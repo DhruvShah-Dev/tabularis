@@ -95,6 +95,36 @@ describe('sqlAnalysis utils', () => {
       expect(result?.get('u')?.name).toBe('users');
       expect(result?.get('o')?.name).toBe('orders');
     });
+
+    it('does not register function arguments as table aliases (comma inside function call)', () => {
+      // `b` and `alias` must NOT appear as spurious table entries due to the
+      // comma inside the parentheses of func(a, b).
+      const result = parseTablesFromQuery('SELECT * FROM func(a, b) AS t');
+      expect(result?.has('b')).toBe(false);
+      // `alias` was previously captured as the alias for the spurious `b` entry
+      expect(result?.has('alias')).toBe(false);
+      // The function itself (captured identifier before the paren) may appear,
+      // but the important invariant is that no argument-list token leaks out.
+    });
+
+    it('does not register AS alias column-list items as table aliases (comma inside AS clause)', () => {
+      // `col2` must NOT appear as a spurious table entry due to the comma inside
+      // the parenthesised column list of the AS clause.
+      const result = parseTablesFromQuery('SELECT * FROM table1 AS alias(col1, col2), orders o');
+      expect(result?.has('col2')).toBe(false);
+      expect(result?.has('col1')).toBe(false);
+      // The real tables must still resolve correctly.
+      expect(result?.get('alias')?.name).toBe('table1');
+      expect(result?.get('o')?.name).toBe('orders');
+    });
+
+    it('handles mixed commas: function call arg list alongside a comma-separated table list', () => {
+      // Ensures that a top-level comma (between func(...) and tbl2) is still
+      // used as a table separator, while the comma inside func() is not.
+      const result = parseTablesFromQuery('SELECT * FROM generate_series(1, 10) gs, orders o');
+      expect(result?.has('10')).toBe(false);
+      expect(result?.get('o')?.name).toBe('orders');
+    });
   });
 
   describe('getCurrentStatement', () => {

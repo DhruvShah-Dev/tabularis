@@ -31,6 +31,28 @@ const extractFromSection = (sql: string): string => {
     .replace(/\busing\s*\([^)]*\)/gi, ' ');
 };
 
+// Splits a string by top-level commas — commas not nested inside any parentheses.
+// This prevents commas inside function-call argument lists (e.g. func(a, b)) or
+// AS alias column lists (e.g. AS alias(col1, col2)) from being treated as table
+// separators in a FROM clause.
+function splitTopLevelCommas(str: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    else if (ch === ',' && depth === 0) {
+      parts.push(str.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(str.slice(start));
+  return parts;
+}
+
 // Returns alias → ParsedTableRef. Handles quoted identifiers, schema.table, and comma-separated FROM.
 export const parseTablesFromQuery = (sql: string): Map<string, ParsedTableRef> | null => {
   if (!sql || sql.length === 0) return null;
@@ -39,23 +61,39 @@ export const parseTablesFromQuery = (sql: string): Map<string, ParsedTableRef> |
   if (!fromSection) return null;
 
   const tableMap = new Map<string, ParsedTableRef>();
-  const fromPattern =
-    /(?:from|join|,)\s+("(?:[^"]|"")*"|`[^`]+`|[a-zA-Z_][a-zA-Z0-9_]*)(?:\.("(?:[^"]|"")*"|`[^`]+`|[a-zA-Z_][a-zA-Z0-9_]*))?(?:\s+(?:as\s+)?("(?:[^"]|"")*"|`[^`]+`|(?!(?:join|left|right|inner|outer|cross|natural|full|on|using|where|group|order|having|limit|offset|union|intersect|except|for|fetch|window|lateral|tablesample|qualify|straight_join)\b)[a-zA-Z_][a-zA-Z0-9_]*))?/gi;
 
-  let match;
+  // Pattern matches tables/aliases introduced by FROM or JOIN keywords only.
+  // Commas are handled by pre-splitting at the top level so that commas inside
+  // function calls or alias column lists are never mistaken for table separators.
+  const fromPattern =
+    /(?:from|join)\s+("(?:[^"]|"")*"|`[^`]+`|[a-zA-Z_][a-zA-Z0-9_]*)(?:\.("(?:[^"]|"")*"|`[^`]+`|[a-zA-Z_][a-zA-Z0-9_]*))?(?:\s+(?:as\s+)?("(?:[^"]|"")*"|`[^`]+`|(?!(?:join|left|right|inner|outer|cross|natural|full|on|using|where|group|order|having|limit|offset|union|intersect|except|for|fetch|window|lateral|tablesample|qualify|straight_join)\b)[a-zA-Z_][a-zA-Z0-9_]*))?/gi;
+
+  // Split fromSection at top-level commas so each segment is either the first
+  // FROM item (which already carries the FROM keyword) or a subsequent
+  // comma-separated table reference (which we normalise by prepending FROM).
+  const segments = splitTopLevelCommas(fromSection).map((seg) =>
+    /^\s*(?:from|join)\b/i.test(seg) ? seg : `FROM ${seg.trimStart()}`
+  );
+
   let matchCount = 0;
   const MAX_MATCHES = 10;
 
-  while ((match = fromPattern.exec(fromSection)) !== null && matchCount++ < MAX_MATCHES) {
-    const schemaToken = match[2] ? match[1] : undefined;
-    const tableToken = match[2] ?? match[1];
-    if (!tableToken) continue;
+  for (const segment of segments) {
+    if (matchCount >= MAX_MATCHES) break;
+    fromPattern.lastIndex = 0;
 
-    const tableName = stripIdentifierQuotes(tableToken);
-    const schema = schemaToken ? stripIdentifierQuotes(schemaToken) : undefined;
-    const aliasToken = match[3];
-    const alias = aliasToken ? stripIdentifierQuotes(aliasToken) : tableName;
-    tableMap.set(alias, { name: tableName, schema });
+    let match;
+    while ((match = fromPattern.exec(segment)) !== null && matchCount++ < MAX_MATCHES) {
+      const schemaToken = match[2] ? match[1] : undefined;
+      const tableToken = match[2] ?? match[1];
+      if (!tableToken) continue;
+
+      const tableName = stripIdentifierQuotes(tableToken);
+      const schema = schemaToken ? stripIdentifierQuotes(schemaToken) : undefined;
+      const aliasToken = match[3];
+      const alias = aliasToken ? stripIdentifierQuotes(aliasToken) : tableName;
+      tableMap.set(alias, { name: tableName, schema });
+    }
   }
 
   return tableMap.size > 0 ? tableMap : null;
