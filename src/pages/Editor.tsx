@@ -323,6 +323,9 @@ export const Editor = () => {
   const [detachedTabIds, setDetachedTabIds] = useState<Set<string>>(
     () => new Set(),
   );
+  // Mirror of detachedTabIds for use inside callbacks/refs without re-creating
+  // them or reading stale closures. Kept in sync alongside tabsRef below.
+  const detachedTabIdsRef = useRef(detachedTabIds);
   const isDragging = useRef(false);
   const rafRef = useRef<number | null>(null);
   const editorsRef = useRef<Record<string, Parameters<OnMount>[0]>>({});
@@ -546,7 +549,8 @@ export const Editor = () => {
   useEffect(() => {
     tabsRef.current = tabs;
     activeTabIdRef.current = activeTabId;
-  }, [tabs, activeTabId]);
+    detachedTabIdsRef.current = detachedTabIds;
+  }, [tabs, activeTabId, detachedTabIds]);
 
   useEffect(() => {
     updateScrollArrows();
@@ -644,6 +648,11 @@ export const Editor = () => {
       const targetTab = tabsRef.current.find((t) => t.id === targetTabId);
       if (!targetTab) return;
 
+      // When the target tab's results live in a detached window, this run was
+      // triggered from that window: don't touch main-window-only UI state
+      // (results panel, params modal) — it belongs to whatever tab is active here.
+      const isDetached = detachedTabIdsRef.current.has(targetTabId);
+
       let textToRun = sql?.trim() || targetTab?.query;
       // For Table Tabs, reconstruct query if filter/sort are present
       if (targetTab?.type === "table" && targetTab.activeTable) {
@@ -676,14 +685,18 @@ export const Editor = () => {
 
         // If we have missing params
         if (missingParams.length > 0) {
-          setQueryParamsModal({
-            isOpen: true,
-            sql: textToRun,
-            parameters: params,
-            pendingPageNum: pageNum,
-            pendingTabId: targetTabId,
-            mode: "run",
-          });
+          // The params modal lives in the main window; don't pop it for a run
+          // triggered from a detached window (it would hijack the active tab).
+          if (!isDetached) {
+            setQueryParamsModal({
+              isOpen: true,
+              sql: textToRun,
+              parameters: params,
+              pendingPageNum: pageNum,
+              pendingTabId: targetTabId,
+              mode: "run",
+            });
+          }
           return;
         }
 
@@ -691,8 +704,11 @@ export const Editor = () => {
         textToRun = interpolateQueryParams(textToRun, storedParams);
       }
 
-      // Automatically open results panel when running a query
-      setIsResultsCollapsed(false);
+      // Automatically open the results panel when running a query — but only
+      // for the main window; a detached run must not re-expand the main panel.
+      if (!isDetached) {
+        setIsResultsCollapsed(false);
+      }
 
       // Preserve total_rows across page changes so the count doesn't disappear
       const previousTotalRows =
@@ -1089,7 +1105,10 @@ export const Editor = () => {
         ? tabsRef.current.find((t) => t.id === tabIdArg)
         : activeTab;
       if (!tab?.result?.pagination || !activeConnectionId) return;
-      setIsCountLoading(true);
+      // setIsCountLoading drives the spinner in the main window only; skip it for
+      // a count triggered from a detached window (its own window owns its spinner).
+      const isDetached = detachedTabIdsRef.current.has(tab.id);
+      if (!isDetached) setIsCountLoading(true);
       try {
         const total = await invoke<number>("count_query", {
           connectionId: activeConnectionId,
@@ -1105,7 +1124,7 @@ export const Editor = () => {
           },
         });
       } finally {
-        setIsCountLoading(false);
+        if (!isDetached) setIsCountLoading(false);
       }
     },
     [activeTab, activeConnectionId, activeSchema, updateTab],
@@ -1285,8 +1304,13 @@ export const Editor = () => {
     );
     const actionP = listen<ResultsActionEnvelope>(
       RESULTS_ACTION_EVENT,
-      (event) =>
-        applyAction(event.payload.action, makeHandlers(event.payload.tabId)),
+      (event) => {
+        // Only honor actions for tabs we actually have detached — defense in
+        // depth against events arriving for a reattached/unknown tab.
+        const { tabId, action } = event.payload;
+        if (!detachedTabIdsRef.current.has(tabId)) return;
+        applyAction(action, makeHandlers(tabId));
+      },
     );
     const closedP = listen<ResultsClosedPayload>(
       RESULTS_CLOSED_EVENT,
