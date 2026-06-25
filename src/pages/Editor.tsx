@@ -96,8 +96,8 @@ import {
 } from "../utils/resultsWindowSync";
 import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
 import { NotebookView } from "../components/notebook/NotebookView";
+import { useSqlAutocompleteRegistration } from "../hooks/useSqlAutocompleteRegistration";
 import { createNotebook, renameNotebook } from "../utils/notebookStore";
-import { registerSqlAutocomplete } from "../utils/autocomplete";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useAlert } from "../hooks/useAlert";
@@ -155,7 +155,6 @@ export const Editor = () => {
   const {
     activeConnectionId,
     connections,
-    tables,
     views,
     activeDriver,
     activeSchema,
@@ -163,8 +162,6 @@ export const Editor = () => {
     selectedDatabases,
     activeConnectionName,
     activeDatabaseName,
-    schemaDataMap,
-    databaseDataMap,
   } = useDatabase();
   const { allDrivers } = useDrivers();
   const { explorerConnectionId } = useConnectionLayoutContext();
@@ -2449,25 +2446,11 @@ export const Editor = () => {
     });
   };
 
-  useEffect(() => {
-    if (monacoInstance && activeConnectionId) {
-      let effectiveTables = tables;
-      if (activeCapabilities?.schemas && activeSchema) {
-        effectiveTables = schemaDataMap[activeSchema]?.tables ?? tables;
-      } else if (isMultiDb) {
-        effectiveTables = selectedDatabases.flatMap(db =>
-          (databaseDataMap[db]?.tables ?? []).map(t => ({ ...t, schema: db }))
-        );
-      }
-      const disposable = registerSqlAutocomplete(
-        monacoInstance,
-        activeConnectionId,
-        effectiveTables,
-        activeSchema,
-      );
-      return () => disposable.dispose();
-    }
-  }, [monacoInstance, activeConnectionId, tables, activeSchema, activeCapabilities, schemaDataMap, databaseDataMap, isMultiDb, selectedDatabases]);
+  useSqlAutocompleteRegistration(activeConnectionId, {
+    monaco: monacoInstance,
+    schema: activeSchema,
+    enabled: !isNotebookTab,
+  });
 
   useEffect(() => {
     const state = location.state as EditorState;
