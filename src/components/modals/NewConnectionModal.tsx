@@ -57,6 +57,9 @@ interface ConnectionParams {
   ssl_ca?: string;
   ssl_cert?: string;
   ssl_key?: string;
+  // MySQL: force PIPES_AS_CONCAT / NO_ENGINE_SUBSTITUTION sql_mode on connect.
+  // Defaults to true; disable for Vitess/PlanetScale which reject altering sql_mode.
+  pipes_as_concat?: boolean;
   // SSH
   ssh_enabled?: boolean;
   ssh_connection_id?: string;
@@ -187,7 +190,7 @@ export const NewConnectionModal = ({
 
   // ── tab ──
   const [activeTab, setActiveTab] = useState<
-    "general" | "databases" | "ssh" | "ssl" | "k8s" | "appearance"
+    "general" | "databases" | "ssh" | "ssl" | "k8s" | "advanced" | "appearance"
   >("general");
 
   // ── SSH ──
@@ -1448,6 +1451,42 @@ export const NewConnectionModal = ({
     </div>
   );
 
+  // ── rendered Advanced tab content (driver-specific low-level options) ──
+  const advancedTabContent = (
+    <div className="space-y-4">
+      {/* MySQL: PIPES_AS_CONCAT compatibility (Vitess/PlanetScale) */}
+      {driver === "mysql" && (
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+            <input
+              type="checkbox"
+              id="pipes-as-concat-toggle"
+              checked={formData.pipes_as_concat !== false}
+              onChange={(e) =>
+                updateField(
+                  "pipes_as_concat",
+                  e.target.checked ? undefined : false,
+                )
+              }
+              className="accent-blue-500 w-3.5 h-3.5 rounded"
+            />
+            <span className="text-sm font-medium text-secondary">
+              {t("newConnection.pipesAsConcat", {
+                defaultValue: "Set PIPES_AS_CONCAT sql_mode on connect",
+              })}
+            </span>
+          </label>
+          <p className="text-xs text-muted">
+            {t("newConnection.pipesAsConcatHint", {
+              defaultValue:
+                "Leave enabled — Tabularis automatically skips it on servers that reject it (Vitess/PlanetScale).",
+            })}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   // ── rendered SSH tab content ──
   const sshTabContent = !isNetworkDriver ? (
     <p className="text-xs text-muted italic">
@@ -2020,6 +2059,16 @@ export const NewConnectionModal = ({
                     : []),
                   ...(isNetworkDriver ? [{ id: "ssh", label: "SSH" }] : []),
                   ...(isNetworkDriver ? [{ id: "k8s", label: "Kubernetes" }] : []),
+                  ...(driver === "mysql"
+                    ? [
+                        {
+                          id: "advanced",
+                          label: t("newConnection.advanced", {
+                            defaultValue: "Advanced",
+                          }),
+                        },
+                      ]
+                    : []),
                   {
                     id: "appearance",
                     label: t("newConnection.appearance", {
@@ -2027,7 +2076,14 @@ export const NewConnectionModal = ({
                     }),
                   },
                 ] as {
-                  id: "general" | "databases" | "ssh" | "ssl" | "k8s" | "appearance";
+                  id:
+                    | "general"
+                    | "databases"
+                    | "ssh"
+                    | "ssl"
+                    | "k8s"
+                    | "advanced"
+                    | "appearance";
                   label: string;
                 }[]
               ).map((tab) => (
@@ -2069,7 +2125,9 @@ export const NewConnectionModal = ({
                       ? k8sTabContent
                       : activeTab === "ssh"
                         ? sshTabContent
-                        : appearanceTabContent}
+                        : activeTab === "advanced"
+                          ? advancedTabContent
+                          : appearanceTabContent}
             </div>
           </div>
         </div>
