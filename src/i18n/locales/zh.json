@@ -36,7 +36,9 @@
     "search": "搜索...",
     "error": "错误",
     "success": "成功",
-    "ok": "OK"
+    "ok": "OK",
+    "continue": "继续",
+    "back": "返回"
   },
   "sidebar": {
     "connections": "连接",
@@ -247,7 +249,30 @@
     "export": "导出连接",
     "import": "导入连接",
     "exportTitle": "导出连接",
-    "exportWarning": "导出的文件将包含您的数据库和 SSH 明文密码。请妥善保管该文件。"
+    "exportWarning": "导出的文件将包含您的数据库和 SSH 明文密码。请妥善保管该文件。",
+    "importFromApp": {
+      "title": "Import from App",
+      "subtitle": "Import connections from another installed SQL client",
+      "previewSubtitle": "Review connections from {{source}}",
+      "notInstalled": "Not installed",
+      "chooseFile": "Choose an export file to import",
+      "connectionsFound_one": "1 connection found",
+      "connectionsFound_other": "{{count}} connections found",
+      "includePasswords": "Include passwords",
+      "includePasswordsHint": "Saved passwords are read and decrypted during import (may require Keychain permission)",
+      "credentialsAborted": "Some passwords could not be read",
+      "importCount_one": "Import 1 connection",
+      "importCount_other": "Import {{count}} connections",
+      "noConnections": "No connections found to import",
+      "duplicateOf": "Duplicate of \"{{name}}\"",
+      "action": {
+        "import": "Import",
+        "skip": "Skip",
+        "replace": "Replace"
+      },
+      "tabularisJsonHint": "Tabularis 导出文件 (.json)",
+      "menuLabel": "导入连接…"
+    }
   },
   "connectionAppearance": {
     "section": "外观",

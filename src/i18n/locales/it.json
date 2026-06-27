@@ -37,7 +37,9 @@
     "noResults": "Nessun risultato trovato",
     "error": "Errore",
     "success": "Successo",
-    "ok": "OK"
+    "ok": "OK",
+    "continue": "Continua",
+    "back": "Indietro"
   },
   "sidebar": {
     "connections": "Connessioni",
@@ -248,7 +250,30 @@
     "export": "Esporta connessioni",
     "import": "Importa connessioni",
     "exportTitle": "Esporta connessioni",
-    "exportWarning": "Il file esportato conterrà le password del database e SSH in chiaro. Conservalo in modo sicuro."
+    "exportWarning": "Il file esportato conterrà le password del database e SSH in chiaro. Conservalo in modo sicuro.",
+    "importFromApp": {
+      "title": "Importa da app",
+      "subtitle": "Importa connessioni da un altro client SQL installato",
+      "previewSubtitle": "Rivedi le connessioni da {{source}}",
+      "notInstalled": "Non installato",
+      "chooseFile": "Scegli un file di esportazione da importare",
+      "connectionsFound_one": "1 connessione trovata",
+      "connectionsFound_other": "{{count}} connessioni trovate",
+      "includePasswords": "Includi password",
+      "includePasswordsHint": "Le password salvate vengono lette e decifrate durante l'import (potrebbe richiedere l'accesso al Portachiavi)",
+      "credentialsAborted": "Alcune password non sono state lette",
+      "importCount_one": "Importa 1 connessione",
+      "importCount_other": "Importa {{count}} connessioni",
+      "noConnections": "Nessuna connessione da importare",
+      "duplicateOf": "Duplicato di \"{{name}}\"",
+      "action": {
+        "import": "Importa",
+        "skip": "Salta",
+        "replace": "Sostituisci"
+      },
+      "tabularisJsonHint": "File di esportazione Tabularis (.json)",
+      "menuLabel": "Importa connessioni…"
+    }
   },
   "connectionAppearance": {
     "section": "Aspetto",
