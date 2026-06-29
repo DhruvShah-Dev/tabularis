@@ -1187,15 +1187,12 @@ export const Editor = () => {
   ]);
 
   // If a detached tab is closed in the main window, close its orphaned window.
+  // Closing the window emits RESULTS_CLOSED_EVENT, whose listener owns pruning
+  // detachedTabIds — so this effect stays side-effect-only (no setState here).
   useEffect(() => {
     for (const id of detachedTabIds) {
       if (!tabs.some((t) => t.id === id)) {
         invoke("close_results_window", { tabId: id }).catch(() => {});
-        setDetachedTabIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
       }
     }
   }, [tabs, detachedTabIds]);
@@ -1203,9 +1200,13 @@ export const Editor = () => {
   // Respond to the detached windows' handshakes and forwarded actions. The main
   // window owns all query/DB logic, so actions map onto the existing handlers
   // targeting the tab named in each event (not necessarily the active one).
+  //
+  // Registered unconditionally (no detachedTabIds.size gate): a freshly opened
+  // window emits its ready handshake as soon as it boots, and listen() registers
+  // asynchronously — gating behind the first detach races that emit and can leave
+  // the window stuck on "Loading…". Each handler self-guards (action via
+  // detachedTabIdsRef, ready via the tabsRef lookup, closed via prev.has).
   useEffect(() => {
-    if (detachedTabIds.size === 0) return;
-
     const emitSyncFor = (tabId: string) => {
       const tab = tabsRef.current.find((t) => t.id === tabId);
       if (tab) {
@@ -1332,7 +1333,6 @@ export const Editor = () => {
       closedP.then((u) => u());
     };
   }, [
-    detachedTabIds,
     activeConnectionId,
     copyFormat,
     csvDelimiter,
