@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -13,9 +14,12 @@ pub struct WindowBounds {
     pub height: u32,
 }
 
+/// Geometry is remembered per tab so that with several windows detached at once
+/// each one re-opens where its own window last was, instead of all stacking on
+/// top of the most-recently-closed one.
 #[derive(Default)]
 pub struct ResultsWindowStore {
-    pub last_bounds: Mutex<Option<WindowBounds>>,
+    pub bounds: Mutex<HashMap<String, WindowBounds>>,
 }
 
 /// One detached results window per editor tab. The frontend keeps each window's
@@ -46,10 +50,11 @@ pub async fn open_results_window(
     let window_title = title.unwrap_or_else(|| "Query Results".to_string());
 
     let remembered = store
-        .last_bounds
+        .bounds
         .lock()
         .map_err(|e| format!("Failed to acquire bounds lock: {}", e))?
-        .clone();
+        .get(&tab_id)
+        .copied();
 
     let url = format!("/results-window?tab={}", encode(&tab_id));
     let mut builder =
@@ -74,15 +79,21 @@ pub async fn open_results_window(
             window.on_window_event(move |event| {
                 if let WindowEvent::CloseRequested { .. } = event {
                     if let Some(win) = app_handle.get_webview_window(&captured_label) {
-                        if let (Ok(pos), Ok(size)) = (win.outer_position(), win.outer_size()) {
+                        // Save the inner size: it is restored via `.inner_size(...)`
+                        // below, so saving `outer_size()` would grow the window by
+                        // the decoration height on each detach→close→reopen cycle.
+                        if let (Ok(pos), Ok(size)) = (win.outer_position(), win.inner_size()) {
                             let store = app_handle.state::<ResultsWindowStore>();
-                            if let Ok(mut bounds) = store.last_bounds.lock() {
-                                *bounds = Some(WindowBounds {
-                                    x: pos.x,
-                                    y: pos.y,
-                                    width: size.width,
-                                    height: size.height,
-                                });
+                            if let Ok(mut bounds) = store.bounds.lock() {
+                                bounds.insert(
+                                    captured_tab_id.clone(),
+                                    WindowBounds {
+                                        x: pos.x,
+                                        y: pos.y,
+                                        width: size.width,
+                                        height: size.height,
+                                    },
+                                );
                             };
                         }
                     }
@@ -115,28 +126,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bounds_round_trip() {
-        let store = ResultsWindowStore::default();
-        {
-            let mut bounds = store.last_bounds.lock().unwrap();
-            *bounds = Some(WindowBounds {
-                x: 100,
-                y: 200,
-                width: 800,
-                height: 600,
-            });
-        }
-        let bounds = store.last_bounds.lock().unwrap();
-        let b = bounds.unwrap();
-        assert_eq!(b.x, 100);
-        assert_eq!(b.y, 200);
-        assert_eq!(b.width, 800);
-        assert_eq!(b.height, 600);
+    fn window_label_is_tab_scoped() {
+        assert_eq!(window_label("abc"), "results-window-abc");
+        assert_eq!(window_label("tab-123"), "results-window-tab-123");
+        // Distinct tabs must map to distinct labels (each gets its own window).
+        assert_ne!(window_label("a"), window_label("b"));
     }
 
     #[test]
-    fn bounds_default_is_none() {
+    fn bounds_are_remembered_per_tab() {
         let store = ResultsWindowStore::default();
-        assert!(store.last_bounds.lock().unwrap().is_none());
+        {
+            let mut bounds = store.bounds.lock().unwrap();
+            bounds.insert(
+                "tab-a".to_string(),
+                WindowBounds {
+                    x: 100,
+                    y: 200,
+                    width: 800,
+                    height: 600,
+                },
+            );
+            bounds.insert(
+                "tab-b".to_string(),
+                WindowBounds {
+                    x: 10,
+                    y: 20,
+                    width: 400,
+                    height: 300,
+                },
+            );
+        }
+        let bounds = store.bounds.lock().unwrap();
+        let a = bounds.get("tab-a").unwrap();
+        assert_eq!((a.x, a.y, a.width, a.height), (100, 200, 800, 600));
+        let b = bounds.get("tab-b").unwrap();
+        assert_eq!((b.x, b.y, b.width, b.height), (10, 20, 400, 300));
+    }
+
+    #[test]
+    fn bounds_default_is_empty() {
+        let store = ResultsWindowStore::default();
+        assert!(store.bounds.lock().unwrap().is_empty());
     }
 }
