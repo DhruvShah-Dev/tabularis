@@ -48,6 +48,7 @@ import {
   Maximize2,
   Minimize2,
   ExternalLink,
+  CheckCircle2,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
@@ -183,7 +184,7 @@ export const Editor = () => {
     closeTabsToRight,
   } = useEditor();
   const location = useLocation();
-  const { matchesShortcut } = useKeybindings();
+  const { matchesShortcut, isMac } = useKeybindings();
   const { showAlert } = useAlert();
   const navigate = useNavigate();
 
@@ -2939,6 +2940,9 @@ export const Editor = () => {
             <button
               onClick={handleRunButton}
               disabled={!activeConnectionId}
+              aria-label={`${t("editor.run")} (${isMac ? "Cmd+Enter" : "Ctrl+Enter"})`}
+              aria-keyshortcuts={isMac ? "Meta+Enter" : "Control+Enter"}
+              title={`${t("editor.run")} (${isMac ? "Cmd+Enter" : "Ctrl+Enter"})`}
               className={clsx(
                 "flex items-center gap-2 px-3 py-1.5 text-white text-sm font-medium disabled:opacity-50 hover:bg-green-600",
                 isTableTab ? "rounded" : "rounded-l",
@@ -3407,6 +3411,34 @@ export const Editor = () => {
               </div>
             ) : activeTab.error ? (
               <ErrorDisplay error={activeTab.error} t={t} />
+            ) : activeTab.result &&
+              activeTab.result.columns.length === 0 &&
+              !(
+                activeTab.pendingInsertions &&
+                Object.keys(activeTab.pendingInsertions).length > 0
+              ) ? (
+              // Non-SELECT statement (INSERT/UPDATE/DELETE/DDL): no result set,
+              // so surface an explicit success message instead of an empty grid.
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-center px-4">
+                <CheckCircle2 size={32} className="text-green-500" />
+                <p className="text-sm font-medium text-primary">
+                  {t("editor.queryExecuted")}
+                </p>
+                <p className="text-xs text-secondary flex items-center gap-2">
+                  {activeTab.result.affected_rows > 0 && (
+                    <span>
+                      {t("editor.rowsAffected", {
+                        count: activeTab.result.affected_rows,
+                      })}
+                    </span>
+                  )}
+                  {activeTab.executionTime !== null && (
+                    <span className="text-muted font-mono">
+                      ({formatDuration(activeTab.executionTime)})
+                    </span>
+                  )}
+                </p>
+              </div>
             ) : activeTab.result ||
               (activeTab.pendingInsertions &&
                 Object.keys(activeTab.pendingInsertions).length > 0) ? (
