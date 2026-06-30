@@ -54,3 +54,41 @@ export function getEffectiveDatabase(db: string | string[]): string {
   }
   return db;
 }
+
+/** The `schema` / `database` params a table-scoped backend call should carry. */
+export interface TableRoutingParams {
+  schema?: string;
+  database?: string;
+}
+
+/**
+ * Builds the `{ schema, database }` params for any table-scoped backend call
+ * (`get_columns`, `get_foreign_keys`, `update_record`, `insert_record`,
+ * `delete_record`, …) from an editor tab's own schema/database plus the
+ * connection's active schema.
+ *
+ * Why `database` matters: on schema-based multi-database connections
+ * (PostgreSQL) the backend keeps a separate connection pool per database, so a
+ * tab opened on `erp_demo.inventory.products` must route its metadata/DML to
+ * the `erp_demo` pool. If the database is dropped, the call hits the
+ * connection's primary database, finds no matching table, and returns no
+ * columns / no primary key — which silently turns the grid read-only. The data
+ * query already routes by `tabDatabase`; metadata calls must match it.
+ *
+ * The tab's `schema` takes precedence over the connection's `activeSchema`
+ * (the active schema is a single global, but each tab can view a different
+ * one). `database` is only emitted when the tab actually carries one, so flat
+ * multi-database drivers (MySQL, where the tab has no separate `database`) are
+ * unaffected.
+ */
+export function buildTableRoutingParams(
+  tabSchema: string | null | undefined,
+  tabDatabase: string | null | undefined,
+  activeSchema: string | null | undefined,
+): TableRoutingParams {
+  const schema = tabSchema ?? activeSchema ?? undefined;
+  const params: TableRoutingParams = {};
+  if (schema) params.schema = schema;
+  if (tabDatabase) params.database = tabDatabase;
+  return params;
+}

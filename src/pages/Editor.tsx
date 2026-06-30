@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
-import { isMultiDatabaseCapable } from "../utils/database";
+import { isMultiDatabaseCapable, buildTableRoutingParams } from "../utils/database";
 import { isReadonly } from "../utils/driverCapabilities";
 import {
   generateTempId,
@@ -560,20 +560,30 @@ export const Editor = () => {
   }, [tabs, updateScrollArrows]);
 
   const fetchPkColumn = useCallback(
-    async (table: string, tabId?: string, tabSchema?: string) => {
+    async (
+      table: string,
+      tabId?: string,
+      tabSchema?: string,
+      tabDatabase?: string,
+    ) => {
       if (!activeConnectionId) return;
-      const effectiveSchema = tabSchema ?? activeSchema;
+      // On schema-based multi-database connections (PostgreSQL) the metadata
+      // pool is keyed by database, so column/PK detection MUST target the
+      // tab's database — otherwise get_columns hits the connection's primary
+      // database, finds no matching table, returns no PK, and the grid silently
+      // becomes read-only. Mirror the database routing the data query uses.
+      const routing = buildTableRoutingParams(tabSchema, tabDatabase, activeSchema);
       try {
         const [cols, fks] = await Promise.all([
           invoke<TableColumn[]>("get_columns", {
             connectionId: activeConnectionId,
             tableName: table,
-            ...(effectiveSchema ? { schema: effectiveSchema } : {}),
+            ...routing,
           }),
           invoke<ForeignKey[]>("get_foreign_keys", {
             connectionId: activeConnectionId,
             tableName: table,
-            ...(effectiveSchema ? { schema: effectiveSchema } : {}),
+            ...routing,
           }).catch((e) => {
             console.warn("Failed to fetch foreign keys:", e);
             return [] as ForeignKey[];
@@ -800,7 +810,12 @@ export const Editor = () => {
 
         if (tableName) {
           // Fetch column metadata in the background; tab updates when ready
-          fetchPkColumn(tableName, targetTabId, targetTab?.schema ?? undefined);
+          fetchPkColumn(
+            tableName,
+            targetTabId,
+            targetTab?.schema ?? undefined,
+            targetTab?.database ?? undefined,
+          );
         } else {
           updateTab(targetTabId, { pkColumns: null });
         }
@@ -1602,14 +1617,19 @@ export const Editor = () => {
         sourceType,
       );
 
+      // Qualify with the referenced table's own schema when the driver
+      // reports one (cross-schema FKs); fall back to the source tab's schema.
       const targetSchema = activeCapabilities?.schemas
-        ? currentTab.schema
+        ? (fk.ref_schema ?? currentTab.schema)
         : undefined;
 
       const newTabId = addTab({
         type: "table",
         activeTable: fk.ref_table,
         schema: targetSchema,
+        // Keep the new tab on the same database pool as the source tab so
+        // multi-database (PostgreSQL) connections query the right database.
+        database: currentTab.database,
         filterClause,
         // Reset clauses that may linger on an existing dedup'd tab
         sortClause: "",
@@ -1931,11 +1951,16 @@ export const Editor = () => {
     }
 
     try {
-      // Fetch table columns
+      // Fetch table columns — route to the tab's schema/database so
+      // multi-database (PostgreSQL) connections resolve the right table.
       const columns = await invoke<TableColumn[]>("get_columns", {
         connectionId: activeConnectionId,
         tableName: activeTab.activeTable,
-        ...(activeSchema ? { schema: activeSchema } : {}),
+        ...buildTableRoutingParams(
+          activeTab?.schema,
+          activeTab?.database,
+          activeSchema,
+        ),
       });
 
       if (!columns || columns.length === 0) {
@@ -2099,11 +2124,16 @@ export const Editor = () => {
     // Process insertions
     if (pendingInsertions && Object.keys(pendingInsertions).length > 0) {
       try {
-        // Fetch columns for validation
+        // Fetch columns for validation — route to the tab's schema/database
+        // so multi-database (PostgreSQL) connections resolve the right table.
         const columns = await invoke<TableColumn[]>("get_columns", {
           connectionId: activeConnectionId,
           tableName: activeTable,
-          ...(activeSchema ? { schema: activeSchema } : {}),
+          ...buildTableRoutingParams(
+            activeTab?.schema,
+            activeTab?.database,
+            activeSchema,
+          ),
         });
 
         const selectedDisplayIndices = new Set<number>();
@@ -3815,7 +3845,8 @@ export const Editor = () => {
                       activeFkQuery={activeFkQuery}
                       connectionId={activeConnectionId}
                       driver={activeDriver}
-                      schema={activeSchema}
+                      schema={activeTab?.schema ?? activeSchema}
+                      database={activeTab?.database}
                       onClose={() => setActiveFkQuery(null)}
                       onNavigateToTab={handleForeignKeyNavigate}
                     />
