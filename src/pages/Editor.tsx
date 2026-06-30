@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
+import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import { isMultiDatabaseCapable } from "../utils/database";
 import { isReadonly } from "../utils/driverCapabilities";
 import {
@@ -499,7 +500,7 @@ export const Editor = () => {
       pendingInsertions,
       selectedRows,
       result,
-      pkColumn,
+      pkColumns,
     } = activeTab;
     const hasGlobalPending =
       (pendingChanges && Object.keys(pendingChanges).length > 0) ||
@@ -518,16 +519,16 @@ export const Editor = () => {
       }
 
       // This is an existing row - check for changes/deletions
-      if (!result || !pkColumn) return false;
-      const pkIndex = result.columns.indexOf(pkColumn);
-      if (pkIndex === -1) return false;
+      if (!result || !pkColumns || pkColumns.length === 0) return false;
+      const pkIndices = pkColumns.map((c) => result.columns.indexOf(c));
+      if (pkIndices.some((i) => i === -1)) return false;
 
       const row = result.rows[rowIndex];
       if (!row) return false;
-      const pkVal = String(row[pkIndex]);
+      const pkKey = serializePkKey(buildPkMap(pkColumns, row, pkIndices));
       return (
-        (pendingChanges && pendingChanges[pkVal]) ||
-        (pendingDeletions && pendingDeletions[pkVal])
+        (pendingChanges && pendingChanges[pkKey]) ||
+        (pendingDeletions && pendingDeletions[pkKey])
       );
     });
   }, [activeTab]);
@@ -577,7 +578,7 @@ export const Editor = () => {
             return [] as ForeignKey[];
           }),
         ]);
-        const pk = cols.find((c) => c.is_pk);
+        const pks = cols.filter((c) => c.is_pk).map((c) => c.name);
         const autoInc = cols
           .filter((c) => c.is_auto_increment)
           .map((c) => c.name);
@@ -590,7 +591,7 @@ export const Editor = () => {
         const targetId = tabId || activeTabId;
         if (targetId)
           updateTab(targetId, {
-            pkColumn: pk ? pk.name : null,
+            pkColumns: pks.length > 0 ? pks : null,
             autoIncrementColumns: autoInc,
             defaultValueColumns: defaultVal,
             nullableColumns: nullable,
@@ -599,11 +600,11 @@ export const Editor = () => {
           });
       } catch (e) {
         console.error("Failed to fetch PK:", e);
-        // Even if PK fetch fails, set pkColumn to null to unblock the UI
+        // Even if PK fetch fails, set pkColumns to null to unblock the UI
         const targetId = tabId || activeTabId;
         if (targetId)
           updateTab(targetId, {
-            pkColumn: null,
+            pkColumns: null,
             autoIncrementColumns: [],
             defaultValueColumns: [],
             nullableColumns: [],
@@ -795,7 +796,7 @@ export const Editor = () => {
           // Fetch column metadata in the background; tab updates when ready
           fetchPkColumn(tableName, targetTabId, targetTab?.schema ?? undefined);
         } else {
-          updateTab(targetTabId, { pkColumn: null });
+          updateTab(targetTabId, { pkColumns: null });
         }
 
         if (shouldRecordHistory) {
@@ -1675,7 +1676,7 @@ export const Editor = () => {
       const currentTab = tabsRef.current.find((t) => t.id === tabId);
       if (!currentTab) return;
 
-      const pkKey = String(pkVal);
+      const pkKey = serializePkKey(pkVal as Record<string, unknown>);
       const currentPending = currentTab.pendingChanges || {};
       const rowEntry = currentPending[pkKey] || {
         pkOriginalValue: pkVal,
@@ -1739,13 +1740,15 @@ export const Editor = () => {
     activeTab.selectedRows.forEach((rowIndex) => {
       if (rowIndex < existingRowCount) {
         // Existing row - add to pending deletions
-        if (activeTab.result && activeTab.pkColumn) {
-          const pkIndex = activeTab.result.columns.indexOf(activeTab.pkColumn);
-          if (pkIndex !== -1) {
+        if (activeTab.result && activeTab.pkColumns && activeTab.pkColumns.length > 0) {
+          const pkCols = activeTab.pkColumns;
+          const pkIndices = pkCols.map((c) => activeTab.result!.columns.indexOf(c));
+          if (pkIndices.every((i) => i !== -1)) {
             const row = activeTab.result.rows[rowIndex];
             if (row) {
-              const pkVal = row[pkIndex];
-              newPendingDeletions[String(pkVal)] = pkVal;
+              const pkMapVal = buildPkMap(pkCols, row, pkIndices);
+              const pkKey = serializePkKey(pkMapVal);
+              newPendingDeletions[pkKey] = pkMapVal;
             }
           }
         }
@@ -1823,7 +1826,7 @@ export const Editor = () => {
       const currentTab = tabsRef.current.find((t) => t.id === tabId);
       if (!currentTab?.pendingDeletions) return;
 
-      const pkKey = String(pkVal);
+      const pkKey = serializePkKey(pkVal as Record<string, unknown>);
       const newPendingDeletions = { ...currentTab.pendingDeletions };
       delete newPendingDeletions[pkKey];
 
@@ -1844,7 +1847,7 @@ export const Editor = () => {
       const currentTab = tabsRef.current.find((t) => t.id === tabId);
       if (!currentTab) return;
 
-      const pkKey = String(pkVal);
+      const pkKey = serializePkKey(pkVal as Record<string, unknown>);
       const currentPendingDeletions = currentTab.pendingDeletions || {};
       const newPendingDeletions = {
         ...currentPendingDeletions,
@@ -1865,7 +1868,7 @@ export const Editor = () => {
 
       const newPendingDeletions = { ...(currentTab.pendingDeletions || {}) };
       for (const pkVal of pkVals) {
-        newPendingDeletions[String(pkVal)] = pkVal;
+        newPendingDeletions[serializePkKey(pkVal as Record<string, unknown>)] = pkVal;
       }
 
       updateTab(tabId, { pendingDeletions: newPendingDeletions });
@@ -1977,11 +1980,11 @@ export const Editor = () => {
         };
       }
 
-      // Ensure pkColumn and autoIncrementColumns are set
-      if (!activeTab.pkColumn) {
-        const pk = columns.find((c) => c.is_pk);
-        if (pk) {
-          updates.pkColumn = pk.name;
+      // Ensure pkColumns and autoIncrementColumns are set
+      if (!activeTab.pkColumns || activeTab.pkColumns.length === 0) {
+        const pks = columns.filter((c) => c.is_pk).map((c) => c.name);
+        if (pks.length > 0) {
+          updates.pkColumns = pks;
         }
       }
 
@@ -2033,52 +2036,52 @@ export const Editor = () => {
   const handleSubmitChanges = useCallback(async () => {
     if (!activeTab || !activeTab.activeTable || !activeConnectionId) return;
 
-    // pkColumn is required for updates/deletions but not for insertions-only
-    const hasPkColumn = !!activeTab.pkColumn;
+    // pkColumns is required for updates/deletions but not for insertions-only
+    const hasPkColumns = !!(activeTab.pkColumns && activeTab.pkColumns.length > 0);
 
     const {
       pendingChanges,
       pendingDeletions,
       pendingInsertions,
       activeTable,
-      pkColumn,
+      pkColumns,
       selectedRows,
     } = activeTab;
-    const updates: { pkVal: unknown; colName: string; newVal: unknown }[] = [];
-    const deletions: unknown[] = [];
+    const updates: { pkVal: Record<string, unknown>; colName: string; newVal: unknown }[] = [];
+    const deletions: Record<string, unknown>[] = [];
     const insertions: { tempId: string; data: Record<string, unknown> }[] = [];
 
     // Filter pending changes by selected rows IF there is a selection AND applyToAll is false
     const hasSelection = !applyToAll && selectedRows && selectedRows.length > 0;
     const selectedPkSet = new Set<string>();
 
-    if (hasSelection && activeTab.result && hasPkColumn && pkColumn) {
-      const pkIndex = activeTab.result.columns.indexOf(pkColumn);
-      if (pkIndex !== -1) {
+    if (hasSelection && activeTab.result && hasPkColumns && pkColumns) {
+      const pkIndices = pkColumns.map((c) => activeTab.result!.columns.indexOf(c));
+      if (pkIndices.every((i) => i !== -1)) {
         selectedRows.forEach((rowIndex) => {
           const row = activeTab.result!.rows[rowIndex];
-          if (row) selectedPkSet.add(String(row[pkIndex]));
+          if (row) selectedPkSet.add(serializePkKey(buildPkMap(pkColumns, row, pkIndices)));
         });
       }
     }
 
-    if (hasPkColumn && pkColumn && pendingChanges) {
+    if (hasPkColumns && pkColumns && pendingChanges) {
       for (const [pkKey, rowData] of Object.entries(pendingChanges)) {
         // Apply filter if selection exists (and applyToAll is false)
         if (hasSelection && !selectedPkSet.has(pkKey)) continue;
 
         const { pkOriginalValue, changes } = rowData;
         for (const [colName, newVal] of Object.entries(changes)) {
-          updates.push({ pkVal: pkOriginalValue, colName, newVal });
+          updates.push({ pkVal: pkOriginalValue as Record<string, unknown>, colName, newVal });
         }
       }
     }
 
-    if (hasPkColumn && pkColumn && pendingDeletions) {
+    if (hasPkColumns && pkColumns && pendingDeletions) {
       for (const [pkKey, pkVal] of Object.entries(pendingDeletions)) {
         // Apply filter if selection exists (and applyToAll is false)
         if (hasSelection && !selectedPkSet.has(pkKey)) continue;
-        deletions.push(pkVal);
+        deletions.push(pkVal as Record<string, unknown>);
       }
     }
 
@@ -2162,12 +2165,11 @@ export const Editor = () => {
       // Deletions
       if (deletions.length > 0) {
         promises.push(
-          ...deletions.map((pkVal) =>
+          ...deletions.map((pkMap) =>
             invoke("delete_record", {
               connectionId: activeConnectionId,
               table: activeTable,
-              pkCol: pkColumn,
-              pkVal,
+              pkMap,
               ...(activeSchema ? { schema: activeSchema } : {}),
               ...databaseParam,
             }),
@@ -2182,8 +2184,7 @@ export const Editor = () => {
             invoke("update_record", {
               connectionId: activeConnectionId,
               table: activeTable,
-              pkCol: pkColumn,
-              pkVal: u.pkVal,
+              pkMap: u.pkVal,
               colName: u.colName,
               newVal: u.newVal,
               ...(activeSchema ? { schema: activeSchema } : {}),
@@ -2216,8 +2217,8 @@ export const Editor = () => {
       const newPendingInsertions = { ...(pendingInsertions || {}) };
 
       // Partial cleanup - remove only processed changes
-      updates.forEach((u) => delete newPendingChanges[String(u.pkVal)]);
-      deletions.forEach((d) => delete newPendingDeletions[String(d)]);
+      updates.forEach((u) => delete newPendingChanges[serializePkKey(u.pkVal)]);
+      deletions.forEach((d) => delete newPendingDeletions[serializePkKey(d as Record<string, unknown>)]);
       insertions.forEach((i) => delete newPendingInsertions[i.tempId]);
 
       // Cleanup empty change objects
@@ -2342,7 +2343,7 @@ export const Editor = () => {
     const {
       selectedRows,
       result,
-      pkColumn,
+      pkColumns,
       pendingChanges,
       pendingDeletions,
       pendingInsertions,
@@ -2368,12 +2369,12 @@ export const Editor = () => {
     });
 
     // For existing rows, also collect their PK values
-    if (result && pkColumn) {
-      const pkIndex = result.columns.indexOf(pkColumn);
-      if (pkIndex !== -1) {
+    if (result && pkColumns && pkColumns.length > 0) {
+      const pkIndices = pkColumns.map((c) => result.columns.indexOf(c));
+      if (pkIndices.every((i) => i !== -1)) {
         selectedRows.forEach((rowIndex) => {
           const row = result.rows[rowIndex];
-          if (row) selectedPkSet.add(String(row[pkIndex]));
+          if (row) selectedPkSet.add(serializePkKey(buildPkMap(pkColumns, row, pkIndices)));
         });
       }
     }
@@ -3754,7 +3755,7 @@ export const Editor = () => {
                       columns={activeTab.result?.columns || []}
                       data={activeTab.result?.rows || []}
                       tableName={activeTab.activeTable}
-                      pkColumn={activeTab.pkColumn}
+                      pkColumns={activeTab.pkColumns}
                       autoIncrementColumns={activeTab.autoIncrementColumns}
                       defaultValueColumns={activeTab.defaultValueColumns}
                       nullableColumns={activeTab.nullableColumns}
