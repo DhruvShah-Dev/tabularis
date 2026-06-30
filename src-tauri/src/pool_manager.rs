@@ -205,26 +205,55 @@ pub(crate) fn build_mysql_options(
     Ok(options)
 }
 
-/// Open a MySQL pool with the connect timeout applied. Returns the error message
-/// on failure so callers can inspect it for an auto-fallback retry.
-async fn connect_mysql_pool(
-    options: sqlx::mysql::MySqlConnectOptions,
+/// Build MySQL options, run the optional startup-script preflight, and open the
+/// pool with the connect timeout applied. Factored out so the auto-fallback path
+/// can retry with a different sql_mode by simply calling it again with adjusted
+/// params. Returns the error message on failure so callers can inspect it for an
+/// auto-fallback retry.
+async fn build_and_connect_mysql_pool(
+    params: &ConnectionParams,
+    override_db: Option<&str>,
     connect_timeout: Duration,
+    script: Option<&str>,
 ) -> Result<Pool<MySql>, String> {
-    tokio::time::timeout(
-        connect_timeout,
-        sqlx::mysql::MySqlPoolOptions::new()
-            .max_connections(10)
-            .connect_with(options),
-    )
-    .await
-    .map_err(|_| {
-        format!(
-            "Timed out creating MySQL connection pool after {} ms",
-            connect_timeout.as_millis()
-        )
-    })?
-    .map_err(|e| e.to_string())
+    let options = build_mysql_options(params, override_db)?;
+
+    // Validate the startup script up front so a broken script fails fast with a
+    // clearly attributed error (see `run_mysql_startup_script`). This uses the
+    // same `options`, so a server that rejects the forced sql_mode surfaces the
+    // error here too and the caller's auto-fallback path can catch it.
+    if let Some(script) = script {
+        tokio::time::timeout(connect_timeout, run_mysql_startup_script(&options, script))
+            .await
+            .map_err(|_| {
+                format!(
+                    "Timed out running MySQL startup script after {} ms",
+                    connect_timeout.as_millis()
+                )
+            })??;
+    }
+
+    let mut pool_options = sqlx::mysql::MySqlPoolOptions::new().max_connections(10);
+    if let Some(script) = script {
+        let script = script.to_owned();
+        pool_options = pool_options.after_connect(move |conn, _meta| {
+            let script = script.clone();
+            Box::pin(async move {
+                conn.execute(script.as_str()).await?;
+                Ok(())
+            })
+        });
+    }
+
+    tokio::time::timeout(connect_timeout, pool_options.connect_with(options))
+        .await
+        .map_err(|_| {
+            format!(
+                "Timed out creating MySQL connection pool after {} ms",
+                connect_timeout.as_millis()
+            )
+        })?
+        .map_err(|e| e.to_string())
 }
 
 /// Whether a connection error means the server refuses sqlx's forced sql_mode
@@ -676,9 +705,16 @@ async fn get_mysql_pool_for_database_with_id(
         "connectTimeout",
         DEFAULT_MYSQL_CONNECT_TIMEOUT_MS,
     ));
+    let script = startup_script(params);
 
-    let options = build_mysql_options(params, override_db)?;
-    let pool = match connect_mysql_pool(options, connect_timeout).await {
+    let pool = match build_and_connect_mysql_pool(
+        params,
+        override_db,
+        connect_timeout,
+        script.as_deref(),
+    )
+    .await
+    {
         Ok(pool) => pool,
         // Auto mode (`pipes_as_concat` unset): the first attempt forces the
         // sql_mode like sqlx does by default. Vitess/PlanetScale reject that, so
@@ -690,44 +726,18 @@ async fn get_mysql_pool_for_database_with_id(
             );
             let mut fallback = params.clone();
             fallback.pipes_as_concat = Some(false);
-            let options = build_mysql_options(&fallback, override_db)?;
-            connect_mysql_pool(options, connect_timeout).await?
+            build_and_connect_mysql_pool(&fallback, override_db, connect_timeout, script.as_deref())
+                .await
+                .map_err(|e| {
+                    log::error!("Failed to create MySQL connection pool: {}", e);
+                    e
+                })?
         }
         Err(e) => {
             log::error!("Failed to create MySQL connection pool: {}", e);
             return Err(e);
         }
     };
-    let mut pool_options = sqlx::mysql::MySqlPoolOptions::new().max_connections(10);
-    if let Some(script) = startup_script(params) {
-        tokio::time::timeout(connect_timeout, run_mysql_startup_script(&options, &script))
-            .await
-            .map_err(|_| {
-                format!(
-                    "Timed out running MySQL startup script after {} ms",
-                    connect_timeout.as_millis()
-                )
-            })??;
-        pool_options = pool_options.after_connect(move |conn, _meta| {
-            let script = script.clone();
-            Box::pin(async move {
-                conn.execute(script.as_str()).await?;
-                Ok(())
-            })
-        });
-    }
-    let pool = tokio::time::timeout(connect_timeout, pool_options.connect_with(options))
-    .await
-    .map_err(|_| {
-        format!(
-            "Timed out creating MySQL connection pool after {} ms",
-            connect_timeout.as_millis()
-        )
-    })?
-    .map_err(|e| {
-        log::error!("Failed to create MySQL connection pool: {}", e);
-        e.to_string()
-    })?;
 
     log::info!(
         "MySQL connection pool created successfully for: {} (key: {})",

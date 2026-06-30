@@ -1180,12 +1180,44 @@ export const NewConnectionModal = ({
     />
   );
 
-  // ── rendered Advanced tab content (per-connection startup SQL) ──
+  // ── rendered Advanced tab content (driver-specific options + startup SQL) ──
   const advancedTabContent = (
-    <div className="space-y-2">
-      <label className="text-[10px] uppercase font-semibold tracking-wider text-muted block">
-        {t("newConnection.startupScript", { defaultValue: "Startup Script" })}
-      </label>
+    <div className="space-y-4">
+      {/* MySQL: PIPES_AS_CONCAT compatibility (Vitess/PlanetScale) */}
+      {driver === "mysql" && (
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
+            <input
+              type="checkbox"
+              id="pipes-as-concat-toggle"
+              checked={formData.pipes_as_concat !== false}
+              onChange={(e) =>
+                updateField(
+                  "pipes_as_concat",
+                  e.target.checked ? undefined : false,
+                )
+              }
+              className="accent-blue-500 w-3.5 h-3.5 rounded"
+            />
+            <span className="text-sm font-medium text-secondary">
+              {t("newConnection.pipesAsConcat", {
+                defaultValue: "Set PIPES_AS_CONCAT sql_mode on connect",
+              })}
+            </span>
+          </label>
+          <p className="text-xs text-muted">
+            {t("newConnection.pipesAsConcatHint", {
+              defaultValue:
+                "Leave enabled — Tabularis automatically skips it on servers that reject it (Vitess/PlanetScale).",
+            })}
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <label className="text-[10px] uppercase font-semibold tracking-wider text-muted block">
+          {t("newConnection.startupScript", { defaultValue: "Startup Script" })}
+        </label>
       <p className="text-xs text-muted leading-snug">
         {t("newConnection.startupScriptDescription", {
           defaultValue:
@@ -1205,6 +1237,7 @@ export const NewConnectionModal = ({
             }),
           }}
         />
+        </div>
       </div>
     </div>
   );
@@ -1523,42 +1556,6 @@ export const NewConnectionModal = ({
               </button>
             </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
-
-  // ── rendered Advanced tab content (driver-specific low-level options) ──
-  const advancedTabContent = (
-    <div className="space-y-4">
-      {/* MySQL: PIPES_AS_CONCAT compatibility (Vitess/PlanetScale) */}
-      {driver === "mysql" && (
-        <div className="flex flex-col gap-1">
-          <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit">
-            <input
-              type="checkbox"
-              id="pipes-as-concat-toggle"
-              checked={formData.pipes_as_concat !== false}
-              onChange={(e) =>
-                updateField(
-                  "pipes_as_concat",
-                  e.target.checked ? undefined : false,
-                )
-              }
-              className="accent-blue-500 w-3.5 h-3.5 rounded"
-            />
-            <span className="text-sm font-medium text-secondary">
-              {t("newConnection.pipesAsConcat", {
-                defaultValue: "Set PIPES_AS_CONCAT sql_mode on connect",
-              })}
-            </span>
-          </label>
-          <p className="text-xs text-muted">
-            {t("newConnection.pipesAsConcatHint", {
-              defaultValue:
-                "Leave enabled — Tabularis automatically skips it on servers that reject it (Vitess/PlanetScale).",
-            })}
-          </p>
         </div>
       )}
     </div>
@@ -2151,16 +2148,6 @@ export const NewConnectionModal = ({
                     : []),
                   ...(isNetworkDriver ? [{ id: "ssh", label: "SSH" }] : []),
                   ...(isNetworkDriver ? [{ id: "k8s", label: "Kubernetes" }] : []),
-                  ...(driver === "mysql"
-                    ? [
-                        {
-                          id: "advanced",
-                          label: t("newConnection.advanced", {
-                            defaultValue: "Advanced",
-                          }),
-                        },
-                      ]
-                    : []),
                   {
                     id: "advanced",
                     label: t("newConnection.advanced", {
