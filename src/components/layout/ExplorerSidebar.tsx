@@ -82,7 +82,7 @@ import { groupRoutinesByType } from "../../utils/routines";
 import { formatObjectCount } from "../../utils/schema";
 import { groupByDate, formatHistoryTime } from "../../utils/dateGroups";
 import { SqlHighlight } from "../ui/SqlHighlight";
-import { isMultiDatabaseCapable } from "../../utils/database";
+import { isMultiDatabaseCapable, isSchemaBasedMultiDb } from "../../utils/database";
 import { supportsManageTables } from "../../utils/driverCapabilities";
 import { newConsoleForDatabase, newConsoleForTable } from "../../utils/newConsole";
 import {
@@ -267,6 +267,29 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
       await refreshTables();
     }
     setSchemaVersion((v) => v + 1);
+  };
+
+  // Refreshes whichever sidebar node actually lists the table after a DROP TABLE
+  // (or similar table-list-changing action), so the deleted table disappears
+  // without a manual refresh-icon click. Bumping schemaVersion alone is not
+  // enough — it only re-fetches a table's own columns/FKs/indexes, not the
+  // tables/views list of the schema or database node it belongs to.
+  const refreshTableListAfterDrop = (schema?: string, database?: string) => {
+    if (database) {
+      // Schema-based multi-database (PostgreSQL): the table lives at
+      // database -> schema -> table. Refreshing the database node reloads its
+      // schema list and drops cached per-schema objects so they reload fresh.
+      refreshDatabaseData(database);
+    } else if (schema && isSchemaBasedMultiDb(activeCapabilities)) {
+      // Single-database PostgreSQL connection: the table lives directly under
+      // a schema node.
+      refreshSchemaData(schema);
+    } else if (schema && isMultiDatabaseCapable(activeCapabilities)) {
+      // Flat multi-database driver (MySQL): `schema` overloads the database name.
+      refreshDatabaseData(schema);
+    } else if (refreshTables) {
+      refreshTables();
+    }
   };
 
   const runQuery = (sql: string, queryName?: string, tableName?: string, preventAutoRun: boolean = false, schema?: string, readOnly?: boolean, database?: string) => {
@@ -1921,7 +1944,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               ...(ctxSchema ? { schema: ctxSchema } : {}),
                               ...(ctxDatabase ? { database: ctxDatabase } : {}),
                             });
-                            if (refreshTables) refreshTables();
+                            refreshTableListAfterDrop(ctxSchema, ctxDatabase);
+                            setSchemaVersion((v) => v + 1);
                           } catch (e) {
                             console.error(e);
                             showAlert(t("sidebar.failDeleteTable") + String(e), { kind: "error" });
