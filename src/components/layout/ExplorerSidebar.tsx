@@ -181,7 +181,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     label: string;
     data?: ContextMenuData;
   } | null>(null);
-  const [schemaModal, setSchemaModal] = useState<{ tableName: string; schema?: string } | null>(null);
+  const [schemaModal, setSchemaModal] = useState<{ tableName: string; schema?: string; database?: string } | null>(null);
   const [isCreateTableModalOpen, setIsCreateTableModalOpen] = useState(false);
   const [createTableTarget, setCreateTableTarget] = useState<CreateTableTarget>(DEFAULT_CREATE_TABLE_TARGET);
   const [isClipboardImportOpen, setIsClipboardImportOpen] = useState(false);
@@ -189,6 +189,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     isOpen: boolean;
     tableName: string;
     column: TableColumn | null;
+    schema?: string;
+    database?: string;
   }>({ isOpen: false, tableName: "", column: null });
   const [createIndexModal, setCreateIndexModal] = useState<{
     isOpen: boolean;
@@ -198,7 +200,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     isOpen: boolean;
     tableName: string;
   }>({ isOpen: false, tableName: "" });
-  const [generateSQLModal, setGenerateSQLModal] = useState<string | null>(null);
+  const [generateSQLModal, setGenerateSQLModal] = useState<{ tableName: string; schema?: string; database?: string } | null>(null);
   const setSidebarTab = onSidebarTabChange;
   const [historyToFavoriteSQL, setHistoryToFavoriteSQL] = useState<string | null>(null);
   const [historyToFavoriteDB, setHistoryToFavoriteDB] = useState<string | null>(null);
@@ -267,9 +269,9 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     setSchemaVersion((v) => v + 1);
   };
 
-  const runQuery = (sql: string, queryName?: string, tableName?: string, preventAutoRun: boolean = false, schema?: string, readOnly?: boolean) => {
+  const runQuery = (sql: string, queryName?: string, tableName?: string, preventAutoRun: boolean = false, schema?: string, readOnly?: boolean, database?: string) => {
     navigate("/editor", {
-      state: { initialQuery: sql, queryName, tableName, preventAutoRun, schema, readOnly, targetConnectionId: activeConnectionId },
+      state: { initialQuery: sql, queryName, tableName, preventAutoRun, schema, database, readOnly, targetConnectionId: activeConnectionId },
     });
   };
 
@@ -1825,21 +1827,27 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
             contextMenu.type === "table"
               ? (() => {
                   const ctxSchema = contextMenu.data && "schema" in contextMenu.data ? contextMenu.data.schema : undefined;
+                  // Schema-based multi-database (PostgreSQL): the table item stashes the
+                  // database its metadata was fetched from in the context-menu payload, so
+                  // every action below can route to that same connection pool. Absent for
+                  // single-database connections and for flat multi-database drivers (MySQL),
+                  // where `ctxSchema` already carries the database name.
+                  const ctxDatabase = contextMenu.data && "database" in contextMenu.data ? contextMenu.data.database : undefined;
                   return [
                     {
                       label: t("sidebar.showData"),
                       icon: PlaySquare,
                       action: () => {
                         const quotedTable = quoteTableRef(contextMenu.id, activeDriver, ctxSchema);
-                        runQuery(`SELECT * FROM ${quotedTable}`, undefined, contextMenu.id, false, ctxSchema);
+                        runQuery(`SELECT * FROM ${quotedTable}`, undefined, contextMenu.id, false, ctxSchema, undefined, ctxDatabase);
                       },
                     },
                     {
                       label: t("sidebar.newConsole"),
                       icon: FileCode,
                       action: () => {
-                        const spec = newConsoleForTable(contextMenu.id, activeDriver, ctxSchema);
-                        runQuery(spec.sql, spec.title, undefined, true, spec.schema);
+                        const spec = newConsoleForTable(contextMenu.id, activeDriver, ctxSchema, ctxDatabase);
+                        runQuery(spec.sql, spec.title, undefined, true, spec.schema, undefined, spec.database);
                       },
                     },
                     {
@@ -1847,13 +1855,13 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       icon: Hash,
                       action: () => {
                         const quotedTable = quoteTableRef(contextMenu.id, activeDriver, ctxSchema);
-                        runQuery(`SELECT COUNT(*) as count FROM ${quotedTable}`, undefined, undefined, false, ctxSchema);
+                        runQuery(`SELECT COUNT(*) as count FROM ${quotedTable}`, undefined, undefined, false, ctxSchema, undefined, ctxDatabase);
                       },
                     },
                     {
                       label: t("sidebar.viewSchema"),
                       icon: FileText,
-                      action: () => setSchemaModal({ tableName: contextMenu.id, schema: ctxSchema }),
+                      action: () => setSchemaModal({ tableName: contextMenu.id, schema: ctxSchema, database: ctxDatabase }),
                     },
                     activeCapabilities?.no_connection_required !== true ? {
                       label: t("sidebar.viewERDiagram"),
@@ -1863,9 +1871,10 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           await invoke("open_er_diagram_window", {
                             connectionId: activeConnectionId || "",
                             connectionName: activeConnectionName || "Unknown",
-                            databaseName: activeDatabaseName || "Unknown",
+                            databaseName: ctxDatabase || activeDatabaseName || "Unknown",
                             focusTable: contextMenu.id,
                             ...(ctxSchema ? { schema: ctxSchema } : {}),
+                            ...(ctxDatabase ? { database: ctxDatabase } : {}),
                           });
                         } catch (e) {
                           console.error("Failed to open ER Diagram window:", e);
@@ -1875,7 +1884,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                     supportsManageTables(activeCapabilities) ? {
                       label: t("sidebar.generateSQL"),
                       icon: FileCode,
-                      action: () => setGenerateSQLModal(contextMenu.id),
+                      action: () => setGenerateSQLModal({ tableName: contextMenu.id, schema: ctxSchema, database: ctxDatabase }),
                     } : null,
                     supportsManageTables(activeCapabilities) ? {
                       label: t("clipboardImport.contextMenuLabel"),
@@ -1891,7 +1900,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       label: t("sidebar.addColumn"),
                       icon: Plus,
                       action: () =>
-                        setModifyColumnModal({ isOpen: true, tableName: contextMenu.id, column: null }),
+                        setModifyColumnModal({ isOpen: true, tableName: contextMenu.id, column: null, schema: ctxSchema, database: ctxDatabase }),
                     } : null,
                     supportsManageTables(activeCapabilities) ? {
                       label: t("sidebar.deleteTable"),
@@ -1910,6 +1919,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               connectionId: activeConnectionId,
                               query: `DROP TABLE ${quotedTable}`,
                               ...(ctxSchema ? { schema: ctxSchema } : {}),
+                              ...(ctxDatabase ? { database: ctxDatabase } : {}),
                             });
                             if (refreshTables) refreshTables();
                           } catch (e) {
@@ -1936,6 +1946,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                         if (contextMenu.data && "tableName" in contextMenu.data) {
                           const t_name = contextMenu.data.tableName;
                           const ctxSchema = "schema" in contextMenu.data ? contextMenu.data.schema : undefined;
+                          const ctxDatabase = "database" in contextMenu.data ? contextMenu.data.database : undefined;
                           if (
                             await ask(
                               t("sidebar.deleteIndexConfirm", { name: contextMenu.id }),
@@ -1948,6 +1959,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                 table: t_name,
                                 indexName: contextMenu.id,
                                 ...(ctxSchema ? { schema: ctxSchema } : {}),
+                                ...(ctxDatabase ? { database: ctxDatabase } : {}),
                               });
                               setSchemaVersion((v) => v + 1);
                             } catch (e) {
@@ -1976,6 +1988,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           if (contextMenu.data && "tableName" in contextMenu.data) {
                             const t_name = contextMenu.data.tableName;
                             const ctxSchema = "schema" in contextMenu.data ? contextMenu.data.schema : undefined;
+                            const ctxDatabase = "database" in contextMenu.data ? contextMenu.data.database : undefined;
                             if (
                               await ask(
                                 t("sidebar.deleteFkConfirm", { name: contextMenu.id }),
@@ -1988,6 +2001,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                   table: t_name,
                                   fkName: contextMenu.id,
                                   ...(ctxSchema ? { schema: ctxSchema } : {}),
+                                  ...(ctxDatabase ? { database: ctxDatabase } : {}),
                                 });
                                 setSchemaVersion((v) => v + 1);
                               } catch (e) {
@@ -2322,6 +2336,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           isOpen={true}
           tableName={schemaModal.tableName}
           schema={schemaModal.schema}
+          database={schemaModal.database}
           onClose={() => setSchemaModal(null)}
         />
       )}
@@ -2381,6 +2396,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           tableName={modifyColumnModal.tableName}
           driver={activeDriver || "sqlite"}
           column={modifyColumnModal.column}
+          schema={modifyColumnModal.schema}
+          database={modifyColumnModal.database}
         />
       )}
 
@@ -2409,7 +2426,9 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
       {generateSQLModal && (
         <GenerateSQLModal
           isOpen={true}
-          tableName={generateSQLModal}
+          tableName={generateSQLModal.tableName}
+          schema={generateSQLModal.schema}
+          database={generateSQLModal.database}
           onClose={() => setGenerateSQLModal(null)}
         />
       )}

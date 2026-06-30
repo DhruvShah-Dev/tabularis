@@ -3409,6 +3409,7 @@ pub async fn open_er_diagram_window(
     database_name: String,
     focus_table: Option<String>,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<(), String> {
     use tauri::{WebviewUrl, WebviewWindowBuilder};
     use urlencoding::encode;
@@ -3436,16 +3437,24 @@ pub async fn open_er_diagram_window(
         url.push_str(&format!("&schema={}", encode(s)));
     }
 
+    // Schema-based multi-database (PostgreSQL): the database the schema lives in,
+    // distinct from `schema` and from `database_name` (a display label only),
+    // routes the diagram's metadata fetch to the right connection pool.
+    if let Some(db) = &database {
+        url.push_str(&format!("&database={}", encode(db)));
+    }
+
     // Derive a unique window label per (connection, database, schema) so that
     // diagrams for different databases on the same connection do not collide on a
     // shared label (which previously kept showing the first database's diagram).
     // Tauri window labels only allow a limited character set, so sanitize anything
     // else to '_'.
     let raw_label = format!(
-        "er-diagram:{}:{}:{}",
+        "er-diagram:{}:{}:{}:{}",
         connection_id,
         database_name,
-        schema.as_deref().unwrap_or("")
+        schema.as_deref().unwrap_or(""),
+        database.as_deref().unwrap_or("")
     );
     let label: String = raw_label
         .chars()
@@ -4044,11 +4053,15 @@ pub async fn drop_index_action<R: Runtime>(
     table: String,
     index_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<(), String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.drop_index(&params, &table, &index_name, schema.as_deref())
         .await
@@ -4061,11 +4074,15 @@ pub async fn drop_foreign_key_action<R: Runtime>(
     table: String,
     fk_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<(), String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.drop_foreign_key(&params, &table, &fk_name, schema.as_deref())
         .await

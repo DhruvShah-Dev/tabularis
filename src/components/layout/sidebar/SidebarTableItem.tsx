@@ -134,7 +134,7 @@ const SidebarTableItemImpl = ({
   const handleContextMenu = (e: React.MouseEvent, type: string, name: string) => {
     e.preventDefault();
     e.stopPropagation();
-    onContextMenu(e, type, name, name, { tableName: table.name, schema });
+    onContextMenu(e, type, name, name, { tableName: table.name, schema, database });
   };
 
   // Group indexes by name since API returns one row per column

@@ -16,6 +16,9 @@ export const SchemaDiagramPage = () => {
   const connectionName = searchParams.get('connectionName') || 'Unknown';
   const databaseName = searchParams.get('databaseName') || 'Unknown';
   const schema = searchParams.get('schema') || undefined;
+  // Schema-based multi-database (PostgreSQL): the database the schema lives in,
+  // so the diagram's metadata fetch routes to the right connection pool.
+  const database = searchParams.get('database') || undefined;
 
   // On a single connection that exposes multiple databases (e.g. MySQL), the
   // diagram must be scoped to the selected database rather than the connection's
@@ -104,7 +107,7 @@ export const SchemaDiagramPage = () => {
 
           {/* Diagram Canvas */}
           <div className="flex-1 overflow-hidden">
-            <SchemaDiagram connectionId={connectionId} refreshTrigger={refreshTrigger} schema={effectiveSchema} />
+            <SchemaDiagram connectionId={connectionId} refreshTrigger={refreshTrigger} schema={effectiveSchema} database={database} />
           </div>
         </div>
       </EditorProvider>
