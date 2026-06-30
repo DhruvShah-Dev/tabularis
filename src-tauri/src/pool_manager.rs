@@ -263,13 +263,26 @@ pub(crate) fn is_pipes_as_concat_unsupported(err: &str) -> bool {
     err.contains("pipes_as_concat") || err.contains("no_engine_substitution")
 }
 
+/// PostgreSQL requires a target database in every connection — unlike MySQL it
+/// cannot connect "server-wide". When no database is selected (e.g. while
+/// listing databases for a multi-database connection), fall back to the standard
+/// `postgres` maintenance database so the connection still succeeds.
+pub(crate) fn postgres_dbname(params: &ConnectionParams) -> String {
+    let primary = params.database.primary();
+    if primary.is_empty() {
+        "postgres".to_string()
+    } else {
+        primary.to_string()
+    }
+}
+
 pub(crate) fn build_postgres_configurations(params: &ConnectionParams) -> PgConfig {
     let mut cfg = PgConfig::new();
     cfg.user(params.username.as_deref().unwrap_or_default())
         .password(params.password.as_deref().unwrap_or_default())
         .port(params.port.unwrap_or(5432))
         .host(params.host.as_deref().unwrap_or_default())
-        .dbname(&format!("{}", params.database));
+        .dbname(&postgres_dbname(params));
 
     if let Some(ssl_mode) = params.ssl_mode.as_deref() {
         match ssl_mode {

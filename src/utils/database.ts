@@ -1,17 +1,29 @@
 import type { DriverCapabilities } from '../types/plugins';
 
 /**
- * Returns true when a driver supports cross-database access from a single connection
- * (e.g. MySQL). Postgres uses schemas; SQLite/DuckDB are file-based or folder-based.
+ * Returns true when a connection can hold and browse more than one database
+ * (server-based drivers: MySQL/MariaDB, PostgreSQL). File-based (SQLite) and
+ * folder-based (DuckDB) drivers, and drivers that need no connection, are excluded.
+ *
+ * Note: this no longer requires `schemas === false`. Schema-based drivers
+ * (PostgreSQL) are multi-database capable too — they just present an extra
+ * `database → schema → table` level. Use {@link isSchemaBasedMultiDb} to tell
+ * the two layouts apart.
  */
 export function isMultiDatabaseCapable(capabilities: DriverCapabilities | null | undefined): boolean {
   if (!capabilities) return false;
   if (capabilities.no_connection_required) return false;
-  return (
-    capabilities.file_based === false &&
-    !capabilities.folder_based &&
-    capabilities.schemas === false
-  );
+  return capabilities.file_based === false && !capabilities.folder_based;
+}
+
+/**
+ * Returns true for multi-database drivers whose databases contain schemas
+ * (PostgreSQL). These need a hierarchical `database → schema → table` sidebar
+ * and per-database connection pools, unlike the flat `database → table` layout
+ * of MySQL/MariaDB.
+ */
+export function isSchemaBasedMultiDb(capabilities: DriverCapabilities | null | undefined): boolean {
+  return isMultiDatabaseCapable(capabilities) && capabilities?.schemas === true;
 }
 
 /**

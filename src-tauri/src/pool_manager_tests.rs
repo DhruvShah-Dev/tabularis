@@ -3,7 +3,7 @@ mod tests {
     use crate::models::{ConnectionParams, DatabaseSelection};
     use crate::pool_manager::{
         build_connection_key, build_mysql_options, format_error_chain,
-        is_pipes_as_concat_unsupported,
+        is_pipes_as_concat_unsupported, postgres_dbname,
     };
     use sqlx::mysql::MySqlSslMode;
 
@@ -226,6 +226,35 @@ mod tests {
         assert!(!is_pipes_as_concat_unsupported(
             "Access denied for user 'root'@'localhost'"
         ));
+    }
+
+    #[test]
+    fn postgres_dbname_uses_selected_single_database() {
+        let mut params = connection_params("postgres", None);
+        params.database = DatabaseSelection::Single("analytics".to_string());
+        assert_eq!(postgres_dbname(&params), "analytics");
+    }
+
+    #[test]
+    fn postgres_dbname_falls_back_to_maintenance_db_when_empty() {
+        let mut params = connection_params("postgres", None);
+        params.database = DatabaseSelection::Single(String::new());
+        assert_eq!(postgres_dbname(&params), "postgres");
+    }
+
+    #[test]
+    fn postgres_dbname_falls_back_when_multiple_selection_is_empty() {
+        let mut params = connection_params("postgres", None);
+        params.database = DatabaseSelection::Multiple(vec![]);
+        assert_eq!(postgres_dbname(&params), "postgres");
+    }
+
+    #[test]
+    fn postgres_dbname_uses_first_of_multiple_selection() {
+        let mut params = connection_params("postgres", None);
+        params.database =
+            DatabaseSelection::Multiple(vec!["app".to_string(), "reporting".to_string()]);
+        assert_eq!(postgres_dbname(&params), "app");
     }
 }
 

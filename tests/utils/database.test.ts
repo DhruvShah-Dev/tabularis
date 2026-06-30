@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isMultiDatabaseCapable,
+  isSchemaBasedMultiDb,
   isMultiDatabaseSelection,
   getDatabaseList,
   getEffectiveDatabase,
@@ -22,8 +23,8 @@ describe('isMultiDatabaseCapable', () => {
     expect(isMultiDatabaseCapable(baseCapabilities)).toBe(true);
   });
 
-  it('returns false when schemas is true (Postgres)', () => {
-    expect(isMultiDatabaseCapable({ ...baseCapabilities, schemas: true })).toBe(false);
+  it('returns true when schemas is true (Postgres is multi-database capable)', () => {
+    expect(isMultiDatabaseCapable({ ...baseCapabilities, schemas: true })).toBe(true);
   });
 
   it('returns false when file_based is true (SQLite)', () => {
@@ -34,8 +35,12 @@ describe('isMultiDatabaseCapable', () => {
     expect(isMultiDatabaseCapable({ ...baseCapabilities, folder_based: true })).toBe(false);
   });
 
-  it('returns false when both schemas and file_based are true', () => {
+  it('returns false when file_based is true even if schemas is true', () => {
     expect(isMultiDatabaseCapable({ ...baseCapabilities, schemas: true, file_based: true })).toBe(false);
+  });
+
+  it('returns false when no_connection_required is true', () => {
+    expect(isMultiDatabaseCapable({ ...baseCapabilities, no_connection_required: true })).toBe(false);
   });
 
   it('returns false for null capabilities', () => {
@@ -44,6 +49,32 @@ describe('isMultiDatabaseCapable', () => {
 
   it('returns false for undefined capabilities', () => {
     expect(isMultiDatabaseCapable(undefined)).toBe(false);
+  });
+});
+
+describe('isSchemaBasedMultiDb', () => {
+  it('returns true for a schema-based server driver (Postgres)', () => {
+    expect(isSchemaBasedMultiDb({ ...baseCapabilities, schemas: true })).toBe(true);
+  });
+
+  it('returns false for a flat server driver (MySQL)', () => {
+    expect(isSchemaBasedMultiDb(baseCapabilities)).toBe(false);
+  });
+
+  it('returns false for a file-based driver even with schemas', () => {
+    expect(isSchemaBasedMultiDb({ ...baseCapabilities, schemas: true, file_based: true })).toBe(false);
+  });
+
+  it('returns false when no_connection_required is true', () => {
+    expect(isSchemaBasedMultiDb({ ...baseCapabilities, schemas: true, no_connection_required: true })).toBe(false);
+  });
+
+  it('returns false for null capabilities', () => {
+    expect(isSchemaBasedMultiDb(null)).toBe(false);
+  });
+
+  it('returns false for undefined capabilities', () => {
+    expect(isSchemaBasedMultiDb(undefined)).toBe(false);
   });
 });
 

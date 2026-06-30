@@ -54,6 +54,10 @@ interface SidebarSchemaItemProps {
   onCreateView: () => void;
   onCreateTrigger: (schema: string) => void;
   showTriggers?: boolean;
+  /** Schema-based multi-database (PostgreSQL): the database this schema belongs
+   * to, so nested table metadata fetches route to the right connection pool.
+   * Absent for single-database connections. */
+  database?: string;
 }
 
 export const SidebarSchemaItem = ({
@@ -83,6 +87,7 @@ export const SidebarSchemaItem = ({
   onCreateView,
   onCreateTrigger,
   showTriggers = false,
+  database,
 }: SidebarSchemaItemProps) => {
   const { t } = useTranslation();
 
@@ -256,6 +261,7 @@ export const SidebarSchemaItem = ({
                         onDropForeignKey={onDropForeignKey}
                         schemaVersion={schemaVersion}
                         schema={schemaName}
+                        database={database}
                       />
                     ))}
                   </div>

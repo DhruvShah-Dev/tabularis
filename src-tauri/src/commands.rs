@@ -468,13 +468,19 @@ pub async fn get_connection_by_id<R: Runtime>(
 pub async fn get_schemas<R: Runtime>(
     app: AppHandle<R>,
     connection_id: String,
+    database: Option<String>,
 ) -> Result<Vec<String>, String> {
     log::info!("Fetching schemas for connection: {}", connection_id);
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections (e.g. PostgreSQL) route schema discovery to the
+    // selected database's pool instead of the connection's primary database.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_schemas(&params).await
@@ -504,13 +510,17 @@ pub async fn get_routines<R: Runtime>(
     app: AppHandle<R>,
     connection_id: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<Vec<RoutineInfo>, String> {
     log::info!("Fetching routines for connection: {}", connection_id);
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_routines(&params, schema.as_deref()).await
@@ -522,6 +532,7 @@ pub async fn get_routine_parameters<R: Runtime>(
     connection_id: String,
     routine_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<Vec<RoutineParameter>, String> {
     log::info!(
         "Fetching routine parameters for: {} on connection: {}",
@@ -532,7 +543,10 @@ pub async fn get_routine_parameters<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_routine_parameters(&params, &routine_name, schema.as_deref())
@@ -546,6 +560,7 @@ pub async fn get_routine_definition<R: Runtime>(
     routine_name: String,
     routine_type: String, // "PROCEDURE" or "FUNCTION" - mainly for MySQL SHOW CREATE
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<String, String> {
     log::info!(
         "Fetching routine definition for: {} ({}) on connection: {}",
@@ -557,7 +572,10 @@ pub async fn get_routine_definition<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_routine_definition(&params, &routine_name, &routine_type, schema.as_deref())
@@ -569,11 +587,15 @@ pub async fn get_schema_snapshot<R: Runtime>(
     app: AppHandle<R>,
     connection_id: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<Vec<crate::models::TableSchema>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_schema_snapshot(&params, schema.as_deref()).await
 }
@@ -2628,13 +2650,17 @@ pub async fn get_tables<R: Runtime>(
     app: AppHandle<R>,
     connection_id: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<Vec<TableInfo>, String> {
     log::info!("Fetching tables for connection: {}", connection_id);
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     log::debug!(
         "Getting tables from {} database: {}",
@@ -2659,11 +2685,15 @@ pub async fn get_columns<R: Runtime>(
     connection_id: String,
     table_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<Vec<TableColumn>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_columns(&params, &table_name, schema.as_deref())
         .await
@@ -2675,11 +2705,15 @@ pub async fn get_foreign_keys<R: Runtime>(
     connection_id: String,
     table_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<Vec<ForeignKey>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_foreign_keys(&params, &table_name, schema.as_deref())
         .await
@@ -2691,11 +2725,15 @@ pub async fn get_indexes<R: Runtime>(
     connection_id: String,
     table_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<Vec<Index>, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_indexes(&params, &table_name, schema.as_deref())
         .await
@@ -3047,6 +3085,7 @@ pub async fn execute_query<R: Runtime>(
     limit: Option<u32>,
     page: Option<u32>,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<QueryResult, String> {
     log::info!(
         "Executing query on connection: {} | Query: {}",
@@ -3059,7 +3098,12 @@ pub async fn execute_query<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections that cannot cross-database qualify in SQL
+    // (e.g. PostgreSQL), route the query to the selected database's pool.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let task = tokio::spawn(async move {
@@ -3550,13 +3594,17 @@ pub async fn get_views<R: Runtime>(
     app: AppHandle<R>,
     connection_id: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<Vec<crate::models::ViewInfo>, String> {
     log::info!("Fetching views for connection: {}", connection_id);
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     log::debug!(
         "Getting views from {} database: {}",
@@ -3735,13 +3783,17 @@ pub async fn get_triggers<R: Runtime>(
     app: AppHandle<R>,
     connection_id: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<Vec<TriggerInfo>, String> {
     log::info!("Fetching triggers for connection: {}", connection_id);
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let result = drv.get_triggers(&params, schema.as_deref()).await;
@@ -3761,6 +3813,7 @@ pub async fn get_trigger_definition<R: Runtime>(
     trigger_name: String,
     table_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<String, String> {
     log::info!(
         "Fetching trigger definition for: {} on connection: {}",
@@ -3771,7 +3824,10 @@ pub async fn get_trigger_definition<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_trigger_definition(&params, &trigger_name, &table_name, schema.as_deref())

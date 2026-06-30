@@ -1482,13 +1482,17 @@ impl DatabaseDriver for PostgresDriver {
         use urlencoding::encode;
         let user = encode(params.username.as_deref().unwrap_or_default());
         let pass = encode(params.password.as_deref().unwrap_or_default());
+        // Fall back to the `postgres` maintenance DB when no database is selected
+        // (PostgreSQL cannot connect server-wide); mirrors postgres_dbname().
+        let dbname_owned = crate::pool_manager::postgres_dbname(params);
+        let dbname = encode(&dbname_owned);
         Ok(format!(
             "postgres://{}:{}@{}:{}/{}",
             user,
             pass,
             params.host.as_deref().unwrap_or("localhost"),
             params.port.unwrap_or(5432),
-            params.database
+            dbname
         ))
     }
 

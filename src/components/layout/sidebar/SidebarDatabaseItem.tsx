@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { Accordion } from "./Accordion";
+import { SidebarSchemaItem } from "./SidebarSchemaItem";
 import { SidebarTableItem } from "./SidebarTableItem";
 import { SidebarViewItem } from "./SidebarViewItem";
 import { SidebarRoutineItem } from "./SidebarRoutineItem";
@@ -62,6 +63,16 @@ interface SidebarDatabaseItemProps {
   onImport?: (database: string) => void;
   onViewDiagram?: (database: string) => void;
   capabilities?: DriverCapabilities | null;
+  // Schema-based multi-database (PostgreSQL) only. When the database holds
+  // schemas (databaseData.schemas is defined), the node renders one
+  // SidebarSchemaItem per schema and these callbacks carry both the database and
+  // the schema so queries route to the correct pool and qualify correctly.
+  onLoadDatabaseSchema?: (database: string, schema: string) => void;
+  onSchemaTableClick?: (database: string, schema: string, name: string) => void;
+  onSchemaTableDoubleClick?: (database: string, schema: string, name: string) => void;
+  onSchemaViewDoubleClick?: (database: string, schema: string, name: string) => void;
+  onSchemaRoutineDoubleClick?: (database: string, schema: string, routine: RoutineInfo) => void;
+  onSchemaTriggerDoubleClick?: (database: string, schema: string, trigger: TriggerInfo) => void;
 }
 
 export const SidebarDatabaseItem = ({
@@ -94,6 +105,12 @@ export const SidebarDatabaseItem = ({
   onImport,
   onViewDiagram,
   capabilities,
+  onLoadDatabaseSchema,
+  onSchemaTableClick,
+  onSchemaTableDoubleClick,
+  onSchemaViewDoubleClick,
+  onSchemaRoutineDoubleClick,
+  onSchemaTriggerDoubleClick,
 }: SidebarDatabaseItemProps) => {
   const { t } = useTranslation();
 
@@ -120,6 +137,12 @@ export const SidebarDatabaseItem = ({
     : triggers;
   const isLoading = databaseData?.isLoading ?? false;
   const isLoaded = databaseData?.isLoaded ?? false;
+
+  // Schema-based multi-database (PostgreSQL): when the database carries a schema
+  // list, this node renders schemas instead of flat tables/views/routines.
+  const schemaList = databaseData?.schemas;
+  const isSchemaBased = schemaList !== undefined;
+  const schemaDataMap = databaseData?.schemaDataMap ?? {};
 
   // Auto-expand this database when it becomes the active one, e.g. after
   // picking a table from the Quick Navigator. Mirrors SidebarSchemaItem; done
@@ -152,7 +175,9 @@ export const SidebarDatabaseItem = ({
   };
 
   const itemCount = isLoaded
-    ? formatObjectCount(tables.length, views.length, routines.length, triggers.length)
+    ? isSchemaBased
+      ? `${schemaList?.length ?? 0}`
+      : formatObjectCount(tables.length, views.length, routines.length, triggers.length)
     : "";
 
   return (
@@ -235,6 +260,47 @@ export const SidebarDatabaseItem = ({
               <Loader2 size={12} className="animate-spin" />
               {t("sidebar.loadingSchema")}
             </div>
+          ) : isSchemaBased ? (
+            (schemaList?.length ?? 0) === 0 ? (
+              <div className="text-center p-2 text-xs text-muted italic">
+                {t("sidebar.noSchemas")}
+              </div>
+            ) : (
+              <div>
+                {schemaList?.map((schema) => (
+                  <SidebarSchemaItem
+                    key={schema}
+                    schemaName={schema}
+                    schemaData={schemaDataMap[schema]}
+                    activeTable={activeTable}
+                    activeSchema={activeSchema}
+                    connectionId={connectionId}
+                    driver={driver}
+                    schemaVersion={schemaVersion}
+                    database={databaseName}
+                    onLoadSchema={(s) => onLoadDatabaseSchema?.(databaseName, s)}
+                    onRefreshSchema={() => onRefreshDatabase(databaseName)}
+                    onTableClick={(name, s) => onSchemaTableClick?.(databaseName, s, name)}
+                    onTableDoubleClick={(name, s) => onSchemaTableDoubleClick?.(databaseName, s, name)}
+                    onViewClick={onViewClick}
+                    onViewDoubleClick={(name, s) => onSchemaViewDoubleClick?.(databaseName, s, name)}
+                    onRoutineDoubleClick={(routine, s) => onSchemaRoutineDoubleClick?.(databaseName, s, routine)}
+                    onTriggerDoubleClick={(trigger, s) => onSchemaTriggerDoubleClick?.(databaseName, s, trigger)}
+                    onContextMenu={onContextMenu}
+                    onAddColumn={onAddColumn}
+                    onEditColumn={onEditColumn}
+                    onAddIndex={onAddIndex}
+                    onDropIndex={onDropIndex}
+                    onAddForeignKey={onAddForeignKey}
+                    onDropForeignKey={onDropForeignKey}
+                    onCreateTable={onCreateTable}
+                    onCreateView={onCreateView}
+                    onCreateTrigger={onCreateTrigger}
+                    showTriggers={capabilities?.triggers === true}
+                  />
+                ))}
+              </div>
+            )
           ) : (
             <>
               {/* Tables */}

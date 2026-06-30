@@ -134,6 +134,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     setSelectedDatabases,
     databaseDataMap,
     loadDatabaseData,
+    loadDatabaseSchemaData,
     refreshDatabaseData,
     connectionDataMap,
     connections,
@@ -394,6 +395,38 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     });
   };
 
+  // Schema-based multi-database (PostgreSQL): a table/view lives at
+  // database → schema → object. The query is schema-qualified ("schema"."table")
+  // and routed to the database's own connection pool via the `database` state.
+  const handleOpenSchemaTable = (database: string, schema: string, tableName: string) => {
+    setActiveTable(tableName, schema);
+    const quotedTable = quoteTableRef(tableName, activeDriver, schema);
+    navigate("/editor", {
+      state: {
+        initialQuery: `SELECT * FROM ${quotedTable}`,
+        tableName,
+        schema,
+        database,
+        title: `${tableName} (${database})`,
+        targetConnectionId: activeConnectionId,
+      },
+    });
+  };
+
+  const handleOpenSchemaView = (database: string, schema: string, viewName: string) => {
+    const quotedView = quoteTableRef(viewName, activeDriver, schema);
+    navigate("/editor", {
+      state: {
+        initialQuery: `SELECT * FROM ${quotedView}`,
+        tableName: viewName,
+        schema,
+        database,
+        title: `${viewName} (${database})`,
+        targetConnectionId: activeConnectionId,
+      },
+    });
+  };
+
   const handleRoutineDoubleClick = async (routine: RoutineInfo, schema?: string) => {
     try {
       const definition = await invoke<string>("get_routine_definition", {
@@ -427,6 +460,40 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
         t("sidebar.failGetTriggerDefinition") + String(e),
         { kind: "error" }
       );
+    }
+  };
+
+  // Schema-based multi-database (PostgreSQL): fetch the routine/trigger DDL from
+  // the selected database's pool, passing both the database and its schema.
+  const handleSchemaRoutineDoubleClick = async (database: string, schema: string, routine: RoutineInfo) => {
+    try {
+      const definition = await invoke<string>("get_routine_definition", {
+        connectionId: activeConnectionId,
+        routineName: routine.name,
+        routineType: routine.routine_type,
+        schema,
+        database,
+      });
+      runQuery(definition, `${routine.name} Definition`, undefined, true);
+    } catch (e) {
+      console.error(e);
+      showAlert(t("sidebar.failGetRoutineDefinition") + String(e), { kind: "error" });
+    }
+  };
+
+  const handleSchemaTriggerDoubleClick = async (database: string, schema: string, trigger: TriggerInfo) => {
+    try {
+      const definition = await invoke<string>("get_trigger_definition", {
+        connectionId: activeConnectionId,
+        triggerName: trigger.name,
+        tableName: trigger.table_name,
+        schema,
+        database,
+      });
+      runQuery(definition, `${trigger.name} Definition`, undefined, true, schema, true);
+    } catch (e) {
+      console.error(e);
+      showAlert(t("sidebar.failGetTriggerDefinition") + String(e), { kind: "error" });
     }
   };
 
@@ -1289,6 +1356,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       onViewDoubleClick={(name, db) => handleOpenDatabaseView(name, db)}
                       onRoutineDoubleClick={(routine, db) => handleRoutineDoubleClick(routine, db)}
                       onTriggerDoubleClick={(trigger, db) => handleTriggerDoubleClick(trigger, db)}
+                      onLoadDatabaseSchema={loadDatabaseSchemaData}
+                      onSchemaTableClick={(db, schema, name) => { void db; setActiveTable(name, schema); }}
+                      onSchemaTableDoubleClick={handleOpenSchemaTable}
+                      onSchemaViewDoubleClick={handleOpenSchemaView}
+                      onSchemaRoutineDoubleClick={handleSchemaRoutineDoubleClick}
+                      onSchemaTriggerDoubleClick={handleSchemaTriggerDoubleClick}
                       onContextMenu={handleContextMenu}
                       onAddColumn={(t_name) =>
                         setModifyColumnModal({ isOpen: true, tableName: t_name, column: null })

@@ -138,6 +138,7 @@ interface EditorState {
   preventAutoRun?: boolean;
   readOnly?: boolean;
   schema?: string;
+  database?: string;
   targetConnectionId?: string;
   title?: string;
 }
@@ -736,9 +737,13 @@ export const Editor = () => {
         targetTab?.type === "console" || targetTab?.type === "query_builder";
 
       const schema = targetTab?.schema ?? activeSchema;
+      // Schema-based multi-database (PostgreSQL): route the query to the tab's
+      // database pool. Undefined for single-database / flat multi-db connections.
+      const database = targetTab?.database;
       // For history: fall back to activeDatabaseName for multi-db connections
       // where schema may not be set on the tab
-      const historyDb = schema
+      const historyDb = database
+        || schema
         || (isMultiDb ? activeDatabaseName : undefined)
         || undefined;
 
@@ -756,6 +761,7 @@ export const Editor = () => {
           limit: pageSize,
           page: pageNum,
           ...(schema ? { schema } : {}),
+          ...(database ? { database } : {}),
         });
         const end = performance.now();
 
@@ -883,7 +889,9 @@ export const Editor = () => {
           ? settings.resultPageSize
           : 100;
       const schema = targetTab?.schema ?? activeSchema;
-      const historyDb = schema
+      const database = targetTab?.database;
+      const historyDb = database
+        || schema
         || (isMultiDb ? activeDatabaseName : undefined)
         || undefined;
 
@@ -979,6 +987,7 @@ export const Editor = () => {
             page: 1,
             batchId,
             ...(schema ? { schema } : {}),
+            ...(database ? { database } : {}),
           },
         );
       } catch (err) {
@@ -1038,6 +1047,7 @@ export const Editor = () => {
           ? settings.resultPageSize
           : 100;
       const schema = currentTab?.schema ?? activeSchema;
+      const database = currentTab?.database;
 
       // Mark this entry as loading
       if (currentTab?.results) {
@@ -1056,6 +1066,7 @@ export const Editor = () => {
           limit: pageSize,
           page: pageNum,
           ...(schema ? { schema } : {}),
+          ...(database ? { database } : {}),
         });
         const end = performance.now();
 
@@ -2157,8 +2168,14 @@ export const Editor = () => {
     try {
       const promises = [];
 
-      const databaseParam =
-        isMultiDatabaseCapable(activeCapabilities) && activeTab?.schema
+      // Schema-based multi-database (PostgreSQL): the tab carries its database
+      // separately from its (PostgreSQL) schema, so route writes to that
+      // database's pool and qualify with the tab schema. Flat multi-database
+      // (MySQL) keeps overloading schema as the database name, unchanged.
+      const editSchema = activeTab?.database ? (activeTab?.schema ?? activeSchema) : activeSchema;
+      const databaseParam = activeTab?.database
+        ? { database: activeTab.database }
+        : isMultiDatabaseCapable(activeCapabilities) && activeTab?.schema
           ? { database: activeTab.schema }
           : {};
 
@@ -2170,7 +2187,7 @@ export const Editor = () => {
               connectionId: activeConnectionId,
               table: activeTable,
               pkMap,
-              ...(activeSchema ? { schema: activeSchema } : {}),
+              ...(editSchema ? { schema: editSchema } : {}),
               ...databaseParam,
             }),
           ),
@@ -2187,7 +2204,7 @@ export const Editor = () => {
               pkMap: u.pkVal,
               colName: u.colName,
               newVal: u.newVal,
-              ...(activeSchema ? { schema: activeSchema } : {}),
+              ...(editSchema ? { schema: editSchema } : {}),
               ...databaseParam,
             }),
           ),
@@ -2202,7 +2219,7 @@ export const Editor = () => {
               connectionId: activeConnectionId,
               table: activeTable,
               data: insertion.data,
-              ...(activeSchema ? { schema: activeSchema } : {}),
+              ...(editSchema ? { schema: editSchema } : {}),
               ...databaseParam,
             }),
           ),
@@ -2488,7 +2505,7 @@ export const Editor = () => {
         )
           return;
 
-        const queryKey = `${state.initialQuery}-${state.tableName}-${state.queryName}-${state.schema}-${state.title}`;
+        const queryKey = `${state.initialQuery}-${state.tableName}-${state.queryName}-${state.schema}-${state.database}-${state.title}`;
 
         if (processingRef.current === queryKey) {
           // If re-navigating to the same definition with readOnly, patch any
@@ -2511,6 +2528,7 @@ export const Editor = () => {
           preventAutoRun,
           readOnly: navReadOnly,
           schema: navSchema,
+          database: navDatabase,
           title: navTitle,
         } = state;
         const tabId = addTab({
@@ -2519,6 +2537,7 @@ export const Editor = () => {
           query: sql,
           activeTable: table,
           schema: navSchema,
+          database: navDatabase,
           readOnly: navReadOnly,
         });
 
