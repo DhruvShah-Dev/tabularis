@@ -58,6 +58,10 @@ interface SidebarSchemaItemProps {
    * to, so nested table metadata fetches route to the right connection pool.
    * Absent for single-database connections. */
   database?: string;
+  /** When true, render the schema's contents (tables/views/routines) directly
+   * without the collapsible schema header — used by the TablePro-style active
+   * schema dropdown, where the schema is chosen by the dropdown above. */
+  hideHeader?: boolean;
 }
 
 export const SidebarSchemaItem = ({
@@ -88,11 +92,12 @@ export const SidebarSchemaItem = ({
   onCreateTrigger,
   showTriggers = false,
   database,
+  hideHeader = false,
 }: SidebarSchemaItemProps) => {
   const { t } = useTranslation();
 
   const [isExpanded, setIsExpanded] = useState(
-    activeSchema === schemaName,
+    hideHeader || activeSchema === schemaName,
   );
   const [prevActiveSchema, setPrevActiveSchema] = useState(activeSchema);
   const [tablesOpen, setTablesOpen] = useState(true);
@@ -142,6 +147,7 @@ export const SidebarSchemaItem = ({
   return (
     <div className="flex flex-col">
       {/* Schema header */}
+      {!hideHeader && (
       <div
         className="flex items-center justify-between px-2 py-1.5 group/schema cursor-pointer hover:bg-surface-secondary transition-colors"
         onClick={handleToggle}
@@ -184,9 +190,11 @@ export const SidebarSchemaItem = ({
         )}
       </div>
 
+      )}
+
       {/* Schema contents */}
-      {isExpanded && (
-        <div className="ml-3 border-l border-default">
+      {(hideHeader || isExpanded) && (
+        <div className={hideHeader ? "" : "ml-3 border-l border-default"}>
           {isLoading && !isLoaded ? (
             <div className="flex items-center gap-2 p-2 text-xs text-muted">
               <Loader2 size={12} className="animate-spin" />

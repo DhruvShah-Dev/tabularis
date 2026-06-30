@@ -13,8 +13,10 @@ import {
   Network,
   Search,
   X,
+  Layers,
 } from "lucide-react";
 import { Accordion } from "./Accordion";
+import { Select } from "../../ui/Select";
 import { SidebarSchemaItem } from "./SidebarSchemaItem";
 import { SidebarTableItem } from "./SidebarTableItem";
 import { SidebarViewItem } from "./SidebarViewItem";
@@ -25,7 +27,7 @@ import type { TableColumn } from "../../../types/schema";
 import type { ContextMenuData } from "../../../types/sidebar";
 import type { DriverCapabilities } from "../../../types/plugins";
 import { groupRoutinesByType } from "../../../utils/routines";
-import { formatObjectCount } from "../../../utils/schema";
+import { formatObjectCount, resolveActiveSchema } from "../../../utils/schema";
 
 interface SidebarDatabaseItemProps {
   databaseName: string;
@@ -143,6 +145,30 @@ export const SidebarDatabaseItem = ({
   const schemaList = databaseData?.schemas;
   const isSchemaBased = schemaList !== undefined;
   const schemaDataMap = databaseData?.schemaDataMap ?? {};
+
+  // TablePro-style active-schema picker: one schema is active per database and
+  // its objects render directly under a dropdown (no per-schema sub-nodes). The
+  // selection is local to this node; it defaults to the connection's active
+  // schema when that schema belongs to this database, otherwise the first one.
+  const [pickedSchema, setPickedSchema] = useState<string | null>(null);
+  const effectiveSchema = resolveActiveSchema(pickedSchema, activeSchema, schemaList);
+
+  // Lazily load the active schema's objects (the schema dropdown replaces the
+  // per-schema header whose toggle would otherwise trigger the load).
+  useEffect(() => {
+    if (!isSchemaBased || !isExpanded || !effectiveSchema) return;
+    const data = schemaDataMap[effectiveSchema];
+    if (!data?.isLoaded && !data?.isLoading) {
+      onLoadDatabaseSchema?.(databaseName, effectiveSchema);
+    }
+  }, [
+    isSchemaBased,
+    isExpanded,
+    effectiveSchema,
+    schemaDataMap,
+    databaseName,
+    onLoadDatabaseSchema,
+  ]);
 
   // Auto-expand this database when it becomes the active one, e.g. after
   // picking a table from the Quick Navigator. Mirrors SidebarSchemaItem; done
@@ -267,13 +293,34 @@ export const SidebarDatabaseItem = ({
               </div>
             ) : (
               <div>
-                {schemaList?.map((schema) => (
+                {/* TablePro-style active-schema dropdown: pick one schema; its
+                    objects render directly below (no per-schema sub-nodes). */}
+                <div className="px-2 py-1.5">
+                  <Select
+                    value={effectiveSchema}
+                    options={schemaList ?? []}
+                    onChange={(s) => {
+                      setPickedSchema(s);
+                      const data = schemaDataMap[s];
+                      if (!data?.isLoaded && !data?.isLoading) {
+                        onLoadDatabaseSchema?.(databaseName, s);
+                      }
+                    }}
+                    searchable={(schemaList?.length ?? 0) > 8}
+                    searchPlaceholder={t("sidebar.searchSchemas", { defaultValue: "Search schemas..." })}
+                    leadingIcon={<Layers size={13} className="text-accent shrink-0" />}
+                    triggerClassName="px-2 py-1 text-xs font-medium"
+                    className="w-full"
+                  />
+                </div>
+                {effectiveSchema && (
                   <SidebarSchemaItem
-                    key={schema}
-                    schemaName={schema}
-                    schemaData={schemaDataMap[schema]}
+                    key={effectiveSchema}
+                    hideHeader
+                    schemaName={effectiveSchema}
+                    schemaData={schemaDataMap[effectiveSchema]}
                     activeTable={activeTable}
-                    activeSchema={activeSchema}
+                    activeSchema={effectiveSchema}
                     connectionId={connectionId}
                     driver={driver}
                     schemaVersion={schemaVersion}
@@ -298,7 +345,7 @@ export const SidebarDatabaseItem = ({
                     onCreateTrigger={onCreateTrigger}
                     showTriggers={capabilities?.triggers === true}
                   />
-                ))}
+                )}
               </div>
             )
           ) : (
