@@ -4,7 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useAlert } from "../../hooks/useAlert";
 import { useDatabase } from "../../hooks/useDatabase";
-import { isMultiDatabaseCapable } from "../../utils/database";
+import type { TableInfo } from "../../contexts/DatabaseContext";
+import { isMultiDatabaseCapable, isSchemaBasedMultiDb } from "../../utils/database";
 import { Modal } from "../ui/Modal";
 import { Loader2, Download, Database, Square, CheckSquare } from "lucide-react";
 import {
@@ -43,8 +44,14 @@ export const DumpDatabaseModal = ({
   const [startTime, setStartTime] = useState<number | null>(null);
 
   const isMultiDb = isMultiDatabaseCapable(activeCapabilities);
+  // Schema-based multi-database (PostgreSQL): databases contain schemas, so
+  // `databaseDataMap[db].tables` is always empty — table lists live per schema
+  // and load lazily. The backend dump is scoped to a single schema too
+  // (`schema.unwrap_or("public")`), so mirror that exact scoping here.
+  const isSchemaBased = isSchemaBasedMultiDb(activeCapabilities);
+  const dumpSchema = activeSchema ?? "public";
 
-  // On a multi-database connection (e.g. MySQL) the dump targets a specific
+  // On a flat multi-database connection (e.g. MySQL) the dump targets a specific
   // database whose cached table list may be missing or belong to a different
   // database. Reload it whenever the dialog opens so the dump reflects the
   // target database's current schema. A ref keeps refreshDatabaseData out of the
@@ -53,19 +60,60 @@ export const DumpDatabaseModal = ({
   const refreshRef = useRef(refreshDatabaseData);
   refreshRef.current = refreshDatabaseData;
   useEffect(() => {
-    if (isOpen && isMultiDb && databaseName) {
+    if (isOpen && isMultiDb && !isSchemaBased && databaseName) {
       refreshRef.current(databaseName);
     }
-  }, [isOpen, isMultiDb, databaseName]);
+  }, [isOpen, isMultiDb, isSchemaBased, databaseName]);
+
+  // Schema-based drivers: fetch the table list of the schema the dump will
+  // actually export, routed to the target database's pool — the sidebar cache
+  // can't be used because per-schema data loads lazily and may be absent.
+  const [schemaTables, setSchemaTables] = useState<string[] | null>(null);
+  const [schemaTablesLoading, setSchemaTablesLoading] = useState(false);
+  useEffect(() => {
+    if (!isOpen || !isSchemaBased) {
+      setSchemaTables(null);
+      return;
+    }
+    let cancelled = false;
+    setSchemaTablesLoading(true);
+    invoke<TableInfo[]>("get_tables", {
+      connectionId,
+      schema: dumpSchema,
+      ...(databaseName ? { database: databaseName } : {}),
+    })
+      .then((res) => {
+        if (!cancelled) setSchemaTables(res.map((tbl) => tbl.name));
+      })
+      .catch((e) => {
+        console.error("Failed to load tables for dump:", e);
+        if (!cancelled) setSchemaTables([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSchemaTablesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, isSchemaBased, connectionId, dumpSchema, databaseName]);
 
   // For multi-database connections read the table list straight from the target
   // database's freshly-loaded data (never the active-database fallback); other
   // drivers keep using the list resolved by the parent.
-  const targetDbData = isMultiDb ? databaseDataMap[databaseName] : undefined;
-  const tablesLoading = isMultiDb ? (targetDbData?.isLoading ?? false) : false;
+  const targetDbData = isMultiDb && !isSchemaBased ? databaseDataMap[databaseName] : undefined;
+  const tablesLoading = isSchemaBased
+    ? schemaTablesLoading
+    : isMultiDb
+      ? (targetDbData?.isLoading ?? false)
+      : false;
   const effectiveTables = useMemo(
-    () => (isMultiDb ? (targetDbData?.tables ?? []).map((tbl) => tbl.name) : tables),
-    [isMultiDb, targetDbData, tables],
+    () =>
+      isSchemaBased
+        ? (schemaTables ?? [])
+        : isMultiDb
+          ? (targetDbData?.tables ?? []).map((tbl) => tbl.name)
+          : tables,
+    [isSchemaBased, schemaTables, isMultiDb, targetDbData, tables],
   );
 
   // Detect content changes without reacting to array-reference churn; the actual

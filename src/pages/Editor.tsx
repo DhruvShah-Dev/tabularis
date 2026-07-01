@@ -3967,9 +3967,25 @@ export const Editor = () => {
             setSaveQueryModal({ ...saveQueryModal, isOpen: false })
           }
           initialSql={saveQueryModal.sql}
-          initialDatabase={activeTab?.schema ?? activeSchema ?? activeDatabaseName}
+          // Schema-based multi-database (PostgreSQL): the saved query's database
+          // is the tab's `database` (the pool key), never its PostgreSQL schema.
+          // Flat drivers (MySQL) keep overloading `schema` with the database name.
+          initialDatabase={
+            isSchemaBasedConn
+              ? (activeTab?.database ?? activeDatabaseName)
+              : (activeTab?.schema ?? activeSchema ?? activeDatabaseName)
+          }
           databases={isMultiDb ? selectedDatabases : undefined}
-          onSave={async (name, sql, database) => await saveQuery(name, sql, database ?? activeTab?.schema ?? activeSchema ?? activeDatabaseName)}
+          onSave={async (name, sql, database) =>
+            await saveQuery(
+              name,
+              sql,
+              database ??
+                (isSchemaBasedConn
+                  ? (activeTab?.database ?? activeDatabaseName)
+                  : (activeTab?.schema ?? activeSchema ?? activeDatabaseName)),
+            )
+          }
           title={t("editor.saveQuery")}
         />
       )}
@@ -3995,6 +4011,7 @@ export const Editor = () => {
         query={visualExplainQuery ?? activeTab?.query ?? ""}
         connectionId={activeConnectionId ?? ""}
         schema={activeTab?.schema ?? activeSchema ?? undefined}
+        database={activeTab?.database}
       />
       <ExplainSelectionModal
         isOpen={isExplainSelectionOpen}

@@ -45,7 +45,12 @@ interface SidebarSchemaItemProps {
     data?: ContextMenuData,
   ) => void;
   onAddColumn: (tableName: string) => void;
-  onEditColumn: (tableName: string, col: TableColumn) => void;
+  onEditColumn: (
+    tableName: string,
+    col: TableColumn,
+    schema?: string,
+    database?: string,
+  ) => void;
   onAddIndex: (tableName: string) => void;
   onDropIndex: (tableName: string, indexName: string) => void;
   onAddForeignKey: (tableName: string) => void;
@@ -313,6 +318,7 @@ export const SidebarSchemaItem = ({
                         connectionId={connectionId}
                         driver={driver}
                         schema={schemaName}
+                        database={database}
                       />
                     ))}
                   </div>
@@ -377,6 +383,7 @@ export const SidebarSchemaItem = ({
                           onContextMenu={onContextMenu}
                           onDoubleClick={(tr) => onTriggerDoubleClick(tr, schemaName)}
                           schema={schemaName}
+                          database={database}
                         />
                       ))}
                     </div>
@@ -415,6 +422,7 @@ export const SidebarSchemaItem = ({
                             onContextMenu={onContextMenu}
                             onDoubleClick={(r) => onRoutineDoubleClick(r, schemaName)}
                             schema={schemaName}
+                            database={database}
                           />
                         ))}
                       </div>
@@ -439,6 +447,7 @@ export const SidebarSchemaItem = ({
                             onContextMenu={onContextMenu}
                             onDoubleClick={(r) => onRoutineDoubleClick(r, schemaName)}
                             schema={schemaName}
+                            database={database}
                           />
                         ))}
                       </div>

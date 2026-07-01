@@ -23,7 +23,14 @@ export const SchemaDiagramPage = () => {
   // On a single connection that exposes multiple databases (e.g. MySQL), the
   // diagram must be scoped to the selected database rather than the connection's
   // primary one. See resolveDiagramSchema for the full rationale.
-  const effectiveSchema = resolveDiagramSchema(schema, databaseName);
+  //
+  // When a `database` param is present (schema-based multi-database, i.e.
+  // PostgreSQL), the pool is already routed by it, so `databaseName` must NOT
+  // be reused as a schema fallback — it is a database name, and treating it as
+  // a schema would set search_path to a non-existent schema.
+  const effectiveSchema = database
+    ? schema
+    : resolveDiagramSchema(schema, databaseName);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {

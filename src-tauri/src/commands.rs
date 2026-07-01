@@ -3282,6 +3282,7 @@ pub async fn explain_query_plan<R: Runtime>(
     query: String,
     analyze: bool,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<ExplainPlan, String> {
     log::info!(
         "Explaining query on connection: {} | analyze: {} | Query: {}",
@@ -3302,7 +3303,12 @@ pub async fn explain_query_plan<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections that cannot cross-database qualify in SQL
+    // (e.g. PostgreSQL), route the explain to the selected database's pool.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let task = tokio::spawn(async move {
@@ -3662,6 +3668,7 @@ pub async fn get_view_definition<R: Runtime>(
     connection_id: String,
     view_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<String, String> {
     log::info!(
         "Fetching view definition for: {} on connection: {}",
@@ -3672,7 +3679,12 @@ pub async fn get_view_definition<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections (e.g. PostgreSQL) route the lookup to the
+    // selected database's pool instead of the connection's primary database.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let result = drv
@@ -3694,6 +3706,7 @@ pub async fn create_view<R: Runtime>(
     view_name: String,
     definition: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<(), String> {
     log::info!(
         "Creating view: {} on connection: {}",
@@ -3704,7 +3717,12 @@ pub async fn create_view<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections (e.g. PostgreSQL) route the DDL to the
+    // selected database's pool instead of the connection's primary database.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let result = drv
@@ -3726,6 +3744,7 @@ pub async fn alter_view<R: Runtime>(
     view_name: String,
     definition: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<(), String> {
     log::info!(
         "Altering view: {} on connection: {}",
@@ -3736,7 +3755,12 @@ pub async fn alter_view<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections (e.g. PostgreSQL) route the DDL to the
+    // selected database's pool instead of the connection's primary database.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let result = drv
@@ -3757,6 +3781,7 @@ pub async fn drop_view<R: Runtime>(
     connection_id: String,
     view_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<(), String> {
     log::info!(
         "Dropping view: {} on connection: {}",
@@ -3767,7 +3792,12 @@ pub async fn drop_view<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections (e.g. PostgreSQL) route the DDL to the
+    // selected database's pool instead of the connection's primary database.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let result = drv.drop_view(&params, &view_name, schema.as_deref()).await;
@@ -3786,6 +3816,7 @@ pub async fn get_view_columns<R: Runtime>(
     connection_id: String,
     view_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<Vec<TableColumn>, String> {
     log::info!(
         "Fetching view columns for: {} on connection: {}",
@@ -3796,7 +3827,12 @@ pub async fn get_view_columns<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections (e.g. PostgreSQL) route the lookup to the
+    // selected database's pool instead of the connection's primary database.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let result = drv
@@ -3873,13 +3909,19 @@ pub async fn create_trigger<R: Runtime>(
     connection_id: String,
     trigger_sql: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<(), String> {
     log::info!("Creating trigger on connection: {}", connection_id);
 
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections (e.g. PostgreSQL) route the DDL to the
+    // selected database's pool instead of the connection's primary database.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let result = drv
@@ -3901,6 +3943,7 @@ pub async fn drop_trigger<R: Runtime>(
     trigger_name: String,
     table_name: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<(), String> {
     log::info!(
         "Dropping trigger: {} on connection: {}",
@@ -3911,7 +3954,12 @@ pub async fn drop_trigger<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections (e.g. PostgreSQL) route the DDL to the
+    // selected database's pool instead of the connection's primary database.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let result = drv

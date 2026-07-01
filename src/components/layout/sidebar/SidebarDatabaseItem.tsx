@@ -53,7 +53,14 @@ interface SidebarDatabaseItemProps {
     data?: ContextMenuData,
   ) => void;
   onAddColumn: (tableName: string) => void;
-  onEditColumn: (tableName: string, col: TableColumn) => void;
+  /** The node's schema/database are forwarded so the edit-column modal can
+   * route its DDL to the right schema and connection pool. */
+  onEditColumn: (
+    tableName: string,
+    col: TableColumn,
+    schema?: string,
+    database?: string,
+  ) => void;
   onAddIndex: (tableName: string) => void;
   onDropIndex: (tableName: string, indexName: string) => void;
   onAddForeignKey: (tableName: string) => void;
