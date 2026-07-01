@@ -2236,8 +2236,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                   label: t("sidebar.newConsole"),
                                   icon: FileCode,
                                   action: () => {
-                                    const spec = newConsoleForDatabase(contextMenu.id);
-                                    runQuery(spec.sql, spec.title, undefined, true, spec.schema);
+                                    const spec = newConsoleForDatabase(contextMenu.id, isSchemaBasedMultiDb(activeCapabilities));
+                                    runQuery(spec.sql, spec.title, undefined, true, spec.schema, undefined, spec.database);
                                   },
                                 },
                                 {
