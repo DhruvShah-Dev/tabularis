@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { supportsManageTables } from "../../../utils/driverCapabilities";
 import { useTranslation } from "react-i18next";
 import {
@@ -144,7 +144,7 @@ export const SidebarDatabaseItem = ({
   // list, this node renders schemas instead of flat tables/views/routines.
   const schemaList = databaseData?.schemas;
   const isSchemaBased = schemaList !== undefined;
-  const schemaDataMap = databaseData?.schemaDataMap ?? {};
+  const schemaDataMap = useMemo(() => databaseData?.schemaDataMap ?? {}, [databaseData?.schemaDataMap]);
 
   // TablePro-style active-schema picker: one schema is active per database and
   // its objects render directly under a dropdown (no per-schema sub-nodes). The

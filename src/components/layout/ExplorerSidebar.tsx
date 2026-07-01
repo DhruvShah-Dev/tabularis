@@ -1855,7 +1855,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                   // every action below can route to that same connection pool. Absent for
                   // single-database connections and for flat multi-database drivers (MySQL),
                   // where `ctxSchema` already carries the database name.
-                  const ctxDatabase = contextMenu.data && "database" in contextMenu.data ? contextMenu.data.database : undefined;
+                  const ctxDatabase = contextMenu.data && "database" in contextMenu.data ? contextMenu.data.database ?? undefined : undefined;
                   return [
                     {
                       label: t("sidebar.showData"),
