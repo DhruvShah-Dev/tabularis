@@ -151,8 +151,8 @@ export const SidebarSchemaItem = ({
             size={14}
             className={
               activeSchema === schemaName
-                ? "text-blue-400 shrink-0"
-                : "text-muted group-hover/schema:text-blue-400 shrink-0"
+                ? "text-accent shrink-0"
+                : "text-muted group-hover/schema:text-accent shrink-0"
             }
           />
           <span className="text-sm font-medium text-secondary truncate">
@@ -170,7 +170,8 @@ export const SidebarSchemaItem = ({
               e.stopPropagation();
               onRefreshSchema(schemaName);
             }}
-            className="p-0.5 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors opacity-0 group-hover/schema:opacity-100"
+            className="p-0.5 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors opacity-0
+                group-hover/schema:opacity-100 ml-1 mr-3"
             title={t("sidebar.refreshTables") || "Refresh"}
           >
             <RefreshCw size={12} />
@@ -194,7 +195,7 @@ export const SidebarSchemaItem = ({
                 isOpen={tablesOpen}
                 onToggle={() => setTablesOpen(!tablesOpen)}
                 actions={
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 mr-2.5">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -217,13 +218,13 @@ export const SidebarSchemaItem = ({
                         value={tableFilter}
                         onChange={(e) => setTableFilter(e.target.value)}
                         placeholder={t("sidebar.filterTables")}
-                        className="w-full bg-surface-secondary text-xs text-secondary placeholder:text-muted rounded pl-6 pr-6 py-1 border border-default focus:outline-none focus:border-blue-500/50"
+                        className="w-full bg-surface-secondary text-xs text-secondary placeholder:text-muted rounded pl-6 pr-10 py-1 border border-default focus:outline-none focus:border-blue-500/50"
                         onClick={(e) => e.stopPropagation()}
                       />
                       {tableFilter && (
                         <button
                           onClick={(e) => { e.stopPropagation(); setTableFilter(""); }}
-                          className="absolute right-1.5 text-muted hover:text-primary"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-primary p-0.5 rounded hover:bg-surface-secondary"
                         >
                           <X size={11} />
                         </button>
@@ -267,7 +268,7 @@ export const SidebarSchemaItem = ({
                 isOpen={viewsOpen}
                 onToggle={() => setViewsOpen(!viewsOpen)}
                 actions={
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 mr-2.5">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -311,7 +312,7 @@ export const SidebarSchemaItem = ({
                   isOpen={triggersOpen}
                   onToggle={() => setTriggersOpen(!triggersOpen)}
                   actions={
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 mr-2.5">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

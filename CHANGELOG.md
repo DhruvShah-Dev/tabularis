@@ -1,3 +1,86 @@
+## [0.13.4](https://github.com/TabularisDB/tabularis/compare/v0.13.3...v0.13.4) (2026-06-30)
+
+
+### Bug Fixes
+
+* **autocomplete:** avoid doubling quotes for quoted identifier completion ([2daa3ec](https://github.com/TabularisDB/tabularis/commit/2daa3ec32d9a074f09efe4f11ad2501699fa0a41))
+* **autocomplete:** resolve aliased PostgreSQL quoted table columns correctly ([970f8ce](https://github.com/TabularisDB/tabularis/commit/970f8ce605edd5f49cb7b690a8926b21c4c3c998))
+* **editor:** correct pkColumns field name in singleResultToEntry ([809dc55](https://github.com/TabularisDB/tabularis/commit/809dc5524e96f821804746419d8c42e0575d6b70))
+* **editor:** remove duplicate SQL autocomplete registration ([76d49f2](https://github.com/TabularisDB/tabularis/commit/76d49f25893d8b759bb82098b07ac38f71212d3b))
+* **editor:** update/delete use full composite PK in WHERE clause ([#324](https://github.com/TabularisDB/tabularis/issues/324)) ([d8d4935](https://github.com/TabularisDB/tabularis/commit/d8d4935245816b4ad3e84987c76c5838420369fb))
+* improve accessibility for screen reader users ([#355](https://github.com/TabularisDB/tabularis/issues/355)) ([3d7740a](https://github.com/TabularisDB/tabularis/commit/3d7740a4bbd9cf7def13fab1a61aa1a7c0547655)), closes [#86](https://github.com/TabularisDB/tabularis/issues/86)
+* **mysql:** avoid invalid pagination after semicolons ([#389](https://github.com/TabularisDB/tabularis/issues/389)) ([021271b](https://github.com/TabularisDB/tabularis/commit/021271b4d4138af99a27bd54aecd8c8c24fa4343))
+* **postgres:** bind uuid-shaped PK as text for varchar columns ([#392](https://github.com/TabularisDB/tabularis/issues/392)) ([#394](https://github.com/TabularisDB/tabularis/issues/394)) ([f2fed4d](https://github.com/TabularisDB/tabularis/commit/f2fed4d43da39014dddefa50ef680d6e6a3c1733))
+* **postgres:** support routine introspection on PostgreSQL < 11 ([#377](https://github.com/TabularisDB/tabularis/issues/377)) ([cbc7ba6](https://github.com/TabularisDB/tabularis/commit/cbc7ba6bc4180bf575da286fc5cbef683ebbcc1b)), closes [#375](https://github.com/TabularisDB/tabularis/issues/375)
+* **updater:** show available update on manual check after dismissal ([#398](https://github.com/TabularisDB/tabularis/issues/398)) ([548f04f](https://github.com/TabularisDB/tabularis/commit/548f04fbcbb18b80982c4e4b1ebd66a811e894e9))
+
+
+### Features
+
+* allow passing a startup script per connection ([#352](https://github.com/TabularisDB/tabularis/issues/352)) ([f885b31](https://github.com/TabularisDB/tabularis/commit/f885b31a11c762dff82ae92a754cd6d4cf3b4c4d)), closes [#350](https://github.com/TabularisDB/tabularis/issues/350) [#2](https://github.com/TabularisDB/tabularis/issues/2)
+* **autocomplete:** add disposeSqlAutocomplete mock for testing ([d04434d](https://github.com/TabularisDB/tabularis/commit/d04434d8fccbede167427bdf1c0c74bdc054fa13))
+* **backend:** add support for SSH password/PIN prompt ([475adfc](https://github.com/TabularisDB/tabularis/commit/475adfc4a292e082e5bd139fdaf90234bc6ffe07))
+* **backend:** implement SSH passphrase prompt support with forced askpass ([81164ee](https://github.com/TabularisDB/tabularis/commit/81164ee980641bf6efb14bc3f504926806d3b1fb))
+* **editor:** show success feedback for non-SELECT statements ([#391](https://github.com/TabularisDB/tabularis/issues/391)) ([33dd58b](https://github.com/TabularisDB/tabularis/commit/33dd58b41b96408c524b561cab2d6bed7c2fbe8f))
+* **editor:** window controls and detachable results panel ([#369](https://github.com/TabularisDB/tabularis/issues/369)) ([b4171a7](https://github.com/TabularisDB/tabularis/commit/b4171a7eeae88b049d617418a5e19564617ad3b9))
+* **frontend:** add SSH prompt toggle to connection modals ([bd64d8e](https://github.com/TabularisDB/tabularis/commit/bd64d8e6b219f7a3c4a9dc4c76e0e0307223c0f9))
+* **i18n:** add SSH prompt translations for all supported languages ([c23c2e8](https://github.com/TabularisDB/tabularis/commit/c23c2e8dfbdfb3df567b5dd13036651748eeb707))
+* **mysql:** auto-skip PIPES_AS_CONCAT sql_mode for Vitess/PlanetScale ([#387](https://github.com/TabularisDB/tabularis/issues/387)) ([53e3ab7](https://github.com/TabularisDB/tabularis/commit/53e3ab74ea362ca0225e090c05f692b2e28b8f7f)), closes [#383](https://github.com/TabularisDB/tabularis/issues/383)
+* **notebook:** collapse query, results and chart sections individually ([#399](https://github.com/TabularisDB/tabularis/issues/399)) ([54973a5](https://github.com/TabularisDB/tabularis/commit/54973a564bc0e422ff1cb56962ae2ba7b7569f19)), closes [#362](https://github.com/TabularisDB/tabularis/issues/362)
+* **plugins:** add DM plugin to registry ([#382](https://github.com/TabularisDB/tabularis/issues/382)) ([26d2839](https://github.com/TabularisDB/tabularis/commit/26d28399490287007b0e460691598d929ecb09ec))
+* **registry:** add Cloudflare D1 plugin v0.1.0 ([43d7d81](https://github.com/TabularisDB/tabularis/commit/43d7d819e143337bdaf91518ef8ed09ada4292db))
+* **sql-autocomplete:** integrate SQL autocomplete registration into NotebookView and Editor components ([c38bd3e](https://github.com/TabularisDB/tabularis/commit/c38bd3ea2092cc444c8572a97e2ce59ac27aaade))
+* **ssh:** serve askpass prompts with an in-app modal ([dacbdb7](https://github.com/TabularisDB/tabularis/commit/dacbdb7bbd0517e4478aca6a9c5afb2c48fdf9bd))
+* **views:** add SQL beautify button to view editor ([#372](https://github.com/TabularisDB/tabularis/issues/372)) ([2b7e34c](https://github.com/TabularisDB/tabularis/commit/2b7e34c289cb433fb03f46eef7caeb86a00a553a))
+
+## [0.13.3](https://github.com/TabularisDB/tabularis/compare/v0.13.2...v0.13.3) (2026-06-24)
+
+
+### Bug Fixes
+
+* address PR review warnings ([941629b](https://github.com/TabularisDB/tabularis/commit/941629b0bc72eb0535241bb5a1caba44c1df36b7))
+* **ai:** fetch Anthropic and MiniMax models from their APIs ([#359](https://github.com/TabularisDB/tabularis/issues/359)) ([ec72177](https://github.com/TabularisDB/tabularis/commit/ec72177a79d6f0abed1fcd2792e54e595fe78806)), closes [#358](https://github.com/TabularisDB/tabularis/issues/358)
+* **k8s:** avoid MySQL fallback in K8s connection modal ([f7e50fb](https://github.com/TabularisDB/tabularis/commit/f7e50fb71e2cd622a5a65a5f9221e48b56511535))
+* **k8s:** correct inline connection port defaults ([36d4d1f](https://github.com/TabularisDB/tabularis/commit/36d4d1fe115222fd06ba807f8d7ab6f80266a53b))
+* **k8s:** return localized validation results ([1506412](https://github.com/TabularisDB/tabularis/commit/15064126189e10e69e4d1363146d49a74afbbb2e))
+* **mcp:** play approval alert via OS notification sound on Linux ([ed9c12f](https://github.com/TabularisDB/tabularis/commit/ed9c12fcd41f56a8a2fdbbccde7bff4565d0f37b))
+* **mcp:** unblock approval gate during language settle ([8601478](https://github.com/TabularisDB/tabularis/commit/86014782594d0dec3fce641cd8ee2f27195a1225))
+* scope multi-database operations to the selected database ([#346](https://github.com/TabularisDB/tabularis/issues/346)) ([cf7c1eb](https://github.com/TabularisDB/tabularis/commit/cf7c1eb16cb07e8a9b0b55dde74ae7ff4a2b62f4))
+* **view-editor:** robustly extract the SELECT body from view definitions ([#320](https://github.com/TabularisDB/tabularis/issues/320)) ([f073d54](https://github.com/TabularisDB/tabularis/commit/f073d54a494896ec1d159a565c6019cb19d81c7b))
+
+
+### Features
+
+* **editor:** tint tab bar with active connection color ([#333](https://github.com/TabularisDB/tabularis/issues/333)) ([b328a97](https://github.com/TabularisDB/tabularis/commit/b328a979f605044e6870f1f680a954a371c14c32))
+* **k8s:** add resource port utility ([8dc81a1](https://github.com/TabularisDB/tabularis/commit/8dc81a134a616326c6de5407488a6fb405e9c83e))
+* **k8s:** add service port discovery command ([a721001](https://github.com/TabularisDB/tabularis/commit/a72100101389502e15aebdea81d257401ed5f312))
+* **k8s:** improve selection dialog defaults ([6c15048](https://github.com/TabularisDB/tabularis/commit/6c15048d087da38eb424628aad15eb095c870fdc))
+* **mcp:** add approval attention controls and localized notifications ([ae8637c](https://github.com/TabularisDB/tabularis/commit/ae8637cd16261e6df2c238da3c176776e5727022)), closes [#307](https://github.com/TabularisDB/tabularis/issues/307)
+* restore previous session connections and add start-maximized option ([#332](https://github.com/TabularisDB/tabularis/issues/332)) ([567a33c](https://github.com/TabularisDB/tabularis/commit/567a33cd7e62729f2a22dc404acde6b989a88365))
+* **ui:** show project social links across update, what's new and welcome modals ([#353](https://github.com/TabularisDB/tabularis/issues/353)) ([97576d1](https://github.com/TabularisDB/tabularis/commit/97576d11066a4b6194c689e063a470008f1ecd6b))
+
+## [0.13.2](https://github.com/TabularisDB/tabularis/compare/v0.13.1...v0.13.2) (2026-06-16)
+
+
+### Bug Fixes
+
+* **autocomplete:** suggest clause keywords and correct columns after … ([#295](https://github.com/TabularisDB/tabularis/issues/295)) ([35952f3](https://github.com/TabularisDB/tabularis/commit/35952f310d0b7ff23e99c3602d5579854c12e056))
+* **mysql:** multiply per-loop time by loops in EXPLAIN ANALYZE ([#303](https://github.com/TabularisDB/tabularis/issues/303)) ([6ed133f](https://github.com/TabularisDB/tabularis/commit/6ed133ff27fc45f4231005617b2e6407bfda561f)), closes [#300](https://github.com/TabularisDB/tabularis/issues/300)
+
+
+### Features
+
+* **connection:** show SSL tab for plugin drivers via supports_ssl capability ([#309](https://github.com/TabularisDB/tabularis/issues/309)) ([5a2e929](https://github.com/TabularisDB/tabularis/commit/5a2e929cb9efb7a279b71ae94a3435dd5e47d8a6)), closes [TabularisDB/tabularis-clickhouse-plugin#1](https://github.com/TabularisDB/tabularis-clickhouse-plugin/issues/1)
+* **explain:** show Actual Rows column in Visual EXPLAIN table view ([#302](https://github.com/TabularisDB/tabularis/issues/302)) ([c6048ce](https://github.com/TabularisDB/tabularis/commit/c6048ce481d4688b2f1f616f915ccf7489e28729)), closes [#298](https://github.com/TabularisDB/tabularis/issues/298)
+* **notebook:** manage saved notebooks per connection ([#304](https://github.com/TabularisDB/tabularis/issues/304)) ([4b5e7f2](https://github.com/TabularisDB/tabularis/commit/4b5e7f22e15f919a698cc7a2bce67315e4c73a01))
+* **plugins:** add Redis (Go) plugin v0.4.1 ([#314](https://github.com/TabularisDB/tabularis/issues/314)) ([31805eb](https://github.com/TabularisDB/tabularis/commit/31805eb0b1ec43e626e7886a5b9aa88375b400a2))
+* show sql progress in realtime ([#296](https://github.com/TabularisDB/tabularis/issues/296)) ([80613c3](https://github.com/TabularisDB/tabularis/commit/80613c36cda8ab9cb39fc6d6198b81f36c69c601))
+
+
+### Performance Improvements
+
+* **grid:** memoize DataGrid rows for fluid scroll with many rows/columns ([61794dc](https://github.com/TabularisDB/tabularis/commit/61794dc21f6618f9e8a1fa9687f445423ba38a00))
+
 ## [0.13.1](https://github.com/TabularisDB/tabularis/compare/v0.13.0...v0.13.1) (2026-06-05)
 
 
