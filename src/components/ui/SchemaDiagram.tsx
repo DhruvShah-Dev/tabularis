@@ -152,7 +152,7 @@ const SchemaDiagramContent = ({
     setSelectedTable(null);
   }, []);
 
-  // Effetto per impostare il focus iniziale dalla URL
+  // Effect to set the initial focus from the URL
   useEffect(() => {
     const focusTable = searchParams.get("focusTable");
     if (focusTable && allNodes.length > 0) {
@@ -276,7 +276,7 @@ const SchemaDiagramContent = ({
     database,
   ]);
 
-  // Effetto per filtrare i nodi quando una tabella è selezionata
+  // Effect to filter the nodes when a table is selected
   useEffect(() => {
     if (!selectedTable || allNodes.length === 0) {
       // Mostra tutti i nodi
@@ -299,12 +299,12 @@ const SchemaDiagramContent = ({
       }
     });
 
-    // Filtra i nodi per mostrare solo la tabella selezionata e le sue relazioni
+    // Filter the nodes to show only the selected table and its relationships
     const filteredNodes = allNodes.filter((node) =>
       relatedTables.has(node.id),
     );
 
-    // Filtra gli edge per mostrare solo quelli tra le tabelle filtrate
+    // Filter the edges to show only those between the filtered tables
     const filteredEdges = allEdges.filter(
       (edge) =>
         relatedTables.has(edge.source) && relatedTables.has(edge.target),
