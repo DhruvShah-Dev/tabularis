@@ -694,6 +694,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               connectionName: activeConnectionName || "Unknown",
                               databaseName: activeDatabaseName || "Unknown",
                               ...(activeSchema ? { schema: activeSchema } : {}),
+                              ...(activeCapabilities?.schemas === true ? { schemaBased: true } : {}),
                             });
                           } catch (e) {
                             console.error("Failed to open ER Diagram window:", e);
@@ -733,6 +734,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                         connectionName: activeConnectionName || "Unknown",
                         databaseName: activeDatabaseName || "Unknown",
                         ...(activeSchema ? { schema: activeSchema } : {}),
+                        ...(activeCapabilities?.schemas === true ? { schemaBased: true } : {}),
                       });
                     } catch (e) {
                       console.error("Failed to open ER Diagram window:", e);
@@ -1485,6 +1487,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                             ...(isSchemaBasedMultiDb(activeCapabilities)
                               ? { database: db }
                               : {}),
+                            ...(activeCapabilities?.schemas === true ? { schemaBased: true } : {}),
                           });
                         } catch (e) {
                           console.error("Failed to open ER Diagram window:", e);
@@ -1927,6 +1930,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                             focusTable: contextMenu.id,
                             ...(ctxSchema ? { schema: ctxSchema } : {}),
                             ...(ctxDatabase ? { database: ctxDatabase } : {}),
+                            ...(activeCapabilities?.schemas === true ? { schemaBased: true } : {}),
                           });
                         } catch (e) {
                           console.error("Failed to open ER Diagram window:", e);
@@ -2326,6 +2330,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                         ...(isSchemaBasedMultiDb(activeCapabilities)
                                           ? { database: contextMenu.id }
                                           : {}),
+                                        ...(activeCapabilities?.schemas === true ? { schemaBased: true } : {}),
                                       });
                                     } catch (e) {
                                       console.error("Failed to open ER Diagram window:", e);

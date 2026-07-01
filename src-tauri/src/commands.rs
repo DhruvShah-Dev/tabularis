@@ -3440,6 +3440,7 @@ pub async fn open_er_diagram_window(
     focus_table: Option<String>,
     schema: Option<String>,
     database: Option<String>,
+    schema_based: Option<bool>,
 ) -> Result<(), String> {
     use tauri::{WebviewUrl, WebviewWindowBuilder};
     use urlencoding::encode;
@@ -3472,6 +3473,13 @@ pub async fn open_er_diagram_window(
     // routes the diagram's metadata fetch to the right connection pool.
     if let Some(db) = &database {
         url.push_str(&format!("&database={}", encode(db)));
+    }
+
+    // Tells the diagram page the driver organizes objects into schemas
+    // (PostgreSQL), so it can offer a schema picker. The page runs in its own
+    // window without the opener's capability context, hence the explicit flag.
+    if schema_based == Some(true) {
+        url.push_str("&schemaBased=1");
     }
 
     // Derive a unique window label per (connection, database, schema) so that

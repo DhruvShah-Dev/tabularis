@@ -6,8 +6,10 @@ import { useAlert } from "../../hooks/useAlert";
 import { useDatabase } from "../../hooks/useDatabase";
 import type { TableInfo } from "../../contexts/DatabaseContext";
 import { isMultiDatabaseCapable, isSchemaBasedMultiDb } from "../../utils/database";
+import { resolveActiveSchema } from "../../utils/schema";
 import { Modal } from "../ui/Modal";
-import { Loader2, Download, Database, Square, CheckSquare } from "lucide-react";
+import { Select } from "../ui/Select";
+import { Loader2, Download, Database, Layers, Square, CheckSquare } from "lucide-react";
 import {
   validateDumpOptions,
   toggleTableSelection,
@@ -47,9 +49,43 @@ export const DumpDatabaseModal = ({
   // Schema-based multi-database (PostgreSQL): databases contain schemas, so
   // `databaseDataMap[db].tables` is always empty — table lists live per schema
   // and load lazily. The backend dump is scoped to a single schema too
-  // (`schema.unwrap_or("public")`), so mirror that exact scoping here.
+  // (`schema.unwrap_or("public")`), so a schema picker lets the user choose
+  // which schema of the target database to dump; the table list mirrors it.
   const isSchemaBased = isSchemaBasedMultiDb(activeCapabilities);
-  const dumpSchema = activeSchema ?? "public";
+  const [availableSchemas, setAvailableSchemas] = useState<string[]>([]);
+  const [pickedSchema, setPickedSchema] = useState<string | null>(null);
+  const dumpSchema = isSchemaBased
+    ? (pickedSchema ?? activeSchema ?? "public")
+    : (activeSchema ?? "public");
+
+  // Load the target database's schema list whenever the dialog opens so the
+  // picker reflects that database (not the connection's primary one).
+  useEffect(() => {
+    if (!isOpen || !isSchemaBased) {
+      setAvailableSchemas([]);
+      setPickedSchema(null);
+      return;
+    }
+    let cancelled = false;
+    invoke<string[]>("get_schemas", {
+      connectionId,
+      ...(databaseName ? { database: databaseName } : {}),
+    })
+      .then((schemas) => {
+        if (cancelled) return;
+        setAvailableSchemas(schemas);
+        // Keep a still-valid pick, otherwise the connection's active schema,
+        // otherwise a sensible default ("public" or the first schema).
+        setPickedSchema((prev) => resolveActiveSchema(prev, activeSchema, schemas));
+      })
+      .catch((e) => console.error("Failed to load schemas for dump:", e));
+    return () => {
+      cancelled = true;
+    };
+    // activeSchema only seeds the default pick; reacting to it would reset the
+    // user's choice while the dialog is open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, isSchemaBased, connectionId, databaseName]);
 
   // On a flat multi-database connection (e.g. MySQL) the dump targets a specific
   // database whose cached table list may be missing or belong to a different
@@ -184,6 +220,10 @@ export const DumpDatabaseModal = ({
       const databaseParam =
         isMultiDb && databaseName ? { database: databaseName } : {};
 
+      // Schema-based drivers (PostgreSQL) dump the schema picked in the dialog;
+      // other drivers keep the connection's active schema.
+      const schemaForDump = isSchemaBased ? dumpSchema : activeSchema;
+
       // Rust command expects `options` struct
       await invoke("dump_database", {
         connectionId,
@@ -193,7 +233,7 @@ export const DumpDatabaseModal = ({
           data: includeData,
           tables: Array.from(selectedTables),
         },
-        ...(activeSchema ? { schema: activeSchema } : {}),
+        ...(schemaForDump ? { schema: schemaForDump } : {}),
         ...databaseParam,
       });
 
@@ -228,6 +268,26 @@ export const DumpDatabaseModal = ({
           </div>
 
           <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-4">
+            {/* Schema picker (schema-based drivers, i.e. PostgreSQL): the dump
+                covers one schema of the target database — let the user pick it. */}
+            {isSchemaBased && availableSchemas.length > 0 && (
+              <div className="flex items-center gap-3 p-3 bg-surface-secondary rounded border border-default">
+                <span className="flex items-center gap-2 text-sm text-secondary shrink-0">
+                  <Layers size={14} className="text-accent shrink-0" />
+                  {t("sidebar.schema")}
+                </span>
+                <Select
+                  value={dumpSchema}
+                  options={availableSchemas}
+                  onChange={(s) => setPickedSchema(s)}
+                  placeholder={t("sidebar.schema")}
+                  className="flex-1"
+                  triggerClassName="px-3 py-1.5 text-sm"
+                  disabled={isExporting}
+                />
+              </div>
+            )}
+
             {/* Options */}
             <div className="flex gap-6 p-3 bg-surface-secondary rounded border border-default">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
