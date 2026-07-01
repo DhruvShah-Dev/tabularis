@@ -2815,11 +2815,17 @@ pub async fn save_blob_to_file<R: Runtime>(
     pk_map: std::collections::HashMap<String, serde_json::Value>,
     file_path: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<(), String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections (e.g. PostgreSQL) route the blob lookup to
+    // the selected database's pool instead of the connection's primary database.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.save_blob_to_file(
         &params,
@@ -2842,11 +2848,17 @@ pub async fn fetch_blob_as_data_url<R: Runtime>(
     col_name: String,
     pk_map: std::collections::HashMap<String, serde_json::Value>,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<String, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections (e.g. PostgreSQL) route the blob lookup to
+    // the selected database's pool instead of the connection's primary database.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
     let drv = driver_for(&saved_conn.params.driver).await?;
     let wire = drv
         .fetch_blob_as_data_url(
@@ -3177,6 +3189,7 @@ pub async fn execute_query_batch<R: Runtime>(
     limit: Option<u32>,
     page: Option<u32>,
     schema: Option<String>,
+    database: Option<String>,
     batch_id: Option<String>,
 ) -> Result<Vec<BatchStatementResult>, String> {
     log::info!(
@@ -3190,7 +3203,12 @@ pub async fn execute_query_batch<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections that cannot cross-database qualify in SQL
+    // (e.g. PostgreSQL), route the whole batch to the selected database's pool.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let drv = driver_for(&saved_conn.params.driver).await?;
 
@@ -3323,11 +3341,17 @@ pub async fn count_query<R: Runtime>(
     connection_id: String,
     query: String,
     schema: Option<String>,
+    database: Option<String>,
 ) -> Result<u64, String> {
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
-    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let mut params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    // On multi-database connections that cannot cross-database qualify in SQL
+    // (e.g. PostgreSQL), route the count to the selected database's pool.
+    if let Some(db) = database.filter(|d| !d.is_empty()) {
+        params.database = crate::models::DatabaseSelection::Single(db);
+    }
 
     let sanitized = query.trim().trim_end_matches(';').to_string();
 

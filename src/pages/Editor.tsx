@@ -1171,6 +1171,9 @@ export const Editor = () => {
           connectionId: activeConnectionId,
           query: tab.query,
           schema: tab.schema ?? activeSchema,
+          // Schema-based multi-database (PostgreSQL): count on the tab's
+          // database pool, mirroring how execute_query routes the data query.
+          ...(tab.database ? { database: tab.database } : {}),
         });
         const latest = tabsRef.current.find((t) => t.id === tab.id) ?? tab;
         if (!latest.result?.pagination) return;
@@ -2230,11 +2233,17 @@ export const Editor = () => {
       // Schema-based multi-database (PostgreSQL): the tab carries its database
       // separately from its (PostgreSQL) schema, so route writes to that
       // database's pool and qualify with the tab schema. Flat multi-database
-      // (MySQL) keeps overloading schema as the database name, unchanged.
+      // (MySQL) keeps overloading schema as the database name — but that
+      // fallback must never fire on schema-based drivers, where `tab.schema`
+      // is a PostgreSQL schema (e.g. "public"), not a database: sending it as
+      // `database` would route the write to a pool for a database named after
+      // the schema (connection failure, or worse the wrong database).
       const editSchema = activeTab?.database ? (activeTab?.schema ?? activeSchema) : activeSchema;
       const databaseParam = activeTab?.database
         ? { database: activeTab.database }
-        : isMultiDatabaseCapable(activeCapabilities) && activeTab?.schema
+        : !isSchemaBasedConn &&
+            isMultiDatabaseCapable(activeCapabilities) &&
+            activeTab?.schema
           ? { database: activeTab.schema }
           : {};
 
@@ -2348,6 +2357,7 @@ export const Editor = () => {
     applyToAll,
     activeSchema,
     activeCapabilities,
+    isSchemaBasedConn,
     showAlert,
   ]);
 
@@ -2725,12 +2735,16 @@ export const Editor = () => {
       });
       setExportMenuOpen(false);
 
-      // On multi-database connections (e.g. MySQL) scope the export to the
-      // selected database so the query runs against the database the user is
-      // viewing rather than the connection's primary database. The tab may not
-      // carry its own schema (e.g. a console query), so fall back to the active
-      // database — mirroring how execute_query resolves the schema.
-      const targetDatabase = activeTab?.schema ?? activeSchema ?? undefined;
+      // On multi-database connections scope the export to the database the
+      // user is viewing rather than the connection's primary database,
+      // mirroring how execute_query routes. Schema-based drivers (PostgreSQL)
+      // carry the database separately on the tab — `tab.schema` there is a
+      // PostgreSQL schema, never a database name — while flat drivers (MySQL)
+      // overload `schema` with the database name, falling back to the active
+      // database for tabs that don't carry one (e.g. a console query).
+      const targetDatabase = isSchemaBasedConn
+        ? activeTab?.database
+        : (activeTab?.schema ?? activeSchema ?? undefined);
       const databaseParam =
         isMultiDatabaseCapable(activeCapabilities) && targetDatabase
           ? { database: targetDatabase }
@@ -3871,6 +3885,8 @@ export const Editor = () => {
                           : undefined
                       }
                       readonly={driverReadonly}
+                      schema={activeTab?.schema ?? activeSchema}
+                      database={activeTab?.database}
                     />
                   </div>
                   {activeFkQuery && activeConnectionId && (
