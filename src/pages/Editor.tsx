@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
-import { isMultiDatabaseCapable, buildTableRoutingParams } from "../utils/database";
+import { isMultiDatabaseCapable, isSchemaBasedMultiDb, buildTableRoutingParams } from "../utils/database";
 import { isReadonly } from "../utils/driverCapabilities";
 import {
   generateTempId,
@@ -289,6 +289,13 @@ export const Editor = () => {
         title: `Console - ${tab.title}`,
         query: query,
         connectionId: tab.connectionId,
+        // Preserve the source tab's routing so the console runs against the same
+        // pool: schema-based multi-database (PostgreSQL) needs `database` (the
+        // pool key) plus the real `schema`; flat multi-database (MySQL) carries
+        // the database name in `schema`. Dropping these ran the console against
+        // the connection's primary database (relation-not-found).
+        schema: tab.schema,
+        database: tab.database,
       });
     },
     [addTab, activeDriver, activeCapabilities?.schemas],
@@ -366,6 +373,24 @@ export const Editor = () => {
   const isNotebookTab = activeTab?.type === "notebook";
   const isMultiDb =
     isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
+  // Schema-based multi-database (PostgreSQL): a non-table tab targets a database
+  // via its `database` field (the pool key), NOT by overloading `schema` with
+  // the database name the way flat drivers (MySQL) do. execute_query routes to
+  // the selected database's pool by `database`; a `schema` equal to a database
+  // name would instead run `SET search_path TO "<db>"` on the primary pool and
+  // fail with relation-not-found.
+  const isSchemaBasedConn = isSchemaBasedMultiDb(activeCapabilities);
+  // The database the active non-table tab currently targets.
+  const activeTabDatabase =
+    (isSchemaBasedConn ? activeTab?.database : activeTab?.schema) ||
+    selectedDatabases[0];
+  // Initial routing params for a newly created non-table tab on a multi-database
+  // connection (see isSchemaBasedConn above for the schema-vs-database split).
+  const initialTabDatabaseParams = (): { schema?: string; database?: string } => {
+    if (!isMultiDb) return {};
+    const db = selectedDatabases[0];
+    return isSchemaBasedConn ? { database: db } : { schema: db };
+  };
   const isEditorOpen =
     !isTableTab && (activeTab?.isEditorOpen ?? activeTab?.type !== "table");
 
@@ -390,7 +415,9 @@ export const Editor = () => {
           let dbDisplay: string;
           if (isMultiDb) {
             dbDisplay =
-              activeTab?.schema ?? selectedDatabases[0] ?? activeDatabaseName;
+              (isSchemaBasedConn ? activeTab?.database : activeTab?.schema) ??
+              selectedDatabases[0] ??
+              activeDatabaseName;
           } else {
             dbDisplay = activeDatabaseName;
           }
@@ -405,11 +432,13 @@ export const Editor = () => {
   }, [
     activeTabId,
     activeTab?.schema,
+    activeTab?.database,
     activeConnectionName,
     activeDatabaseName,
     activeSchema,
     activeCapabilities,
     isMultiDb,
+    isSchemaBasedConn,
     selectedDatabases,
   ]);
 
@@ -2909,7 +2938,7 @@ export const Editor = () => {
                   <span className="truncate">{tab.title}</span>
                   {tab.type === "console" && isMultiDb && (
                     <span className="text-muted shrink-0">
-                      ({tab.schema || selectedDatabases[0]})
+                      ({(isSchemaBasedConn ? tab.database : tab.schema) || selectedDatabases[0]})
                     </span>
                   )}
                 </span>
@@ -2943,7 +2972,7 @@ export const Editor = () => {
           onClick={() =>
             addTab({
               type: "console",
-              ...(isMultiDb ? { schema: selectedDatabases[0] } : {}),
+              ...initialTabDatabaseParams(),
             })
           }
           className="flex items-center justify-center w-9 h-full text-muted hover:text-primary hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
@@ -2966,7 +2995,7 @@ export const Editor = () => {
             addTab({
               type: "notebook",
               notebookId,
-              ...(isMultiDb ? { schema: selectedDatabases[0] } : {}),
+              ...initialTabDatabaseParams(),
             });
           }}
           className="flex items-center justify-center w-9 h-full text-orange-400 hover:text-primary hover:bg-surface-secondary border-l border-default transition-colors shrink-0"
@@ -3145,7 +3174,7 @@ export const Editor = () => {
             >
               <Database size={12} className="text-muted shrink-0" />
               <span className="max-w-[120px] truncate">
-                {activeTab.schema || selectedDatabases[0]}
+                {activeTabDatabase}
               </span>
               <ChevronDown size={12} className="text-muted shrink-0" />
             </button>
@@ -3160,12 +3189,16 @@ export const Editor = () => {
                     <button
                       key={db}
                       onClick={() => {
-                        updateActiveTab({ schema: db });
+                        updateActiveTab(
+                          isSchemaBasedConn
+                            ? { database: db, schema: undefined }
+                            : { schema: db },
+                        );
                         setIsDbDropdownOpen(false);
                       }}
                       className={clsx(
                         "text-left px-3 py-1.5 text-xs hover:bg-surface transition-colors flex items-center gap-2",
-                        (activeTab.schema || selectedDatabases[0]) === db
+                        activeTabDatabase === db
                           ? "text-white font-medium"
                           : "text-secondary",
                       )}
