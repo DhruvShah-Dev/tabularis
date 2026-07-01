@@ -173,6 +173,12 @@ async fn handle_connection_failure(app: &tauri::AppHandle, connection_id: &str, 
         if let Ok(expanded) =
             crate::commands::expand_ssh_connection_params(app, &saved_conn.params).await
         {
+            // Tear down the SSH tunnel before it is reused: after the remote
+            // host dies the tunnel is dead but still holds its local port,
+            // which breaks the next reconnect ("port already in use").
+            // `expanded` still carries the original SSH/remote fields.
+            crate::commands::teardown_ssh_tunnel(&expanded);
+
             let expanded = crate::commands::expand_k8s_connection_params(app, &expanded).await;
             if let Ok(params) = expanded.and_then(|params| {
                 crate::commands::resolve_connection_params_with_id(&params, connection_id)

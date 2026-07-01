@@ -220,6 +220,27 @@ fn build_tunnel_map_key(
     crate::ssh_tunnel::build_tunnel_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port)
 }
 
+/// Stop and remove the SSH tunnel associated with these params, if any.
+///
+/// Called when a connection is closed (manually or by the health check) so a
+/// tunnel does not outlive the connection that owns it. Expects params that
+/// still carry the original SSH/remote fields (i.e. before
+/// [`resolve_connection_params`] rewrites host/port to the local forward).
+pub(crate) fn teardown_ssh_tunnel(params: &ConnectionParams) {
+    if !params.ssh_enabled.unwrap_or(false) {
+        return;
+    }
+    let (Some(ssh_host), Some(ssh_user)) = (params.ssh_host.as_deref(), params.ssh_user.as_deref())
+    else {
+        return;
+    };
+    let ssh_port = params.ssh_port.unwrap_or(22);
+    let remote_host = params.host.as_deref().unwrap_or("localhost");
+    let remote_port = params.port.unwrap_or(DEFAULT_MYSQL_PORT);
+    let map_key = build_tunnel_map_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port);
+    crate::ssh_tunnel::remove_tunnel(&map_key);
+}
+
 /// Resolve K8s tunnel params synchronously (no saved-connection lookup; uses inline fields only).
 fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, String> {
     let context = params
@@ -311,15 +332,29 @@ pub fn resolve_connection_params(params: &ConnectionParams) -> Result<Connection
 
     let map_key = build_tunnel_map_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port);
 
-    // Check for existing tunnel
+    // Check for existing tunnel. A tunnel that is no longer alive (e.g. the
+    // ssh client exited after the remote host rebooted) must not be reused:
+    // its local port is dead or still held by the defunct process, which is
+    // what produced the "port already in use" failures on reconnect. Drop it
+    // and fall through to create a fresh tunnel.
     {
-        let tunnels = get_tunnels().lock().unwrap();
-        if let Some(tunnel) = tunnels.get(&map_key) {
-            log::debug!("Reusing existing SSH tunnel on port {}", tunnel.local_port);
-            let mut new_params = params.clone();
-            new_params.host = Some("127.0.0.1".to_string());
-            new_params.port = Some(tunnel.local_port);
-            return Ok(new_params);
+        let stale = {
+            let tunnels = get_tunnels().lock().unwrap();
+            match tunnels.get(&map_key) {
+                Some(tunnel) if tunnel.is_alive() => {
+                    log::debug!("Reusing existing SSH tunnel on port {}", tunnel.local_port);
+                    let mut new_params = params.clone();
+                    new_params.host = Some("127.0.0.1".to_string());
+                    new_params.port = Some(tunnel.local_port);
+                    return Ok(new_params);
+                }
+                Some(_) => true,
+                None => false,
+            }
+        };
+        if stale {
+            log::warn!("Discarding dead SSH tunnel for {}, recreating", map_key);
+            crate::ssh_tunnel::remove_tunnel(&map_key);
         }
     }
 
@@ -3861,6 +3896,11 @@ pub async fn disconnect_connection<R: Runtime>(
 
     // Close the connection pool
     crate::pool_manager::close_pool_with_id(&params, Some(&connection_id)).await;
+
+    // Tear down the SSH tunnel (if any) so it does not linger holding its
+    // local port after the connection is gone. `expanded_params` still carries
+    // the original SSH/remote fields (before resolve rewrites host/port).
+    teardown_ssh_tunnel(&expanded_params);
 
     log::info!(
         "Successfully disconnected from connection: {}",
