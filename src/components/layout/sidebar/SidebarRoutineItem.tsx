@@ -120,7 +120,9 @@ export const SidebarRoutineItem = ({
                   <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted select-none">
                     <Folder size={12} className="text-blue-400/70" />
                     <span>{t("sidebar.parameters")}</span>
-                    <span className="ml-auto text-[10px] opacity-50">
+                    {/* mr-2.5 lines the count up with the group counts of
+                        Functions / Procedures (px-2 + mr-2.5 = same edge). */}
+                    <span className="ml-auto mr-2.5 text-[10px] opacity-50">
                       {parameters.length}
                     </span>
                   </div>
@@ -146,7 +148,9 @@ export const SidebarRoutineItem = ({
                               {mode}
                             </span>
                           )}
-                          <span className="text-muted text-[10px] ml-auto shrink-0">
+                          {/* px-3 (12px) + mr-1.5 (6px) ends at the same
+                              18px right edge as the group / parameter counts. */}
+                          <span className="text-muted text-[10px] ml-auto mr-1.5 shrink-0">
                             {param.data_type}
                           </span>
                         </div>
