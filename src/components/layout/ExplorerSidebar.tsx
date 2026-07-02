@@ -61,6 +61,7 @@ import { ClipboardImportModal } from "../modals/ClipboardImportModal";
 import { ViewEditorModal } from "../modals/ViewEditorModal";
 import { TriggerEditorModal } from "../modals/TriggerEditorModal";
 import { ConfirmModal } from "../modals/ConfirmModal";
+import { RunRoutineModal } from "../modals/RunRoutineModal";
 import { Accordion } from "./sidebar/Accordion";
 import { SidebarTableItem } from "./sidebar/SidebarTableItem";
 import { buildTableItemSelector } from "../../utils/sidebarTableItem";
@@ -181,6 +182,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     data?: ContextMenuData;
   } | null>(null);
   const [schemaModal, setSchemaModal] = useState<{ tableName: string; schema?: string } | null>(null);
+  const [runRoutineModal, setRunRoutineModal] = useState<{ routine: RoutineInfo; schema?: string } | null>(null);
+  const [routineDropConfirm, setRoutineDropConfirm] = useState<{ name: string; routineType: string; schema?: string } | null>(null);
   const [isCreateTableModalOpen, setIsCreateTableModalOpen] = useState(false);
   const [createTableTarget, setCreateTableTarget] = useState<CreateTableTarget>(DEFAULT_CREATE_TABLE_TARGET);
   const [isClipboardImportOpen, setIsClipboardImportOpen] = useState(false);
@@ -415,6 +418,43 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
         t("sidebar.failGetRoutineDefinition") + String(e),
         { kind: "error" }
       );
+    }
+  };
+
+  const handleNewRoutine = async (routineType: string) => {
+    try {
+      const template = await invoke<string>("get_routine_create_template", {
+        connectionId: activeConnectionId,
+        routineType,
+        ...(activeSchema ? { schema: activeSchema } : {}),
+      });
+      const tabName =
+        routineType === "FUNCTION"
+          ? t("routines.newFunction")
+          : t("routines.newProcedure");
+      runQuery(template, tabName, undefined, true, activeSchema ?? undefined);
+    } catch (e) {
+      console.error(e);
+      showAlert(t("routines.templateError") + String(e), { kind: "error" });
+    }
+  };
+
+  const handleDropRoutine = async () => {
+    if (!routineDropConfirm) return;
+    const { name, routineType, schema } = routineDropConfirm;
+    setRoutineDropConfirm(null);
+    try {
+      await invoke("drop_routine", {
+        connectionId: activeConnectionId,
+        routineName: name,
+        routineType,
+        ...(schema ? { schema } : {}),
+      });
+      showAlert(t("routines.dropSuccess", { name }), { kind: "info" });
+      if (refreshRoutines) refreshRoutines();
+    } catch (e) {
+      console.error(e);
+      showAlert(t("routines.dropError") + String(e), { kind: "error" });
     }
   };
 
@@ -1674,6 +1714,18 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       onToggle={() => setRoutinesOpen(!routinesOpen)}
                       actions={
                         <div className="flex items-center gap-1">
+                          {activeCapabilities?.routine_management === true && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleContextMenu(e, "routines-new", "routines-new", t("routines.newRoutine"));
+                              }}
+                              className="p-1 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors"
+                              title={t("routines.newRoutine")}
+                            >
+                              <Plus size={14} />
+                            </button>
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2087,38 +2139,102 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                             ];
                           })()
                         : contextMenu.type === "routine"
-                          ? [
-                              {
-                                label: t("sidebar.viewDefinition"),
-                                icon: FileText,
-                                action: async () => {
-                                  try {
-                                    const routineType =
-                                      contextMenu.data && 'routine_type' in contextMenu.data
-                                        ? (contextMenu.data).routine_type
-                                        : "PROCEDURE";
-                                    const definition = await invoke<string>("get_routine_definition", {
-                                      connectionId: activeConnectionId,
-                                      routineName: contextMenu.id,
-                                      routineType: routineType,
-                                      ...(activeSchema ? { schema: activeSchema } : {}),
-                                    });
-                                    runQuery(definition, `${contextMenu.id} Definition`, undefined, true);
-                                  } catch (e) {
-                                    console.error(e);
-                                    showAlert(
-                                      t("sidebar.failGetRoutineDefinition") + String(e),
-                                      { kind: "error" }
-                                    );
-                                  }
+                          ? (() => {
+                              const routineData =
+                                contextMenu.data && 'routine_type' in contextMenu.data
+                                  ? (contextMenu.data as RoutineInfo & { schema?: string })
+                                  : null;
+                              const routineType = routineData?.routine_type ?? "PROCEDURE";
+                              const routineSchema = routineData?.schema ?? activeSchema ?? undefined;
+                              const canManageRoutines =
+                                activeCapabilities?.routine_management === true;
+                              return [
+                                canManageRoutines ? {
+                                  label: t("routines.menuRun"),
+                                  icon: Play,
+                                  action: () => {
+                                    if (routineData) {
+                                      setRunRoutineModal({
+                                        routine: routineData,
+                                        schema: routineSchema,
+                                      });
+                                    }
+                                  },
+                                } : null,
+                                {
+                                  label: t("sidebar.viewDefinition"),
+                                  icon: FileText,
+                                  action: async () => {
+                                    try {
+                                      const definition = await invoke<string>("get_routine_definition", {
+                                        connectionId: activeConnectionId,
+                                        routineName: contextMenu.id,
+                                        routineType: routineType,
+                                        ...(routineSchema ? { schema: routineSchema } : {}),
+                                      });
+                                      runQuery(definition, `${contextMenu.id} Definition`, undefined, true, routineSchema);
+                                    } catch (e) {
+                                      console.error(e);
+                                      showAlert(
+                                        t("sidebar.failGetRoutineDefinition") + String(e),
+                                        { kind: "error" }
+                                      );
+                                    }
+                                  },
                                 },
-                              },
-                              {
-                                label: t("sidebar.copyName"),
-                                icon: Copy,
-                                action: () => navigator.clipboard.writeText(contextMenu.id),
-                              },
-                            ]
+                                canManageRoutines ? {
+                                  label: t("routines.menuEdit"),
+                                  icon: Edit,
+                                  action: async () => {
+                                    try {
+                                      const script = await invoke<string>("get_routine_edit_script", {
+                                        connectionId: activeConnectionId,
+                                        routineName: contextMenu.id,
+                                        routineType: routineType,
+                                        ...(routineSchema ? { schema: routineSchema } : {}),
+                                      });
+                                      runQuery(script, `${contextMenu.id} Edit`, undefined, true, routineSchema);
+                                    } catch (e) {
+                                      console.error(e);
+                                      showAlert(
+                                        t("sidebar.failGetRoutineDefinition") + String(e),
+                                        { kind: "error" }
+                                      );
+                                    }
+                                  },
+                                } : null,
+                                canManageRoutines ? {
+                                  label: t("routines.menuDrop"),
+                                  icon: Trash2,
+                                  danger: true,
+                                  action: () => {
+                                    setRoutineDropConfirm({
+                                      name: contextMenu.id,
+                                      routineType,
+                                      schema: routineSchema,
+                                    });
+                                  },
+                                } : null,
+                                {
+                                  label: t("sidebar.copyName"),
+                                  icon: Copy,
+                                  action: () => navigator.clipboard.writeText(contextMenu.id),
+                                },
+                              ].filter(Boolean) as ContextMenuItem[];
+                            })()
+                          : contextMenu.type === "routines-new"
+                            ? [
+                                {
+                                  label: t("routines.newProcedure"),
+                                  icon: FileCode,
+                                  action: () => handleNewRoutine("PROCEDURE"),
+                                },
+                                {
+                                  label: t("routines.newFunction"),
+                                  icon: FileCode,
+                                  action: () => handleNewRoutine("FUNCTION"),
+                                },
+                              ]
                           : contextMenu.type === "trigger"
                             ? (() => {
                                 const triggerData = contextMenu.data && 'table_name' in contextMenu.data
@@ -2509,6 +2625,29 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           clearHistory();
           setHistoryClearConfirm(false);
         }}
+      />
+
+      {/* Run routine with parameters */}
+      {runRoutineModal && activeConnectionId && (
+        <RunRoutineModal
+          isOpen={true}
+          onClose={() => setRunRoutineModal(null)}
+          connectionId={activeConnectionId}
+          routine={runRoutineModal.routine}
+          schema={runRoutineModal.schema}
+          onRun={(sql) => {
+            runQuery(sql, `${t("routines.runTabPrefix")} ${runRoutineModal.routine.name}`, undefined, false, runRoutineModal.schema);
+          }}
+        />
+      )}
+
+      {/* Drop routine confirmation */}
+      <ConfirmModal
+        isOpen={routineDropConfirm !== null}
+        onClose={() => setRoutineDropConfirm(null)}
+        title={t("routines.dropConfirmTitle")}
+        message={t("routines.dropConfirmMessage", { name: routineDropConfirm?.name ?? "" })}
+        onConfirm={handleDropRoutine}
       />
     </>
   );

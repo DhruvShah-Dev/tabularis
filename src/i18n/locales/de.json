@@ -1610,5 +1610,27 @@
       "resourceNameRequired": "Der Ressourcenname ist erforderlich",
       "portInvalid": "Der Port muss zwischen 1 und 65535 liegen"
     }
+  },
+  "routines": {
+    "menuRun": "Ausführen…",
+    "menuEdit": "Bearbeiten",
+    "menuDrop": "Löschen",
+    "newRoutine": "Neue Routine",
+    "newProcedure": "Neue Prozedur",
+    "newFunction": "Neue Funktion",
+    "templateError": "Routinen-Vorlage konnte nicht geladen werden: ",
+    "dropConfirmTitle": "Routine löschen",
+    "dropConfirmMessage": "Routine \"{{name}}\" löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "dropSuccess": "Routine {{name}} gelöscht",
+    "dropError": "Routine konnte nicht gelöscht werden: ",
+    "runTitle": "{{name}} ausführen",
+    "runSubtitle": "Parameterwerte eingeben und das generierte SQL im Editor prüfen",
+    "loadingParameters": "Parameter werden geladen…",
+    "noParameters": "Diese Routine hat keine Parameter. Das Aufrufskript wird im Editor geöffnet.",
+    "outputParameter": "Ausgabeparameter — wird als Ergebnis zurückgegeben",
+    "rawLabel": "Raw",
+    "rawHint": "Wert unverändert einfügen, ohne String-Quoting (Zahlen, Ausdrücke)",
+    "runButton": "Ausführen",
+    "runTabPrefix": "Ausführen"
   }
 }

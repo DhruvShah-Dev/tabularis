@@ -1610,5 +1610,27 @@
       "resourceNameRequired": "Le nom de la ressource est requis",
       "portInvalid": "Le port doit être compris entre 1 et 65535"
     }
+  },
+  "routines": {
+    "menuRun": "Exécuter…",
+    "menuEdit": "Modifier",
+    "menuDrop": "Supprimer",
+    "newRoutine": "Nouvelle routine",
+    "newProcedure": "Nouvelle procédure",
+    "newFunction": "Nouvelle fonction",
+    "templateError": "Impossible de charger le modèle de routine : ",
+    "dropConfirmTitle": "Supprimer la routine",
+    "dropConfirmMessage": "Supprimer la routine \"{{name}}\" ? Cette action est irréversible.",
+    "dropSuccess": "Routine {{name}} supprimée",
+    "dropError": "Impossible de supprimer la routine : ",
+    "runTitle": "Exécuter {{name}}",
+    "runSubtitle": "Saisissez les valeurs des paramètres, puis vérifiez le SQL généré dans l'éditeur",
+    "loadingParameters": "Chargement des paramètres…",
+    "noParameters": "Cette routine n'a aucun paramètre. Le script d'invocation s'ouvrira dans l'éditeur.",
+    "outputParameter": "Paramètre de sortie — renvoyé comme résultat",
+    "rawLabel": "Brut",
+    "rawHint": "Insère la valeur telle quelle, sans guillemets de chaîne (nombres, expressions)",
+    "runButton": "Exécuter",
+    "runTabPrefix": "Exécuter"
   }
 }

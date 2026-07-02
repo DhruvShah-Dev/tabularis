@@ -80,7 +80,9 @@ export const SidebarRoutineItem = ({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    onContextMenu(e, "routine", routine.name, routine.name, routine);
+    // Forward the item's schema so menu actions (run / edit / drop) target
+    // the right namespace even outside the connection's active schema.
+    onContextMenu(e, "routine", routine.name, routine.name, { ...routine, schema });
   };
 
   return (
