@@ -26,6 +26,8 @@ export const SidebarRoutineGroupHeader = ({
   >
     {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
     <span>{label}</span>
-    <span className="ml-auto text-[10px] opacity-50">{count}</span>
+    {/* mr-2.5 keeps the count's right edge aligned with the section-header
+        action icons, which sit inside an mr-2.5 container. */}
+    <span className="ml-auto mr-2.5 text-[10px] opacity-50">{count}</span>
   </button>
 );

@@ -1715,6 +1715,16 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       onToggle={() => setRoutinesOpen(!routinesOpen)}
                       actions={
                         <div className="flex items-center gap-1 mr-2.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (refreshRoutines) refreshRoutines();
+                            }}
+                            className="p-1 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors"
+                            title={t("sidebar.refreshRoutines") || "Refresh Routines"}
+                          >
+                            <RefreshCw size={14} />
+                          </button>
                           {activeCapabilities?.routine_management === true && (
                             <button
                               onClick={(e) => {
@@ -1727,16 +1737,6 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               <Plus size={14} />
                             </button>
                           )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (refreshRoutines) refreshRoutines();
-                            }}
-                            className="p-1 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors"
-                            title={t("sidebar.refreshRoutines") || "Refresh Routines"}
-                          >
-                            <RefreshCw size={14} />
-                          </button>
                         </div>
                       }
                     >
