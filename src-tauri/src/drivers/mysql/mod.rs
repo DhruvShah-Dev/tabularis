@@ -1079,11 +1079,15 @@ pub async fn get_routine_parameters(
         }
     }
 
-    // 2. Get parameters
+    // 2. Get parameters. Position 0 is the function's return value, which
+    // MySQL also exposes here (NULL name / NULL mode) — step 1 already
+    // reported it from information_schema.routines, so skip it to avoid a
+    // duplicated return-value row.
     let query = r#"
             SELECT parameter_name, data_type, parameter_mode, ordinal_position
             FROM information_schema.parameters
             WHERE specific_schema = ? AND specific_name = ?
+              AND ordinal_position >= 1
             ORDER BY ordinal_position
         "#;
 

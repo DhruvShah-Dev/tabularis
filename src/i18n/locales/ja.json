@@ -76,6 +76,8 @@
     "expandTable": "テーブル {{name}} を展開",
     "collapseTable": "テーブル {{name}} を折りたたむ",
     "columns": "カラム",
+    "parameters": "パラメータ",
+    "noParameters": "パラメータなし",
     "keys": "キー",
     "foreignKeys": "外部キー",
     "indexes": "インデックス",
@@ -731,7 +733,6 @@
     "selectTypeFirst": "先にコンテキスト/ネームスペース/タイプを選択してください",
     "useK8s": "Kubernetes ポートフォワードを使用",
     "useK8sConnection": "保存された接続",
-    "advanced": "詳細設定",
     "startupScript": "起動スクリプト",
     "startupScriptDescription": "このデータソースへの新規接続ごとに実行される SQL です。SET / set_config（例: RLS のバイパス）などのセッション設定に使用します。複数のステートメントはセミコロンで区切ってください。",
     "startupScriptPlaceholder": "SELECT set_config('app.bypass_rls', 'on', false);",
@@ -1650,6 +1651,7 @@
     "rawLabel": "Raw",
     "rawHint": "文字列クォートなしでそのまま挿入します（数値・式）",
     "runButton": "実行",
-    "runTabPrefix": "実行"
+    "runTabPrefix": "実行",
+    "returnValue": "戻り値"
   }
 }

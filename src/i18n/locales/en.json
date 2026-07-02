@@ -76,6 +76,8 @@
     "expandTable": "Expand table {{name}}",
     "collapseTable": "Collapse table {{name}}",
     "columns": "columns",
+    "parameters": "parameters",
+    "noParameters": "No parameters",
     "keys": "keys",
     "foreignKeys": "foreign keys",
     "indexes": "indexes",
@@ -751,7 +753,6 @@
     "selectTypeFirst": "Select context/namespace/type first",
     "useK8s": "Use Kubernetes Port-Forward",
     "useK8sConnection": "Saved Connection",
-    "advanced": "Advanced",
     "startupScript": "Startup Script",
     "startupScriptDescription": "SQL run on every new connection to this data source. Use it for session settings such as SET / set_config (e.g. bypassing RLS). Separate statements with semicolons.",
     "startupScriptPlaceholder": "SELECT set_config('app.bypass_rls', 'on', false);",
@@ -1707,6 +1708,7 @@
     "rawLabel": "Raw",
     "rawHint": "Insert the value verbatim, without string quoting (numbers, expressions)",
     "runButton": "Run",
-    "runTabPrefix": "Run"
+    "runTabPrefix": "Run",
+    "returnValue": "returns"
   }
 }

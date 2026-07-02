@@ -67,6 +67,7 @@ import { SidebarTableItem } from "./sidebar/SidebarTableItem";
 import { buildTableItemSelector } from "../../utils/sidebarTableItem";
 import { SidebarViewItem } from "./sidebar/SidebarViewItem";
 import { SidebarRoutineItem } from "./sidebar/SidebarRoutineItem";
+import { SidebarRoutineGroupHeader } from "./sidebar/SidebarRoutineGroupHeader";
 import { SidebarSchemaItem } from "./sidebar/SidebarSchemaItem";
 import { SidebarDatabaseItem } from "./sidebar/SidebarDatabaseItem";
 import { SidebarTriggerItem } from "./sidebar/SidebarTriggerItem";
@@ -1713,7 +1714,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       isOpen={routinesOpen}
                       onToggle={() => setRoutinesOpen(!routinesOpen)}
                       actions={
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 mr-2.5">
                           {activeCapabilities?.routine_management === true && (
                             <button
                               onClick={(e) => {
@@ -1748,14 +1749,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           {/* Functions */}
                           {groupedRoutines.functions.length > 0 && (
                             <div className="mb-2">
-                              <button
-                                onClick={() => setFunctionsOpen(!functionsOpen)}
-                                className="flex items-center gap-1 px-2 py-1 w-full text-left text-xs font-semibold text-muted uppercase tracking-wider hover:text-secondary transition-colors"
-                              >
-                                {functionsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                <span>{t("sidebar.functions")}</span>
-                                <span className="ml-auto text-[10px] opacity-50">{groupedRoutines.functions.length}</span>
-                              </button>
+                              <SidebarRoutineGroupHeader
+                                label={t("sidebar.functions")}
+                                count={groupedRoutines.functions.length}
+                                isOpen={functionsOpen}
+                                onToggle={() => setFunctionsOpen(!functionsOpen)}
+                              />
                               {functionsOpen && groupedRoutines.functions.map((routine) => (
                                 <SidebarRoutineItem
                                   key={routine.name}
@@ -1771,14 +1770,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           {/* Procedures */}
                           {groupedRoutines.procedures.length > 0 && (
                             <div>
-                              <button
-                                onClick={() => setProceduresOpen(!proceduresOpen)}
-                                className="flex items-center gap-1 px-2 py-1 w-full text-left text-xs font-semibold text-muted uppercase tracking-wider hover:text-secondary transition-colors"
-                              >
-                                {proceduresOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                <span>{t("sidebar.procedures")}</span>
-                                <span className="ml-auto text-[10px] opacity-50">{groupedRoutines.procedures.length}</span>
-                              </button>
+                              <SidebarRoutineGroupHeader
+                                label={t("sidebar.procedures")}
+                                count={groupedRoutines.procedures.length}
+                                isOpen={proceduresOpen}
+                                onToggle={() => setProceduresOpen(!proceduresOpen)}
+                              />
                               {proceduresOpen && groupedRoutines.procedures.map((routine) => (
                                 <SidebarRoutineItem
                                   key={routine.name}

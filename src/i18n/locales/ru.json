@@ -76,6 +76,8 @@
     "expandTable": "Развернуть таблицу {{name}}",
     "collapseTable": "Свернуть таблицу {{name}}",
     "columns": "столбцы",
+    "parameters": "параметры",
+    "noParameters": "Нет параметров",
     "keys": "ключи",
     "foreignKeys": "внешние ключи",
     "indexes": "индексы",
@@ -710,7 +712,6 @@
     "useK8s": "Использовать проброс портов Kubernetes",
     "useK8sConnection": "Сохранённое подключение",
     "appearance": "Внешний вид",
-    "advanced": "Дополнительно",
     "startupScript": "Сценарий запуска",
     "startupScriptDescription": "SQL, выполняемый при каждом новом подключении к этому источнику данных. Используйте его для настроек сеанса, таких как SET / set_config (например, для обхода RLS). Разделяйте операторы точкой с запятой.",
     "startupScriptPlaceholder": "SELECT set_config('app.bypass_rls', 'on', false);",
@@ -1703,6 +1704,7 @@
     "rawLabel": "Raw",
     "rawHint": "Вставить значение как есть, без строковых кавычек (числа, выражения)",
     "runButton": "Выполнить",
-    "runTabPrefix": "Выполнить"
+    "runTabPrefix": "Выполнить",
+    "returnValue": "возвращает"
   }
 }
