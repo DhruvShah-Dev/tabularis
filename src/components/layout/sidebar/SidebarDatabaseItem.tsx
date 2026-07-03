@@ -25,6 +25,7 @@ import type { ContextMenuData } from "../../../types/sidebar";
 import type { DriverCapabilities } from "../../../types/plugins";
 import { groupRoutinesByType } from "../../../utils/routines";
 import { formatObjectCount } from "../../../utils/schema";
+import { fuzzyFilter } from "../../../utils/fuzzy";
 
 interface SidebarDatabaseItemProps {
   databaseName: string;
@@ -109,15 +110,11 @@ export const SidebarDatabaseItem = ({
   const [triggerFilter, setTriggerFilter] = useState("");
 
   const tables = databaseData?.tables ?? [];
-  const filteredTables = tableFilter
-    ? tables.filter((t) => t.name.toLowerCase().includes(tableFilter.toLowerCase()))
-    : tables;
+  const filteredTables = fuzzyFilter(tables, tableFilter, (t) => t.name);
   const views = databaseData?.views ?? [];
   const routines = databaseData?.routines ?? [];
   const triggers = databaseData?.triggers ?? [];
-  const filteredTriggers = triggerFilter
-    ? triggers.filter((tr) => tr.name.toLowerCase().includes(triggerFilter.toLowerCase()))
-    : triggers;
+  const filteredTriggers = fuzzyFilter(triggers, triggerFilter, (tr) => tr.name);
   const isLoading = databaseData?.isLoading ?? false;
   const isLoaded = databaseData?.isLoaded ?? false;
 
@@ -265,16 +262,17 @@ export const SidebarDatabaseItem = ({
                       <Search size={11} className="absolute left-2 text-muted pointer-events-none" />
                       <input
                         type="text"
+                        data-table-filter
                         value={tableFilter}
                         onChange={(e) => setTableFilter(e.target.value)}
                         placeholder={t("sidebar.filterTables")}
-                        className="w-full bg-surface-secondary text-xs text-secondary placeholder:text-muted rounded pl-6 pr-6 py-1 border border-default focus:outline-none focus:border-blue-500/50"
+                        className="w-full bg-surface-secondary text-xs text-secondary placeholder:text-muted rounded pl-6 pr-10 py-1 border border-default focus:outline-none focus:border-blue-500/50"
                         onClick={(e) => e.stopPropagation()}
                       />
                       {tableFilter && (
                         <button
                           onClick={(e) => { e.stopPropagation(); setTableFilter(""); }}
-                          className="absolute right-1.5 text-muted hover:text-primary"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-primary p-0.5 rounded hover:bg-surface-secondary"
                         >
                           <X size={11} />
                         </button>
