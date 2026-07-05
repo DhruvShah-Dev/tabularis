@@ -190,6 +190,14 @@ impl SshTunnel {
 
         args.push("-o".to_string());
         args.push("StrictHostKeyChecking=accept-new".to_string());
+        // Keepalives make ssh exit when the server goes away (e.g. a reboot);
+        // without them the process can hold the local port forever.
+        args.push("-o".to_string());
+        args.push("ServerAliveInterval=15".to_string());
+        args.push("-o".to_string());
+        args.push("ServerAliveCountMax=3".to_string());
+        args.push("-o".to_string());
+        args.push("ExitOnForwardFailure=yes".to_string());
         args.push("-o".to_string());
         if ssh_allow_passphrase_prompt {
             args.push("BatchMode=no".to_string());
@@ -453,6 +461,15 @@ impl SshTunnel {
 
                 println!("[SSH Tunnel] Starting tunnel forwarding loop");
                 while running_clone.load(Ordering::Relaxed) {
+                    // If the SSH session died (e.g. the server rebooted), mark
+                    // the tunnel as dead and release the local port so a
+                    // reconnect can create a fresh tunnel.
+                    if handle.lock().await.is_closed() {
+                        eprintln!("[SSH Tunnel Error] SSH session closed unexpectedly; shutting down tunnel");
+                        running_clone.store(false, Ordering::Relaxed);
+                        break;
+                    }
+
                     let accept = tokio::time::timeout(
                         Duration::from_millis(SSH_ACCEPT_POLL_MS),
                         listener.accept(),
@@ -542,9 +559,9 @@ impl SshTunnel {
     /// For a system-ssh backend this detects a process that has already
     /// exited (e.g. the ssh client tore down after the remote host rebooted),
     /// which would otherwise leave a stale entry in the tunnel map pointing at
-    /// a dead local port. The russh backend keeps its local listener bound for
-    /// as long as it has not been explicitly stopped, so it is considered
-    /// alive until `stop()` flips the flag.
+    /// a dead local port. For the russh backend the `running` flag is cleared
+    /// either by `stop()` or by the forwarding loop itself when it detects the
+    /// SSH session has closed.
     pub fn is_alive(&self) -> bool {
         match &self.backend {
             TunnelBackend::Russh(running) => running.load(Ordering::Relaxed),

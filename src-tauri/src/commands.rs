@@ -220,25 +220,51 @@ fn build_tunnel_map_key(
     crate::ssh_tunnel::build_tunnel_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port)
 }
 
+/// Build the tunnel map key from unresolved params, if they describe an SSH
+/// tunnel. Expects params that still carry the original SSH/remote fields
+/// (i.e. before [`resolve_connection_params`] rewrites host/port to the local
+/// forward).
+fn ssh_tunnel_key_for(params: &ConnectionParams) -> Option<String> {
+    if !params.ssh_enabled.unwrap_or(false) {
+        return None;
+    }
+    let ssh_host = params.ssh_host.as_deref()?;
+    let ssh_user = params.ssh_user.as_deref()?;
+    Some(build_tunnel_map_key(
+        ssh_user,
+        ssh_host,
+        params.ssh_port.unwrap_or(22),
+        params.host.as_deref().unwrap_or("localhost"),
+        params.port.unwrap_or(DEFAULT_MYSQL_PORT),
+    ))
+}
+
 /// Stop and remove the SSH tunnel associated with these params, if any.
 ///
 /// Called when a connection is closed (manually or by the health check) so a
-/// tunnel does not outlive the connection that owns it. Expects params that
-/// still carry the original SSH/remote fields (i.e. before
-/// [`resolve_connection_params`] rewrites host/port to the local forward).
+/// tunnel does not outlive the connection that owns it.
 pub(crate) fn teardown_ssh_tunnel(params: &ConnectionParams) {
-    if !params.ssh_enabled.unwrap_or(false) {
-        return;
+    if let Some(map_key) = ssh_tunnel_key_for(params) {
+        crate::ssh_tunnel::remove_tunnel(&map_key);
     }
-    let (Some(ssh_host), Some(ssh_user)) = (params.ssh_host.as_deref(), params.ssh_user.as_deref())
-    else {
-        return;
+}
+
+/// Remove the cached SSH tunnel for these params if it is no longer alive
+/// (e.g. the remote server rebooted), so the next resolve creates a fresh one.
+/// Returns true if a dead tunnel was evicted.
+pub(crate) fn evict_dead_ssh_tunnel(params: &ConnectionParams) -> bool {
+    let Some(map_key) = ssh_tunnel_key_for(params) else {
+        return false;
     };
-    let ssh_port = params.ssh_port.unwrap_or(22);
-    let remote_host = params.host.as_deref().unwrap_or("localhost");
-    let remote_port = params.port.unwrap_or(DEFAULT_MYSQL_PORT);
-    let map_key = build_tunnel_map_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port);
-    crate::ssh_tunnel::remove_tunnel(&map_key);
+    let is_dead = {
+        let tunnels = get_tunnels().lock().unwrap();
+        matches!(tunnels.get(&map_key), Some(tunnel) if !tunnel.is_alive())
+    };
+    if is_dead {
+        log::warn!("SSH tunnel {} is no longer alive, removing it", map_key);
+        crate::ssh_tunnel::remove_tunnel(&map_key);
+    }
+    is_dead
 }
 
 /// Resolve K8s tunnel params synchronously (no saved-connection lookup; uses inline fields only).
@@ -332,29 +358,22 @@ pub fn resolve_connection_params(params: &ConnectionParams) -> Result<Connection
 
     let map_key = build_tunnel_map_key(ssh_user, ssh_host, ssh_port, remote_host, remote_port);
 
-    // Check for existing tunnel. A tunnel that is no longer alive (e.g. the
-    // ssh client exited after the remote host rebooted) must not be reused:
-    // its local port is dead or still held by the defunct process, which is
-    // what produced the "port already in use" failures on reconnect. Drop it
-    // and fall through to create a fresh tunnel.
+    // A tunnel that is no longer alive (e.g. the ssh client exited after the
+    // remote host rebooted) must not be reused: its local port is dead or
+    // still held by the defunct process, which is what produced the "port
+    // already in use" failures on reconnect. Evict it so a fresh tunnel gets
+    // created below.
+    evict_dead_ssh_tunnel(params);
+
+    // Check for existing tunnel
     {
-        let stale = {
-            let tunnels = get_tunnels().lock().unwrap();
-            match tunnels.get(&map_key) {
-                Some(tunnel) if tunnel.is_alive() => {
-                    log::debug!("Reusing existing SSH tunnel on port {}", tunnel.local_port);
-                    let mut new_params = params.clone();
-                    new_params.host = Some("127.0.0.1".to_string());
-                    new_params.port = Some(tunnel.local_port);
-                    return Ok(new_params);
-                }
-                Some(_) => true,
-                None => false,
-            }
-        };
-        if stale {
-            log::warn!("Discarding dead SSH tunnel for {}, recreating", map_key);
-            crate::ssh_tunnel::remove_tunnel(&map_key);
+        let tunnels = get_tunnels().lock().unwrap();
+        if let Some(tunnel) = tunnels.get(&map_key) {
+            log::debug!("Reusing existing SSH tunnel on port {}", tunnel.local_port);
+            let mut new_params = params.clone();
+            new_params.host = Some("127.0.0.1".to_string());
+            new_params.port = Some(tunnel.local_port);
+            return Ok(new_params);
         }
     }
 
@@ -2376,6 +2395,26 @@ mod tests {
             let result = resolve_connection_params(&params);
             assert!(result.is_err());
             assert!(result.unwrap_err().contains("SSH User"));
+        }
+
+        #[test]
+        fn test_evict_dead_ssh_tunnel_noop_when_ssh_disabled() {
+            let params = base_params();
+            assert!(!evict_dead_ssh_tunnel(&params));
+        }
+
+        #[test]
+        fn test_evict_dead_ssh_tunnel_noop_without_ssh_fields() {
+            let mut params = create_ssh_params("jump.server", 22, "admin", "db.internal", 3306);
+            params.ssh_user = None;
+            assert!(!evict_dead_ssh_tunnel(&params));
+        }
+
+        #[test]
+        fn test_evict_dead_ssh_tunnel_noop_without_cached_tunnel() {
+            let params =
+                create_ssh_params("no-such-tunnel.host", 22, "admin", "db.internal", 3306);
+            assert!(!evict_dead_ssh_tunnel(&params));
         }
     }
 
