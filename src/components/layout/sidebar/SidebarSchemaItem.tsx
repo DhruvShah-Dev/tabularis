@@ -21,6 +21,7 @@ import type { TableColumn } from "../../../types/schema";
 import type { ContextMenuData } from "../../../types/sidebar";
 import { groupRoutinesByType } from "../../../utils/routines";
 import { formatObjectCount } from "../../../utils/schema";
+import { fuzzyFilter } from "../../../utils/fuzzy";
 
 interface SidebarSchemaItemProps {
   schemaName: string;
@@ -116,16 +117,12 @@ export const SidebarSchemaItem = ({
   }
 
   const tables = schemaData?.tables ?? [];
-  const filteredTables = tableFilter
-    ? tables.filter((t) => t.name.toLowerCase().includes(tableFilter.toLowerCase()))
-    : tables;
+  const filteredTables = fuzzyFilter(tables, tableFilter, (t) => t.name);
   const views = schemaData?.views ?? [];
   const materializedViews = schemaData?.materializedViews ?? [];
   const routines = schemaData?.routines ?? [];
   const triggers = schemaData?.triggers ?? [];
-  const filteredTriggers = triggerFilter
-    ? triggers.filter((tr) => tr.name.toLowerCase().includes(triggerFilter.toLowerCase()))
-    : triggers;
+  const filteredTriggers = fuzzyFilter(triggers, triggerFilter, (tr) => tr.name);
   const isLoading = schemaData?.isLoading ?? false;
   const isLoaded = schemaData?.isLoaded ?? false;
 
@@ -224,6 +221,7 @@ export const SidebarSchemaItem = ({
                       <Search size={11} className="absolute left-2 text-muted pointer-events-none" />
                       <input
                         type="text"
+                        data-table-filter
                         value={tableFilter}
                         onChange={(e) => setTableFilter(e.target.value)}
                         placeholder={t("sidebar.filterTables")}

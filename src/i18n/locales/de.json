@@ -574,6 +574,7 @@
       "tabSwitcher": "Tab wechseln",
       "copySelection": "Auswahl kopieren",
       "toggleSidebar": "Seitenleiste umschalten",
+      "focusTableFilter": "Tabellenfilter fokussieren",
       "openConnections": "Verbindungen öffnen",
       "newConnection": "Neue Verbindung",
       "newTab": "Neuer Tab",
