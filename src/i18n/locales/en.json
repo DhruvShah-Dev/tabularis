@@ -893,6 +893,9 @@
     "saveThisQuery": "Save this query",
     "noValidQueries": "No valid queries found",
     "queryFailed": "Query failed.",
+    "dangerousQueryTitle": "Run without a WHERE clause?",
+    "dangerousQueryMessage": "This statement will affect every row in the table because it has no WHERE clause. This cannot be undone.",
+    "dangerousQueryConfirm": "Run anyway",
     "showErrorDetails": "Show details",
     "hideErrorDetails": "Hide details",
     "errorBoundary": {

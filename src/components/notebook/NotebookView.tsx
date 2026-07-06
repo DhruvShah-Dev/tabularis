@@ -63,6 +63,8 @@ import { isMultiDatabaseCapable } from "../../utils/database";
 import { useSettings } from "../../hooks/useSettings";
 import { useAlert } from "../../hooks/useAlert";
 import { useKeybindings } from "../../hooks/useKeybindings";
+import { useDangerousQueryGuard } from "../../hooks/useDangerousQueryGuard";
+import { ConfirmModal } from "../modals/ConfirmModal";
 import { NotebookToolbar } from "./NotebookToolbar";
 import { NotebookHistoryPanel } from "./NotebookHistoryPanel";
 import { NotebookCellWrapper } from "./NotebookCellWrapper";
@@ -98,6 +100,11 @@ export function NotebookView({
   const { settings } = useSettings();
   const { showAlert } = useAlert();
   const { matchesShortcut } = useKeybindings();
+  const {
+    isPending: isDangerousQueryPending,
+    guardQuery: guardDangerousQuery,
+    resolve: resolveDangerousQuery,
+  } = useDangerousQueryGuard();
 
   // Local notebook state — loaded from store/disk, NOT from tab
   const [notebook, setNotebook] = useState<NotebookState | null>(() =>
@@ -356,6 +363,11 @@ export function NotebookView({
         return;
       }
 
+      if (!(await guardDangerousQuery(resolvedSql))) {
+        updateCell(cellId, { isLoading: false });
+        return;
+      }
+
       const start = performance.now();
       try {
         const res = await invoke<QueryResult>("execute_query", {
@@ -409,6 +421,7 @@ export function NotebookView({
       settings.resultPageSize,
       updateCell,
       params,
+      guardDangerousQuery,
     ],
   );
 
@@ -820,6 +833,15 @@ export function NotebookView({
 
   return (
     <div className="flex flex-col h-full relative">
+      <ConfirmModal
+        isOpen={isDangerousQueryPending}
+        onClose={() => resolveDangerousQuery(false)}
+        onConfirm={() => resolveDangerousQuery(true)}
+        title={t("editor.dangerousQueryTitle")}
+        message={t("editor.dangerousQueryMessage")}
+        confirmLabel={t("editor.dangerousQueryConfirm")}
+        variant="danger"
+      />
       <NotebookToolbar {...toolbarProps} />
       {showHistory && (
         <NotebookHistoryPanel

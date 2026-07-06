@@ -877,6 +877,9 @@
     "saveThisQuery": "Diese Abfrage speichern",
     "noValidQueries": "Keine gültigen Abfragen gefunden",
     "queryFailed": "Abfrage fehlgeschlagen.",
+    "dangerousQueryTitle": "Ohne WHERE-Klausel ausführen?",
+    "dangerousQueryMessage": "Diese Anweisung betrifft alle Zeilen der Tabelle, da keine WHERE-Klausel vorhanden ist. Dies kann nicht rückgängig gemacht werden.",
+    "dangerousQueryConfirm": "Trotzdem ausführen",
     "showErrorDetails": "Details anzeigen",
     "hideErrorDetails": "Details ausblenden",
     "errorBoundary": {

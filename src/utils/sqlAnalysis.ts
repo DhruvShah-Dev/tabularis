@@ -1,5 +1,7 @@
 // SQL Analysis Utilities - Pure logic functions for parsing and analyzing SQL
 
+import { leadingKeyword } from './sqlSplitter/classify';
+
 export interface ParsedTableRef {
   name: string;
   schema?: string;
@@ -59,6 +61,70 @@ export const parseTablesFromQuery = (sql: string): Map<string, ParsedTableRef> |
   }
 
   return tableMap.size > 0 ? tableMap : null;
+};
+
+// Strips comments and quoted literals so the keyword/depth scan below never
+// matches text that only looks like SQL because it's inside a string or a
+// comment. `\\.` handles backslash-escaped quotes (MySQL's default string
+// escaping) in addition to the standard doubled-quote escaping.
+const stripCommentsAndLiterals = (sql: string): string =>
+  sql
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/'(?:[^'\\]|\\.|'')*'/g, "''")
+    .replace(/"(?:[^"\\]|\\.|"")*"/g, '""')
+    .replace(/`(?:[^`]|``)*`/g, '``');
+
+const CTE_STATEMENT_KEYWORDS = new Set(['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'MERGE']);
+
+// A data-modifying CTE (`WITH x AS (...) DELETE FROM t ...`) carries its
+// real statement type after the CTE definitions, not at the start. Scan for
+// the first keyword that sits outside any parenthesized CTE body.
+function finalCteStatementKeyword(cleaned: string): string | null {
+  const tokenRe = /\(|\)|[A-Za-z_][A-Za-z0-9_]*/g;
+  let depth = 0;
+  let match: RegExpExecArray | null;
+  while ((match = tokenRe.exec(cleaned)) !== null) {
+    const token = match[0];
+    if (token === '(') { depth++; continue; }
+    if (token === ')') { depth = Math.max(0, depth - 1); continue; }
+    if (depth === 0) {
+      const word = token.toUpperCase();
+      if (CTE_STATEMENT_KEYWORDS.has(word)) return word;
+    }
+  }
+  return null;
+}
+
+// True if `WHERE` appears outside of any parenthesized group — a WHERE
+// nested in a subquery (e.g. an UPDATE...SET with a correlated subquery)
+// doesn't count, since it doesn't limit which rows of the target table are
+// affected.
+function hasTopLevelWhere(cleaned: string): boolean {
+  const tokenRe = /\(|\)|\bWHERE\b/gi;
+  let depth = 0;
+  let match: RegExpExecArray | null;
+  while ((match = tokenRe.exec(cleaned)) !== null) {
+    const token = match[0];
+    if (token === '(') { depth++; continue; }
+    if (token === ')') { depth = Math.max(0, depth - 1); continue; }
+    if (depth === 0) return true;
+  }
+  return false;
+}
+
+// Flags DELETE/UPDATE statements with no top-level WHERE clause — the
+// classic "forgot the WHERE" accident that wipes or overwrites a whole
+// table.
+export const isDestructiveWithoutWhere = (sql: string): boolean => {
+  const cleaned = stripCommentsAndLiterals(sql);
+  let keyword = leadingKeyword(cleaned);
+  if (keyword === 'WITH') {
+    keyword = finalCteStatementKeyword(cleaned) ?? keyword;
+  }
+  if (keyword !== 'DELETE' && keyword !== 'UPDATE') return false;
+
+  return !hasTopLevelWhere(cleaned);
 };
 
 // Optimized statement extractor - avoid full text scan when possible

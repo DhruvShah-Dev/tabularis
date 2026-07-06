@@ -877,6 +877,9 @@
     "saveThisQuery": "Enregistrer cette requête",
     "noValidQueries": "Aucune requête valide trouvée",
     "queryFailed": "Échec de la requête.",
+    "dangerousQueryTitle": "Exécuter sans clause WHERE ?",
+    "dangerousQueryMessage": "Cette instruction affectera toutes les lignes de la table car elle ne comporte pas de clause WHERE. Cette action est irréversible.",
+    "dangerousQueryConfirm": "Exécuter quand même",
     "showErrorDetails": "Afficher les détails",
     "hideErrorDetails": "Masquer les détails",
     "errorBoundary": {

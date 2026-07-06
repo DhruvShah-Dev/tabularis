@@ -860,6 +860,9 @@
     "saveThisQuery": "Salva questa query",
     "noValidQueries": "Nessuna query valida trovata",
     "queryFailed": "Esecuzione query fallita.",
+    "dangerousQueryTitle": "Eseguire senza clausola WHERE?",
+    "dangerousQueryMessage": "Questa istruzione interesserà tutte le righe della tabella perché non ha una clausola WHERE. L'operazione non può essere annullata.",
+    "dangerousQueryConfirm": "Esegui comunque",
     "showErrorDetails": "Mostra dettagli",
     "hideErrorDetails": "Nascondi dettagli",
     "errorBoundary": {
