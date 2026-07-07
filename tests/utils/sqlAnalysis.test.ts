@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTablesFromQuery, getCurrentStatement, isDestructiveWithoutWhere } from '../../src/utils/sqlAnalysis';
+import { parseTablesFromQuery, getCurrentStatement, isDestructiveWithoutWhere, classifyDangerousQuery, isDangerousQuery } from '../../src/utils/sqlAnalysis';
 
 describe('sqlAnalysis utils', () => {
   describe('parseTablesFromQuery', () => {
@@ -235,6 +235,42 @@ WHERE id = 1`;
     it('returns false for empty or whitespace-only input', () => {
       expect(isDestructiveWithoutWhere('')).toBe(false);
       expect(isDestructiveWithoutWhere('   \n\t  ')).toBe(false);
+    });
+  });
+
+  describe('classifyDangerousQuery', () => {
+    it('classifies DELETE/UPDATE without a WHERE as no-where', () => {
+      expect(classifyDangerousQuery('DELETE FROM users')).toBe('no-where');
+      expect(classifyDangerousQuery('UPDATE users SET active = 0')).toBe('no-where');
+    });
+
+    it('classifies DROP statements', () => {
+      expect(classifyDangerousQuery('DROP TABLE users')).toBe('drop');
+      expect(classifyDangerousQuery('drop database analytics;')).toBe('drop');
+      expect(classifyDangerousQuery('DROP INDEX idx_users_email')).toBe('drop');
+    });
+
+    it('classifies TRUNCATE statements', () => {
+      expect(classifyDangerousQuery('TRUNCATE TABLE users')).toBe('truncate');
+      expect(classifyDangerousQuery('truncate logs;')).toBe('truncate');
+    });
+
+    it('returns null for safe statements', () => {
+      expect(classifyDangerousQuery('SELECT * FROM users')).toBe(null);
+      expect(classifyDangerousQuery('DELETE FROM users WHERE id = 1')).toBe(null);
+      expect(classifyDangerousQuery('INSERT INTO users (id) VALUES (1)')).toBe(null);
+      expect(classifyDangerousQuery('')).toBe(null);
+    });
+
+    it('is not fooled by DROP/TRUNCATE inside comments or literals', () => {
+      expect(classifyDangerousQuery("SELECT 'DROP TABLE users'")).toBe(null);
+      expect(classifyDangerousQuery('SELECT 1 -- DROP TABLE users')).toBe(null);
+    });
+
+    it('exposes isDangerousQuery as a boolean shortcut', () => {
+      expect(isDangerousQuery('DROP TABLE users')).toBe(true);
+      expect(isDangerousQuery('DELETE FROM users')).toBe(true);
+      expect(isDangerousQuery('SELECT * FROM users')).toBe(false);
     });
   });
 });

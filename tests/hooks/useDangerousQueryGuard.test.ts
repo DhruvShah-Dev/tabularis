@@ -24,6 +24,11 @@ describe('useDangerousQueryGuard', () => {
     });
 
     expect(result.current.isPending).toBe(true);
+    expect(result.current.pending).toEqual({
+      kind: 'no-where',
+      sql: 'DELETE FROM users',
+      count: 1,
+    });
 
     act(() => {
       result.current.resolve(true);
@@ -31,6 +36,29 @@ describe('useDangerousQueryGuard', () => {
 
     expect(await guardPromise).toBe(true);
     expect(result.current.isPending).toBe(false);
+    expect(result.current.pending).toBe(null);
+  });
+
+  it('flags DROP and TRUNCATE statements with the matching kind', async () => {
+    const { result } = renderHook(() => useDangerousQueryGuard());
+
+    act(() => {
+      result.current.guardQuery('DROP TABLE users');
+    });
+    expect(result.current.pending?.kind).toBe('drop');
+
+    act(() => {
+      result.current.resolve(false);
+    });
+
+    act(() => {
+      result.current.guardQuery('TRUNCATE TABLE logs');
+    });
+    expect(result.current.pending?.kind).toBe('truncate');
+
+    act(() => {
+      result.current.resolve(false);
+    });
   });
 
   it('resolves to false and closes the dialog when the user declines', async () => {
@@ -57,10 +85,17 @@ describe('useDangerousQueryGuard', () => {
       guardPromise = result.current.guardQuery([
         'SELECT * FROM users',
         'DELETE FROM sessions',
+        'DROP TABLE audit',
       ]);
     });
 
     expect(result.current.isPending).toBe(true);
+    // The first flagged statement drives the preview; count reflects all of them.
+    expect(result.current.pending).toEqual({
+      kind: 'no-where',
+      sql: 'DELETE FROM sessions',
+      count: 2,
+    });
 
     act(() => {
       result.current.resolve(true);

@@ -113,19 +113,39 @@ function hasTopLevelWhere(cleaned: string): boolean {
   return false;
 }
 
-// Flags DELETE/UPDATE statements with no top-level WHERE clause — the
-// classic "forgot the WHERE" accident that wipes or overwrites a whole
-// table.
-export const isDestructiveWithoutWhere = (sql: string): boolean => {
+// The distinct ways a statement can be flagged as dangerous. Each maps to its
+// own confirmation copy so the dialog can explain the specific risk.
+//   - 'no-where':  DELETE/UPDATE with no top-level WHERE (wipes a whole table)
+//   - 'drop':      DROP removes an object (and its data) irreversibly
+//   - 'truncate':  TRUNCATE empties a table irreversibly
+export type DangerousQueryKind = 'no-where' | 'drop' | 'truncate';
+
+// Classifies a single statement's danger, or null when it is safe to run
+// without confirmation. Handles the same edge cases as the WHERE detection:
+// comments, string literals, and data-modifying CTEs.
+export const classifyDangerousQuery = (sql: string): DangerousQueryKind | null => {
   const cleaned = stripCommentsAndLiterals(sql);
   let keyword = leadingKeyword(cleaned);
   if (keyword === 'WITH') {
     keyword = finalCteStatementKeyword(cleaned) ?? keyword;
   }
-  if (keyword !== 'DELETE' && keyword !== 'UPDATE') return false;
 
-  return !hasTopLevelWhere(cleaned);
+  if (keyword === 'DROP') return 'drop';
+  if (keyword === 'TRUNCATE') return 'truncate';
+  if ((keyword === 'DELETE' || keyword === 'UPDATE') && !hasTopLevelWhere(cleaned)) {
+    return 'no-where';
+  }
+  return null;
 };
+
+// True when a statement should be gated behind a confirmation dialog.
+export const isDangerousQuery = (sql: string): boolean => classifyDangerousQuery(sql) !== null;
+
+// Flags DELETE/UPDATE statements with no top-level WHERE clause — the
+// classic "forgot the WHERE" accident that wipes or overwrites a whole
+// table.
+export const isDestructiveWithoutWhere = (sql: string): boolean =>
+  classifyDangerousQuery(sql) === 'no-where';
 
 // Optimized statement extractor - avoid full text scan when possible
 export const getCurrentStatement = (model: { getValue: () => string; getOffsetAt: (position: { lineNumber: number; column: number }) => number }, position: { lineNumber: number; column: number }): string => {

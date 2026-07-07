@@ -5,7 +5,10 @@ import { reconstructTableQuery } from "../utils/editor";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import { isMultiDatabaseCapable } from "../utils/database";
 import { isReadonly } from "../utils/driverCapabilities";
-import { useDangerousQueryGuard } from "../hooks/useDangerousQueryGuard";
+import {
+  useDangerousQueryGuard,
+  DANGEROUS_QUERY_I18N,
+} from "../hooks/useDangerousQueryGuard";
 import {
   generateTempId,
   initializeNewRow,
@@ -341,7 +344,7 @@ export const Editor = () => {
   const [isQuerySelectionModalOpen, setIsQuerySelectionModalOpen] =
     useState(false);
   const {
-    isPending: isDangerousQueryPending,
+    pending: dangerousQuery,
     guardQuery: guardDangerousQuery,
     resolve: resolveDangerousQuery,
   } = useDangerousQueryGuard();
@@ -3925,13 +3928,23 @@ export const Editor = () => {
         onClose={() => setIsQuerySelectionModalOpen(false)}
       />
       <ConfirmModal
-        isOpen={isDangerousQueryPending}
+        isOpen={!!dangerousQuery}
         onClose={() => resolveDangerousQuery(false)}
         onConfirm={() => resolveDangerousQuery(true)}
-        title={t("editor.dangerousQueryTitle")}
-        message={t("editor.dangerousQueryMessage")}
+        title={t(
+          dangerousQuery
+            ? DANGEROUS_QUERY_I18N[dangerousQuery.kind].title
+            : "editor.dangerousQueryTitle",
+        )}
+        message={t(
+          dangerousQuery
+            ? DANGEROUS_QUERY_I18N[dangerousQuery.kind].message
+            : "editor.dangerousQueryMessage",
+        )}
+        sql={dangerousQuery?.sql}
         confirmLabel={t("editor.dangerousQueryConfirm")}
         variant="danger"
+        confirmDelaySeconds={5}
       />
       <TabSwitcherModal
         isOpen={isTabSwitcherOpen}
