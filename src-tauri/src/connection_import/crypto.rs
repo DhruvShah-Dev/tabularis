@@ -36,11 +36,11 @@ pub fn decrypt_dbeaver(data: &[u8]) -> Option<Vec<u8>> {
 /// HMAC verification is skipped: the file is owned by the user and tampering
 /// surfaces as a failed JSON decode downstream.
 pub fn decrypt_beekeeper(payload: &str, key_string: &str) -> Option<Vec<u8>> {
-    if payload.len() <= 96 {
-        return None;
-    }
-    let iv_hex = &payload[64..96];
-    let cipher_b64 = &payload[96..];
+    // `payload` is attacker-/corruption-reachable (a `.key` file or an encrypted
+    // TEXT column); `get` returns None on out-of-range or non-char-boundary
+    // indices, so a crafted multibyte payload can't panic the whole import.
+    let iv_hex = payload.get(64..96)?;
+    let cipher_b64 = payload.get(96..)?;
 
     let iv = hex_decode(iv_hex)?;
     if iv.len() != 16 {
@@ -123,5 +123,18 @@ mod tests {
             decrypt_beekeeper_string(&payload, key_string).unwrap(),
             "hunter2"
         );
+    }
+
+    #[test]
+    fn beekeeper_rejects_short_payload() {
+        assert!(decrypt_beekeeper(&"a".repeat(96), "k").is_none());
+    }
+
+    #[test]
+    fn beekeeper_rejects_multibyte_payload_without_panicking() {
+        // A multibyte char straddling byte offset 64/96 must not panic the
+        // import; a byte-index slice here would. 50 'é' = 100 bytes.
+        let payload = "é".repeat(50);
+        assert!(decrypt_beekeeper(&payload, "k").is_none());
     }
 }
