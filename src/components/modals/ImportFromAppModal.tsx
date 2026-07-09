@@ -11,15 +11,19 @@ import {
   KeyRound,
   Lock,
   FolderPlus,
+  FlaskConical,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import clsx from "clsx";
 import { toErrorMessage } from "../../utils/errors";
 import { useDatabase } from "../../hooks/useDatabase";
 import type { ConnectionGroup } from "../../contexts/DatabaseContext";
 import { Select } from "../ui/Select";
+import { BetaBadge } from "../ui/BetaBadge";
+import { GITHUB_ISSUES_URL } from "../../config/links";
 import type {
   ImportSourceInfo,
   ImportPreview,
@@ -240,8 +244,9 @@ export const ImportFromAppModal = ({
               <Database size={20} className="text-blue-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-primary">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-primary">
                 {t("connections.importFromApp.title")}
+                <BetaBadge />
               </h2>
               <p className="text-xs text-secondary">
                 {step === "picker"
@@ -262,6 +267,20 @@ export const ImportFromAppModal = ({
 
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1">
+          {/* Beta notice with a link to report problems. */}
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-300/90">
+            <FlaskConical size={14} className="mt-0.5 shrink-0" />
+            <span>
+              {t("connections.importFromApp.betaNotice")}{" "}
+              <button
+                onClick={() => openUrl(GITHUB_ISSUES_URL)}
+                className="font-medium underline underline-offset-2 hover:text-amber-200"
+              >
+                {t("connections.importFromApp.reportIssue")}
+              </button>
+            </span>
+          </div>
+
           {error && (
             <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" />

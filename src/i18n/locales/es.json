@@ -42,7 +42,8 @@
     "back": "Atrás",
     "copy": "Copiar",
     "showDetails": "Mostrar detalles",
-    "hideDetails": "Ocultar detalles"
+    "hideDetails": "Ocultar detalles",
+    "beta": "Beta"
   },
   "sidebar": {
     "connections": "Conexiones",
@@ -289,7 +290,9 @@
         "none": "Sin grupo",
         "new": "Nuevo grupo…",
         "newPlaceholder": "Nombre del grupo"
-      }
+      },
+      "betaNotice": "La importación desde otra app está en beta. Si tienes algún problema,",
+      "reportIssue": "repórtalo en GitHub."
     }
   },
   "connectionAppearance": {

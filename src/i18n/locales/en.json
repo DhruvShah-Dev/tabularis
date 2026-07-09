@@ -42,7 +42,8 @@
     "back": "Back",
     "copy": "Copy",
     "showDetails": "Show details",
-    "hideDetails": "Hide details"
+    "hideDetails": "Hide details",
+    "beta": "Beta"
   },
   "sidebar": {
     "connections": "Connections",
@@ -302,7 +303,9 @@
         "none": "No group",
         "new": "New group…",
         "newPlaceholder": "Group name"
-      }
+      },
+      "betaNotice": "Import from App is in beta. If you run into a problem,",
+      "reportIssue": "report it on GitHub."
     }
   },
   "connectionAppearance": {

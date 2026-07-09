@@ -41,7 +41,8 @@
     "back": "返回",
     "copy": "复制",
     "showDetails": "显示详情",
-    "hideDetails": "隐藏详情"
+    "hideDetails": "隐藏详情",
+    "beta": "测试版"
   },
   "sidebar": {
     "connections": "连接",
@@ -288,7 +289,9 @@
         "none": "无分组",
         "new": "新建分组…",
         "newPlaceholder": "分组名称"
-      }
+      },
+      "betaNotice": "从应用导入功能处于测试阶段。如果遇到问题，",
+      "reportIssue": "请在 GitHub 上反馈。"
     }
   },
   "connectionAppearance": {

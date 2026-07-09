@@ -42,7 +42,8 @@
     "back": "Zurück",
     "copy": "Kopieren",
     "showDetails": "Details anzeigen",
-    "hideDetails": "Details ausblenden"
+    "hideDetails": "Details ausblenden",
+    "beta": "Beta"
   },
   "sidebar": {
     "connections": "Verbindungen",
@@ -289,7 +290,9 @@
         "none": "Keine Gruppe",
         "new": "Neue Gruppe…",
         "newPlaceholder": "Gruppenname"
-      }
+      },
+      "betaNotice": "Der Import aus einer App befindet sich in der Beta-Phase. Falls ein Problem auftritt,",
+      "reportIssue": "melde es auf GitHub."
     }
   },
   "connectionAppearance": {

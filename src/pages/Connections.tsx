@@ -36,6 +36,7 @@ import { GroupHeader } from "../components/connections/GroupHeader";
 import { ConnectionCard } from "../components/connections/ConnectionCard";
 import { ConnectionListItem } from "../components/connections/ConnectionListItem";
 import { ConnectionErrorBanner } from "../components/ConnectionErrorBanner";
+import { BetaBadge } from "../components/ui/BetaBadge";
 
 let autoConnectAttempted = false;
 
@@ -626,7 +627,8 @@ export const Connections = () => {
                     className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-secondary hover:text-primary hover:bg-surface-secondary transition-colors text-left"
                   >
                     <FolderInput size={15} className="shrink-0 text-blue-400" />
-                    {t("connections.importFromApp.menuLabel")}
+                    <span className="flex-1">{t("connections.importFromApp.menuLabel")}</span>
+                    <BetaBadge />
                   </button>
                 </div>
               </>,
@@ -680,6 +682,7 @@ export const Connections = () => {
               >
                 <FolderInput size={14} />
                 {t("connections.importFromApp.menuLabel")}
+                <BetaBadge />
               </button>
             </div>
           </div>
