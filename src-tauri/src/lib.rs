@@ -15,12 +15,17 @@ pub mod cli;
 pub mod clipboard_import;
 pub mod commands;
 pub mod connection_appearance;
+pub mod connection_import;
+pub mod connection_import_commands;
 #[cfg(test)]
 pub mod connection_appearance_tests;
 pub mod config;
 pub mod connection_cache;
 #[cfg(test)]
 pub mod connection_cache_tests;
+pub mod connection_window;
+#[cfg(test)]
+pub mod connection_window_tests;
 pub mod credential_cache;
 pub mod dump_commands; // Added
 #[cfg(test)]
@@ -34,6 +39,8 @@ pub mod export;
 pub mod export_import_tests;
 pub mod headless;
 pub mod health_check;
+#[cfg(test)]
+pub mod group_tree_tests;
 pub mod heartbeat;
 #[cfg(test)]
 pub mod heartbeat_tests;
@@ -198,6 +205,7 @@ pub fn run() {
         .manage(std::sync::Arc::new(
             connection_cache::ConnectionCache::default(),
         ))
+        .manage(connection_import_commands::ImportEnvelopeCache::default())
         .manage(explain_import::PendingExplainFile::default())
         .manage(json_viewer::JsonViewerStore::default())
         .manage(results_window::ResultsWindowStore::default())
@@ -301,6 +309,7 @@ pub fn run() {
             commands::get_connection_by_id,
             commands::disconnect_connection,
             commands::register_active_connection,
+            commands::get_active_connections,
             commands::get_data_types,
             commands::map_inferred_column_types,
             // SSH Connections
@@ -324,13 +333,18 @@ pub fn run() {
             commands::get_connection_groups,
             commands::get_connections_with_groups,
             commands::create_connection_group,
+            commands::create_group_path,
             commands::update_connection_group,
+            commands::move_group_to_parent,
             commands::delete_connection_group,
             commands::move_connection_to_group,
             commands::reorder_groups,
             commands::reorder_connections_in_group,
             commands::export_connections_payload,
             commands::import_connections_payload,
+            connection_import_commands::list_connection_import_sources,
+            connection_import_commands::preview_connection_import,
+            connection_import_commands::apply_connection_import,
             commands::get_schemas,
             commands::get_available_databases,
             commands::get_tables,
@@ -359,6 +373,10 @@ pub fn run() {
             commands::alter_view,
             commands::drop_view,
             commands::get_view_columns,
+            commands::get_materialized_views,
+            commands::get_materialized_view_columns,
+            commands::get_materialized_view_definition,
+            commands::refresh_materialized_view,
             commands::set_window_title,
             commands::open_er_diagram_window,
             // Terminal CLI shortcut
@@ -434,6 +452,10 @@ pub fn run() {
             commands::get_routines,
             commands::get_routine_parameters,
             commands::get_routine_definition,
+            commands::build_routine_call_sql,
+            commands::get_routine_create_template,
+            commands::get_routine_edit_script,
+            commands::drop_routine,
             // Triggers
             commands::get_triggers,
             commands::get_trigger_definition,
@@ -506,6 +528,8 @@ pub fn run() {
             json_viewer::complete_json_viewer_session,
             results_window::open_results_window,
             results_window::close_results_window,
+            // Connection Window
+            connection_window::open_connection_window,
             // Task Manager
             task_manager::get_process_list,
             task_manager::get_system_stats,
@@ -518,6 +542,12 @@ pub fn run() {
             connection_appearance::delete_connection_icon,
             commands::set_connection_appearance,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                log::info!("Application exiting, stopping all active SSH tunnels...");
+                crate::ssh_tunnel::stop_all_tunnels();
+            }
+        });
 }
