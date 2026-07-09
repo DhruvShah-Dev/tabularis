@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use super::beekeeper::BeekeeperImporter;
 use super::datagrip::DataGripImporter;
 use super::dbeaver::DBeaverImporter;
+use super::sequelace::SequelAceImporter;
 use super::tableplus::TablePlusImporter;
 use super::ForeignAppImporter;
 
@@ -126,6 +127,91 @@ async fn datagrip_parses_xml() {
     assert_eq!(c.database, "analytics");
     assert_eq!(c.username, "analyst");
     assert_eq!(c.driver_label, "PostgreSQL");
+}
+
+#[tokio::test]
+async fn sequelace_parses_favorites_plist() {
+    let tmp = tempfile::tempdir().unwrap();
+    let plist = tmp.path().join("Favorites.plist");
+    write(
+        &plist,
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Favorites Root</key>
+  <dict>
+    <key>Children</key>
+    <array>
+      <dict>
+        <key>Name</key><string>Work</string>
+        <key>Children</key>
+        <array>
+          <dict>
+            <key>name</key><string>Shop DB</string>
+            <key>host</key><string>db.example.com</string>
+            <key>port</key><integer>3307</integer>
+            <key>database</key><string>shop</string>
+            <key>user</key><string>appuser</string>
+            <key>type</key><integer>0</integer>
+            <key>useSSL</key><integer>1</integer>
+            <key>sslCACertFileLocation</key><string>/certs/ca.pem</string>
+          </dict>
+        </array>
+      </dict>
+      <dict>
+        <key>name</key><string>Tunneled</string>
+        <key>host</key><string>127.0.0.1</string>
+        <key>port</key><string>3306</string>
+        <key>database</key><string>main</string>
+        <key>user</key><string>root</string>
+        <key>type</key><integer>2</integer>
+        <key>sshHost</key><string>bastion</string>
+        <key>sshPort</key><integer>2222</integer>
+        <key>sshUser</key><string>deploy</string>
+        <key>sshKeyLocationEnabled</key><integer>1</integer>
+        <key>sshKeyLocation</key><string>/home/u/.ssh/id_ed25519</string>
+      </dict>
+    </array>
+  </dict>
+</dict>
+</plist>"#,
+    );
+
+    let importer = SequelAceImporter::with_favorites(plist);
+    assert!(importer.is_available().await);
+    assert_eq!(importer.connection_count().await, 2);
+
+    let env = importer.import(false, None).await.unwrap();
+    assert_eq!(env.connections.len(), 2);
+
+    // Grouped connection: fields, MySQL default driver, SSL mapped, group name.
+    let shop = env.connections.iter().find(|c| c.name == "Shop DB").unwrap();
+    assert_eq!(shop.host, "db.example.com");
+    assert_eq!(shop.port, 3307);
+    assert_eq!(shop.database, "shop");
+    assert_eq!(shop.username, "appuser");
+    assert_eq!(shop.driver_label, "MySQL");
+    assert_eq!(shop.group_name.as_deref(), Some("Work"));
+    assert!(shop.ssh.is_none());
+    let ssl = shop.ssl.as_ref().unwrap();
+    assert_eq!(ssl.mode, "require");
+    assert_eq!(ssl.ca_certificate_path.as_deref(), Some("/certs/ca.pem"));
+
+    // Top-level SSH connection (type 2), port given as a string.
+    let tun = env.connections.iter().find(|c| c.name == "Tunneled").unwrap();
+    assert_eq!(tun.port, 3306);
+    assert!(tun.group_name.is_none());
+    let ssh = tun.ssh.as_ref().unwrap();
+    assert_eq!(ssh.host, "bastion");
+    assert_eq!(ssh.port, Some(2222));
+    assert_eq!(ssh.username, "deploy");
+    assert_eq!(ssh.auth_type, "ssh_key");
+    assert!(ssh
+        .private_key_path
+        .as_deref()
+        .unwrap()
+        .ends_with("id_ed25519"));
 }
 
 #[tokio::test]
