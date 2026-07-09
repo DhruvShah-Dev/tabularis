@@ -46,4 +46,12 @@ export interface ImportResolution {
   index: number;
   action: ImportAction;
   replaceExistingId?: string;
+  /**
+   * Target group for a newly-imported connection. An id assigns to that
+   * existing group; `""` means "no group"; omitted falls back to the source
+   * app's folder. Ignored for `replace`.
+   */
+  groupId?: string;
+  /** Name of a group to create (or reuse by name). Wins over `groupId`. */
+  newGroupName?: string;
 }

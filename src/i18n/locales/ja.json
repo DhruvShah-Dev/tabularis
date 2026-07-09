@@ -296,7 +296,13 @@
         "replace": "Replace"
       },
       "tabularisJsonHint": "Tabularis エクスポートファイル (.json)",
-      "menuLabel": "接続をインポート…"
+      "menuLabel": "接続をインポート…",
+      "group": {
+        "label": "グループ:",
+        "none": "グループなし",
+        "new": "新規グループ…",
+        "newPlaceholder": "グループ名"
+      }
     }
   },
   "connectionAppearance": {

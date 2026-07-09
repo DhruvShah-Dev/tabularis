@@ -39,6 +39,10 @@ pub struct ImportItem {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ImportItemStatus {
     Ready,
+    // `rename_all` on the enum only renames variant tags, not the fields inside
+    // struct variants — those need their own annotation to reach the
+    // camelCase keys the frontend reads (`existingId` / `existingName`).
+    #[serde(rename_all = "camelCase")]
     Duplicate {
         existing_id: String,
         existing_name: String,
@@ -257,5 +261,19 @@ mod tests {
         let env = envelope(vec![conn("A", "h", 5432, "db", "u", "PostgreSQL")]);
         let preview = analyze(&env, &[], &["postgres".into()], &|_| true);
         assert!(matches!(preview.items[0].status, ImportItemStatus::Ready));
+    }
+
+    #[test]
+    fn duplicate_status_serializes_camel_case_fields() {
+        // The frontend reads `existingId` / `existingName`; a snake_case leak
+        // here surfaces as `Duplicate of ""` in the UI (see analyzer note).
+        let env = envelope(vec![conn("A", "Host", 5432, "DB", "User", "PostgreSQL")]);
+        let existing = vec![saved("x", "Existing Name", "host", 5432, "db", "user")];
+        let preview = analyze(&env, &existing, &["postgres".into()], &|_| true);
+        let json = serde_json::to_value(&preview.items[0].status).unwrap();
+        assert_eq!(json["kind"], "duplicate");
+        assert_eq!(json["existingId"], "x");
+        assert_eq!(json["existingName"], "Existing Name");
+        assert!(json.get("existing_name").is_none());
     }
 }

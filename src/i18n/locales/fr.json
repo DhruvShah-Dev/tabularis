@@ -283,7 +283,13 @@
         "replace": "Replace"
       },
       "tabularisJsonHint": "Fichier d'export Tabularis (.json)",
-      "menuLabel": "Importer des connexions…"
+      "menuLabel": "Importer des connexions…",
+      "group": {
+        "label": "Groupe :",
+        "none": "Aucun groupe",
+        "new": "Nouveau groupe…",
+        "newPlaceholder": "Nom du groupe"
+      }
     }
   },
   "connectionAppearance": {

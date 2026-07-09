@@ -22,6 +22,15 @@ pub struct ImportResolution {
     pub action: String,
     #[serde(default)]
     pub replace_existing_id: Option<String>,
+    /// Target group for a newly-imported connection. `Some(id)` assigns to that
+    /// existing group; `Some("")` means "no group"; `None` (absent) falls back
+    /// to the source app's folder. Ignored for `replace`.
+    #[serde(default)]
+    pub group_id: Option<String>,
+    /// Name of a group to create (or reuse by name) for a newly-imported
+    /// connection. Takes precedence over `group_id`. Ignored for `replace`.
+    #[serde(default)]
+    pub new_group_name: Option<String>,
 }
 
 /// Build the payload from the envelope and resolutions. `existing_groups` lets
@@ -55,9 +64,31 @@ pub fn build_payload(
         };
         let creds = envelope.credentials_by_index.get(&res.index);
 
-        let group_id = conn.group_name.as_ref().map(|name| {
-            resolve_group(name, existing_groups, &mut group_ids, &mut payload)
-        });
+        // Group assignment. For newly-imported connections the user can override
+        // the source-app folder: create a group on the fly (`new_group_name`),
+        // pick an existing one (`group_id`), or explicitly choose none
+        // (`group_id == ""`). `replace` keeps the source-folder behavior.
+        let source_group = |group_ids: &mut std::collections::HashMap<String, String>,
+                            payload: &mut ExportPayload| {
+            conn.group_name
+                .as_ref()
+                .map(|name| resolve_group(name, existing_groups, group_ids, payload))
+        };
+        let group_id = if res.action == "replace" {
+            source_group(&mut group_ids, &mut payload)
+        } else if let Some(name) = res
+            .new_group_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(resolve_group(name, existing_groups, &mut group_ids, &mut payload))
+        } else if let Some(gid) = &res.group_id {
+            // `Some("")` is an explicit "no group"; a real id assigns to it.
+            (!gid.is_empty()).then(|| gid.clone())
+        } else {
+            source_group(&mut group_ids, &mut payload)
+        };
 
         let conn_id = match res.action.as_str() {
             "replace" => res
@@ -203,6 +234,17 @@ mod tests {
             index,
             action: action.to_string(),
             replace_existing_id: None,
+            group_id: None,
+            new_group_name: None,
+        }
+    }
+
+    fn group(id: &str, name: &str) -> ConnectionGroup {
+        ConnectionGroup {
+            id: id.to_string(),
+            name: name.to_string(),
+            collapsed: false,
+            sort_order: 0,
         }
     }
 
@@ -264,6 +306,85 @@ mod tests {
         assert_eq!(ssh.port, 2222);
         assert_eq!(ssh.save_in_keychain, Some(true));
         assert_eq!(conn.params.save_in_keychain, Some(true));
+    }
+
+    #[test]
+    fn import_assigns_to_chosen_existing_group() {
+        let env = ImportEnvelope {
+            source_name: "X".into(),
+            connections: vec![base_conn()],
+            ..Default::default()
+        };
+        let mut r = res(0, "import");
+        r.group_id = Some("existing-group".into());
+        let groups = [group("existing-group", "My Group")];
+        let payload = build_payload(&env, &[r], &["postgres".into()], &groups);
+        // No new group is minted; the connection joins the chosen one.
+        assert!(payload.groups.is_empty());
+        assert_eq!(
+            payload.connections[0].group_id.as_deref(),
+            Some("existing-group")
+        );
+    }
+
+    #[test]
+    fn import_creates_new_group_on_the_fly() {
+        let env = ImportEnvelope {
+            source_name: "X".into(),
+            connections: vec![base_conn()],
+            ..Default::default()
+        };
+        let mut r = res(0, "import");
+        r.new_group_name = Some("Fresh Group".into());
+        let payload = build_payload(&env, &[r], &["postgres".into()], &[]);
+        assert_eq!(payload.groups.len(), 1);
+        assert_eq!(payload.groups[0].name, "Fresh Group");
+        assert_eq!(
+            payload.connections[0].group_id.as_deref(),
+            Some(payload.groups[0].id.as_str())
+        );
+    }
+
+    #[test]
+    fn import_new_group_name_reuses_matching_existing() {
+        let env = ImportEnvelope {
+            source_name: "X".into(),
+            connections: vec![base_conn()],
+            ..Default::default()
+        };
+        let mut r = res(0, "import");
+        r.new_group_name = Some("  my group ".into()); // case/space-insensitive match
+        let groups = [group("g1", "My Group")];
+        let payload = build_payload(&env, &[r], &["postgres".into()], &groups);
+        assert!(payload.groups.is_empty());
+        assert_eq!(payload.connections[0].group_id.as_deref(), Some("g1"));
+    }
+
+    #[test]
+    fn import_explicit_no_group_overrides_source_folder() {
+        // base_conn has source folder "Work"; empty group_id clears it.
+        let env = ImportEnvelope {
+            source_name: "X".into(),
+            connections: vec![base_conn()],
+            ..Default::default()
+        };
+        let mut r = res(0, "import");
+        r.group_id = Some(String::new());
+        let payload = build_payload(&env, &[r], &["postgres".into()], &[]);
+        assert!(payload.groups.is_empty());
+        assert_eq!(payload.connections[0].group_id, None);
+    }
+
+    #[test]
+    fn import_without_group_choice_falls_back_to_source_folder() {
+        let env = ImportEnvelope {
+            source_name: "X".into(),
+            connections: vec![base_conn()],
+            ..Default::default()
+        };
+        let payload = build_payload(&env, &[res(0, "import")], &["postgres".into()], &[]);
+        assert_eq!(payload.groups.len(), 1);
+        assert_eq!(payload.groups[0].name, "Work");
     }
 
     #[test]

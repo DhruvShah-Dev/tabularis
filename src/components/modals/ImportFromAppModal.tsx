@@ -10,12 +10,16 @@ import {
   Copy,
   KeyRound,
   Lock,
+  FolderPlus,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import clsx from "clsx";
 import { toErrorMessage } from "../../utils/errors";
+import { useDatabase } from "../../hooks/useDatabase";
+import type { ConnectionGroup } from "../../contexts/DatabaseContext";
+import { Select } from "../ui/Select";
 import type {
   ImportSourceInfo,
   ImportPreview,
@@ -37,12 +41,17 @@ type Step = "picker" | "preview";
  * directly, without the foreign-app preview pipeline). */
 const TABULARIS_SOURCE_ID = "tabularis-json";
 
+/** Sentinel `groupChoice` values that aren't a real group id. */
+const GROUP_NONE = "__none__";
+const GROUP_NEW = "__new__";
+
 export const ImportFromAppModal = ({
   isOpen,
   onClose,
   onImported,
 }: ImportFromAppModalProps) => {
   const { t } = useTranslation();
+  const { connectionGroups } = useDatabase();
 
   const [step, setStep] = useState<Step>("picker");
   const [sources, setSources] = useState<ImportSourceInfo[]>([]);
@@ -50,6 +59,9 @@ export const ImportFromAppModal = ({
   const [includePasswords, setIncludePasswords] = useState(true);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [resolutions, setResolutions] = useState<Record<number, ImportAction>>({});
+  // Per-item group selection for new imports: a group id, GROUP_NONE, or GROUP_NEW.
+  const [groupChoice, setGroupChoice] = useState<Record<number, string>>({});
+  const [newGroupName, setNewGroupName] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +71,8 @@ export const ImportFromAppModal = ({
     setIncludePasswords(true);
     setPreview(null);
     setResolutions({});
+    setGroupChoice({});
+    setNewGroupName({});
     setError(null);
     setLoading(false);
   }, []);
@@ -128,11 +142,30 @@ export const ImportFromAppModal = ({
       });
       // Default: import everything, skip duplicates.
       const defaults: Record<number, ImportAction> = {};
+      // Seed each item's group from its source-app folder: reuse a matching
+      // existing group, otherwise pre-fill a new-group name.
+      const groupDefaults: Record<number, string> = {};
+      const newNameDefaults: Record<number, string> = {};
       for (const item of result.items) {
         defaults[item.index] = item.status.kind === "duplicate" ? "skip" : "import";
+        if (item.groupName) {
+          const match = connectionGroups.find(
+            (g) => g.name.trim().toLowerCase() === item.groupName!.trim().toLowerCase(),
+          );
+          if (match) {
+            groupDefaults[item.index] = match.id;
+          } else {
+            groupDefaults[item.index] = GROUP_NEW;
+            newNameDefaults[item.index] = item.groupName;
+          }
+        } else {
+          groupDefaults[item.index] = GROUP_NONE;
+        }
       }
       setPreview(result);
       setResolutions(defaults);
+      setGroupChoice(groupDefaults);
+      setNewGroupName(newNameDefaults);
       setStep("preview");
     } catch (e) {
       setError(toErrorMessage(e));
@@ -148,14 +181,26 @@ export const ImportFromAppModal = ({
     try {
       const payload: ImportResolution[] = preview.items.map((item) => {
         const action = resolutions[item.index] ?? "skip";
-        return {
-          index: item.index,
-          action,
-          replaceExistingId:
-            action === "replace" && item.status.kind === "duplicate"
-              ? item.status.existingId
-              : undefined,
-        };
+        if (action === "replace" && item.status.kind === "duplicate") {
+          return { index: item.index, action, replaceExistingId: item.status.existingId };
+        }
+        if (action === "import") {
+          const choice = groupChoice[item.index] ?? GROUP_NONE;
+          if (choice === GROUP_NEW) {
+            const name = newGroupName[item.index]?.trim();
+            // An empty new-group name means "no group".
+            return name
+              ? { index: item.index, action, newGroupName: name }
+              : { index: item.index, action, groupId: "" };
+          }
+          // GROUP_NONE clears the group; any other value is an existing group id.
+          return {
+            index: item.index,
+            action,
+            groupId: choice === GROUP_NONE ? "" : choice,
+          };
+        }
+        return { index: item.index, action };
       });
       await invoke("apply_connection_import", {
         sourceId: selectedSource.id,
@@ -246,6 +291,15 @@ export const ImportFromAppModal = ({
               resolutions={resolutions}
               onChange={(index, action) =>
                 setResolutions((prev) => ({ ...prev, [index]: action }))
+              }
+              groups={connectionGroups}
+              groupChoice={groupChoice}
+              newGroupName={newGroupName}
+              onGroupChoiceChange={(index, value) =>
+                setGroupChoice((prev) => ({ ...prev, [index]: value }))
+              }
+              onNewGroupNameChange={(index, value) =>
+                setNewGroupName((prev) => ({ ...prev, [index]: value }))
               }
             />
           )}
@@ -380,9 +434,23 @@ interface PreviewListProps {
   preview: ImportPreview;
   resolutions: Record<number, ImportAction>;
   onChange: (index: number, action: ImportAction) => void;
+  groups: ConnectionGroup[];
+  groupChoice: Record<number, string>;
+  newGroupName: Record<number, string>;
+  onGroupChoiceChange: (index: number, value: string) => void;
+  onNewGroupNameChange: (index: number, value: string) => void;
 }
 
-const PreviewList = ({ preview, resolutions, onChange }: PreviewListProps) => {
+const PreviewList = ({
+  preview,
+  resolutions,
+  onChange,
+  groups,
+  groupChoice,
+  newGroupName,
+  onGroupChoiceChange,
+  onNewGroupNameChange,
+}: PreviewListProps) => {
   const { t } = useTranslation();
 
   return (
@@ -393,6 +461,11 @@ const PreviewList = ({ preview, resolutions, onChange }: PreviewListProps) => {
           item={item}
           action={resolutions[item.index] ?? "skip"}
           onChange={(action) => onChange(item.index, action)}
+          groups={groups}
+          groupChoice={groupChoice[item.index] ?? GROUP_NONE}
+          newGroupName={newGroupName[item.index] ?? ""}
+          onGroupChoiceChange={(value) => onGroupChoiceChange(item.index, value)}
+          onNewGroupNameChange={(value) => onNewGroupNameChange(item.index, value)}
         />
       ))}
       {preview.items.length === 0 && (
@@ -408,55 +481,104 @@ interface PreviewRowProps {
   item: ImportItem;
   action: ImportAction;
   onChange: (action: ImportAction) => void;
+  groups: ConnectionGroup[];
+  groupChoice: string;
+  newGroupName: string;
+  onGroupChoiceChange: (value: string) => void;
+  onNewGroupNameChange: (value: string) => void;
 }
 
-const PreviewRow = ({ item, action, onChange }: PreviewRowProps) => {
+const PreviewRow = ({
+  item,
+  action,
+  onChange,
+  groups,
+  groupChoice,
+  newGroupName,
+  onGroupChoiceChange,
+  onNewGroupNameChange,
+}: PreviewRowProps) => {
   const { t } = useTranslation();
   const isDuplicate = item.status.kind === "duplicate";
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-strong bg-base px-3.5 py-2.5">
-      <StatusBadge item={item} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-primary">
-          {item.name}
-          {item.hasPassword && (
-            <Lock size={11} className="ml-1.5 inline text-green-400" />
+    <div className="rounded-xl border border-strong bg-base px-3.5 py-2.5">
+      <div className="flex items-center gap-3">
+        <StatusBadge item={item} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-primary">
+            {item.name}
+            {item.hasPassword && (
+              <Lock size={11} className="ml-1.5 inline text-green-400" />
+            )}
+          </p>
+          <p className="truncate text-xs text-muted">
+            {item.driverId}
+            {" · "}
+            {item.port ? `${item.host}:${item.port}` : item.host}
+            {item.database ? ` / ${item.database}` : ""}
+            {item.groupName ? `  ·  ${item.groupName}` : ""}
+          </p>
+          {item.status.kind === "warnings" && (
+            <p className="mt-0.5 text-xs text-amber-400">
+              {item.status.warnings.join(" · ")}
+            </p>
           )}
-        </p>
-        <p className="truncate text-xs text-muted">
-          {item.driverId}
-          {" · "}
-          {item.port ? `${item.host}:${item.port}` : item.host}
-          {item.database ? ` / ${item.database}` : ""}
-          {item.groupName ? `  ·  ${item.groupName}` : ""}
-        </p>
-        {item.status.kind === "warnings" && (
-          <p className="mt-0.5 text-xs text-amber-400">
-            {item.status.warnings.join(" · ")}
-          </p>
-        )}
-        {isDuplicate && item.status.kind === "duplicate" && (
-          <p className="mt-0.5 text-xs text-blue-300">
-            {t("connections.importFromApp.duplicateOf", {
-              name: item.status.existingName,
-            })}
-          </p>
-        )}
+          {isDuplicate && item.status.kind === "duplicate" && (
+            <p className="mt-0.5 text-xs text-blue-300">
+              {t("connections.importFromApp.duplicateOf", {
+                name: item.status.existingName,
+              })}
+            </p>
+          )}
+        </div>
+
+        {/* Per-item action selector */}
+        <Select
+          value={action}
+          options={isDuplicate ? ["import", "skip", "replace"] : ["import", "skip"]}
+          labels={{
+            import: t("connections.importFromApp.action.import"),
+            skip: t("connections.importFromApp.action.skip"),
+            replace: t("connections.importFromApp.action.replace"),
+          }}
+          onChange={(value) => onChange(value as ImportAction)}
+          searchable={false}
+          className="w-32 shrink-0"
+        />
       </div>
 
-      {/* Per-item action selector */}
-      <select
-        value={action}
-        onChange={(e) => onChange(e.target.value as ImportAction)}
-        className="shrink-0 rounded-lg border border-strong bg-elevated px-2 py-1 text-xs text-primary focus:border-blue-500 focus:outline-none"
-      >
-        <option value="import">{t("connections.importFromApp.action.import")}</option>
-        <option value="skip">{t("connections.importFromApp.action.skip")}</option>
-        {isDuplicate && (
-          <option value="replace">{t("connections.importFromApp.action.replace")}</option>
-        )}
-      </select>
+      {/* Group assignment — only for connections being imported as new. */}
+      {action === "import" && (
+        <div className="mt-2 flex items-center gap-2 pl-9">
+          <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted">
+            <FolderPlus size={13} />
+            {t("connections.importFromApp.group.label")}
+          </label>
+          <Select
+            value={groupChoice}
+            options={[GROUP_NONE, ...groups.map((g) => g.id), GROUP_NEW]}
+            labels={{
+              [GROUP_NONE]: t("connections.importFromApp.group.none"),
+              [GROUP_NEW]: t("connections.importFromApp.group.new"),
+              ...Object.fromEntries(groups.map((g) => [g.id, g.name])),
+            }}
+            onChange={onGroupChoiceChange}
+            searchable={groups.length > 6}
+            className="min-w-0 flex-1"
+          />
+          {groupChoice === GROUP_NEW && (
+            <input
+              type="text"
+              value={newGroupName}
+              autoFocus
+              onChange={(e) => onNewGroupNameChange(e.target.value)}
+              placeholder={t("connections.importFromApp.group.newPlaceholder")}
+              className="min-w-0 flex-1 rounded border border-strong bg-base px-3 py-2 text-sm text-primary focus:border-blue-500 focus:outline-none"
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 };

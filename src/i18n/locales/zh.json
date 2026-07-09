@@ -282,7 +282,13 @@
         "replace": "Replace"
       },
       "tabularisJsonHint": "Tabularis 导出文件 (.json)",
-      "menuLabel": "导入连接…"
+      "menuLabel": "导入连接…",
+      "group": {
+        "label": "分组：",
+        "none": "无分组",
+        "new": "新建分组…",
+        "newPlaceholder": "分组名称"
+      }
     }
   },
   "connectionAppearance": {

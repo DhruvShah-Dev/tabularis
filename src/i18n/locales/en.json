@@ -296,7 +296,13 @@
         "replace": "Replace"
       },
       "tabularisJsonHint": "Tabularis export file (.json)",
-      "menuLabel": "Import connections…"
+      "menuLabel": "Import connections…",
+      "group": {
+        "label": "Group:",
+        "none": "No group",
+        "new": "New group…",
+        "newPlaceholder": "Group name"
+      }
     }
   },
   "connectionAppearance": {

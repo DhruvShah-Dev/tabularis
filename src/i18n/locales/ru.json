@@ -299,7 +299,13 @@
         "replace": "Replace"
       },
       "tabularisJsonHint": "Файл экспорта Tabularis (.json)",
-      "menuLabel": "Импорт подключений…"
+      "menuLabel": "Импорт подключений…",
+      "group": {
+        "label": "Группа:",
+        "none": "Без группы",
+        "new": "Новая группа…",
+        "newPlaceholder": "Название группы"
+      }
     }
   },
   "settings": {
