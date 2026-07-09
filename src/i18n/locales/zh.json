@@ -39,7 +39,9 @@
     "ok": "OK",
     "continue": "继续",
     "back": "返回",
-    "copy": "复制"
+    "copy": "复制",
+    "showDetails": "显示详情",
+    "hideDetails": "隐藏详情"
   },
   "sidebar": {
     "connections": "连接",

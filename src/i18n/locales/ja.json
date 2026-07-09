@@ -40,7 +40,9 @@
     "ok": "OK",
     "continue": "続行",
     "back": "戻る",
-    "copy": "コピー"
+    "copy": "コピー",
+    "showDetails": "詳細を表示",
+    "hideDetails": "詳細を非表示"
   },
   "sidebar": {
     "connections": "接続",

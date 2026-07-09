@@ -13,7 +13,6 @@ import {
   Plus,
   Edit,
   Trash2,
-  AlertCircle,
   Search,
   X,
   LayoutGrid,
@@ -23,7 +22,6 @@ import {
   Download,
   FolderInput,
   ChevronDown,
-  Upload,
   AppWindow,
 } from "lucide-react";
 import { useDatabase } from "../hooks/useDatabase";
@@ -37,6 +35,7 @@ import { useOpenConnectionInNewWindow } from "../hooks/useOpenConnectionInNewWin
 import { GroupHeader } from "../components/connections/GroupHeader";
 import { ConnectionCard } from "../components/connections/ConnectionCard";
 import { ConnectionListItem } from "../components/connections/ConnectionListItem";
+import { ConnectionErrorBanner } from "../components/ConnectionErrorBanner";
 
 let autoConnectAttempted = false;
 
@@ -638,18 +637,11 @@ export const Connections = () => {
 
       {/* ── Error banner ──────────────────────────────────────────────────── */}
       {error && (
-        <div className="mx-6 mt-4 p-3.5 bg-red-900/20 border border-red-900/40 rounded-xl flex items-start gap-3 text-red-400 shrink-0">
-          <AlertCircle size={15} className="mt-0.5 shrink-0" />
-          <span className="text-sm whitespace-pre-wrap flex-1 leading-relaxed">
-            {error}
-          </span>
-          <button
-            onClick={() => setError(null)}
-            className="text-red-400/50 hover:text-red-400 transition-colors shrink-0 mt-0.5"
-          >
-            <X size={14} />
-          </button>
-        </div>
+        <ConnectionErrorBanner
+          key={error}
+          message={error}
+          onClose={() => setError(null)}
+        />
       )}
 
       {/* ── Content ───────────────────────────────────────────────────────── */}

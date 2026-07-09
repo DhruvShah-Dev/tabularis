@@ -40,7 +40,9 @@
     "ok": "OK",
     "continue": "Continua",
     "back": "Indietro",
-    "copy": "Copia"
+    "copy": "Copia",
+    "showDetails": "Mostra dettagli",
+    "hideDetails": "Nascondi dettagli"
   },
   "sidebar": {
     "connections": "Connessioni",

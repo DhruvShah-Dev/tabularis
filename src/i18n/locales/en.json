@@ -40,7 +40,9 @@
     "ok": "OK",
     "continue": "Continue",
     "back": "Back",
-    "copy": "Copy"
+    "copy": "Copy",
+    "showDetails": "Show details",
+    "hideDetails": "Hide details"
   },
   "sidebar": {
     "connections": "Connections",

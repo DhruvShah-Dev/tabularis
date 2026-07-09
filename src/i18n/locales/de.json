@@ -40,7 +40,9 @@
     "ok": "OK",
     "continue": "Weiter",
     "back": "Zurück",
-    "copy": "Kopieren"
+    "copy": "Kopieren",
+    "showDetails": "Details anzeigen",
+    "hideDetails": "Details ausblenden"
   },
   "sidebar": {
     "connections": "Verbindungen",
