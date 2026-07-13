@@ -926,6 +926,9 @@ mod multi_result_collector {
         let sets = c.finish();
         assert_eq!(sets.len(), 1);
         assert_eq!(sets[0].rows.len(), 1);
+    }
+}
+
 mod routine_management {
     use super::super::routines::{
         drop_routine_sql, routine_call_sql, routine_create_template, routine_edit_script,
