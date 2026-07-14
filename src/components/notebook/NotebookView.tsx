@@ -67,7 +67,7 @@ import {
   useDangerousQueryGuard,
   DANGEROUS_QUERY_I18N,
 } from "../../hooks/useDangerousQueryGuard";
-import { useProductionGuard } from "../../contexts/ProductionGuardContext";
+import { useProductionGuard } from "../../hooks/useProductionGuard";
 import { ConfirmModal } from "../modals/ConfirmModal";
 import { NotebookToolbar } from "./NotebookToolbar";
 import { NotebookHistoryPanel } from "./NotebookHistoryPanel";

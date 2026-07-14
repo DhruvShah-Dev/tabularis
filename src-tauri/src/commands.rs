@@ -1073,7 +1073,9 @@ pub async fn duplicate_connection<R: Runtime>(
         detect_json_in_text_columns: original.detect_json_in_text_columns,
         appearance: new_appearance,
         tag_ids: original.tag_ids.clone(),
-        environment: original.environment.clone(),
+        // Normalize rather than fail: an invalid on-disk value must not
+        // block duplication, the copy just becomes "unclassified".
+        environment: validate_environment(original.environment.clone()).unwrap_or(None),
     };
 
     conn_file.connections.push(new_conn.clone());
@@ -5043,7 +5045,12 @@ pub async fn apply_export_payload<R: Runtime>(
         crate::connection_tags::merge_imported_tags(&mut current_file.tags, payload.tags);
     let mut payload_connections = payload.connections;
     if !tag_remap.is_empty() {
-        for conn in &mut payload_connections {
+        // Existing connections may reference a tag id that the merge unified
+        // onto another tag, so the remap applies to both sides.
+        for conn in payload_connections
+            .iter_mut()
+            .chain(current_file.connections.iter_mut())
+        {
             if let Some(tag_ids) = &mut conn.tag_ids {
                 let mut seen = std::collections::HashSet::new();
                 *tag_ids = tag_ids
@@ -5053,6 +5060,12 @@ pub async fn apply_export_payload<R: Runtime>(
                     .collect();
             }
         }
+    }
+
+    // Environments come from an external file: normalize instead of failing
+    // the whole import — an unknown tier just becomes "unclassified".
+    for conn in &mut payload_connections {
+        conn.environment = validate_environment(conn.environment.take()).unwrap_or(None);
     }
 
     // Merge connections and handle passwords

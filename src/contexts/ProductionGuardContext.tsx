@@ -1,59 +1,18 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { TriangleAlert, X } from "lucide-react";
 import { Modal } from "../components/ui/Modal";
 import { SqlPreview } from "../components/ui/SqlPreview";
-import { useDatabase } from "../hooks/useDatabase";
-import { isReadOnlyQuery } from "../utils/sqlAnalysis";
+import {
+  ProductionGuardContext,
+  snoozedConnectionIds,
+  type GuardRequest,
+} from "../hooks/useProductionGuard";
 
 /**
- * Confirmation gate for writes against production connections.
- *
- * `useProductionGuard()` returns `guardWrite(connectionId, sql?)`: it
- * resolves `true` immediately unless the connection is classified as
- * production AND the operation is (or may be) a write, in which case a
- * confirmation dialog is shown. Ticking "don't ask again" silences the
- * prompt for that connection until the app restarts.
+ * Provider side of the production write guard: renders the confirmation
+ * dialog requested by `useProductionGuard` (see hooks/useProductionGuard).
  */
-
-type GuardRequest = (
-  connectionId: string,
-  connectionName: string,
-  sql?: string,
-) => Promise<boolean>;
-
-const ProductionGuardContext = createContext<GuardRequest | null>(null);
-
-/** Session-scoped snooze; survives provider remounts, dies with the window. */
-const snoozedConnectionIds = new Set<string>();
-
-export function useProductionGuard() {
-  const { connections } = useDatabase();
-  const request = useContext(ProductionGuardContext);
-
-  return useCallback(
-    async (
-      connectionId: string | null | undefined,
-      sql?: string,
-    ): Promise<boolean> => {
-      if (!connectionId) return true;
-      const conn = connections.find((c) => c.id === connectionId);
-      if (conn?.environment !== "production") return true;
-      if (sql !== undefined && isReadOnlyQuery(sql)) return true;
-      if (snoozedConnectionIds.has(connectionId)) return true;
-      // No provider in this window: don't silently block the operation.
-      if (!request) return true;
-      return request(connectionId, conn.name, sql);
-    },
-    [connections, request],
-  );
-}
 
 interface PendingPrompt {
   connectionName: string;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
@@ -6,7 +6,7 @@ import { Check, Pencil, Plus, Settings2, Trash2, X } from "lucide-react";
 import { useConnectionTags } from "../../../hooks/useConnectionTags";
 import type { ConnectionTag } from "../../../types/tags";
 import { toErrorMessage } from "../../../utils/errors";
-import { PALETTE } from "./AppearanceSection";
+import { PALETTE } from "./palette";
 
 /** Mirrors MAX_TAG_NAME_CHARS enforced by the backend. */
 const MAX_TAG_NAME_CHARS = 32;
@@ -62,6 +62,14 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
   const [editColor, setEditColor] = useState(PALETTE[9]);
   const [error, setError] = useState<string | null>(null);
 
+  // Async handlers (create/delete) resolve after the user may have toggled
+  // other chips; reading through the ref avoids clobbering those newer
+  // selections with the stale closure value.
+  const selectedIdsRef = useRef(selectedIds);
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds;
+  }, [selectedIds]);
+
   const toggle = (id: string) => {
     onChange(
       selectedIds.includes(id)
@@ -75,7 +83,7 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
     setError(null);
     try {
       const tag = await createTag(newName.trim(), newColor);
-      onChange([...selectedIds, tag.id]);
+      onChange([...selectedIdsRef.current, tag.id]);
       setNewName("");
       setCreating(false);
     } catch (e) {
@@ -110,7 +118,7 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
     setError(null);
     try {
       await deleteTag(tag.id);
-      onChange(selectedIds.filter((s) => s !== tag.id));
+      onChange(selectedIdsRef.current.filter((s) => s !== tag.id));
     } catch (e) {
       setError(toErrorMessage(e));
     }

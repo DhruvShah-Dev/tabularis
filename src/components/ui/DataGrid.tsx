@@ -63,7 +63,7 @@ import {
 } from "../../utils/dateInput";
 import { RowEditorSidebar } from "./RowEditorSidebar";
 import { useDatabase } from "../../hooks/useDatabase";
-import { useProductionGuard } from "../../contexts/ProductionGuardContext";
+import { useProductionGuard } from "../../hooks/useProductionGuard";
 import {
   rowsToCSV,
   rowsToCSVWithHeaders,

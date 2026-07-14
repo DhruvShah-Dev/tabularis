@@ -139,20 +139,30 @@ pub fn set_connection_tags_impl(
 /// under a different id → the tags are unified onto the existing id, and the
 /// returned map (imported id → existing id) lets the caller remap the
 /// imported connections' `tag_ids`, so a "prod" tag created independently on
-/// two machines never ends up duplicated.
+/// two machines never ends up duplicated. The caller must apply the remap to
+/// existing connections as well: a same-id tag whose imported rename collides
+/// with another tag is removed and remapped onto the name holder.
 pub fn merge_imported_tags(
     existing: &mut Vec<ConnectionTag>,
     imported: Vec<ConnectionTag>,
 ) -> std::collections::HashMap<String, String> {
     let mut remap = std::collections::HashMap::new();
     for tag in imported {
-        if let Some(same_id) = existing.iter_mut().find(|t| t.id == tag.id) {
-            *same_id = tag;
-        } else if let Some(same_name) = existing
+        // Name match on a *different* existing tag always unifies onto it,
+        // even when a tag with the imported id also exists: an imported
+        // rename that collides with another tag must not break the
+        // unique-name invariant, so the same-id tag is dropped and its id
+        // remapped (the caller applies the remap to existing connections
+        // too, so nothing dangles).
+        if let Some(same_name) = existing
             .iter()
-            .find(|t| t.name.eq_ignore_ascii_case(&tag.name))
+            .find(|t| t.id != tag.id && t.name.eq_ignore_ascii_case(&tag.name))
         {
-            remap.insert(tag.id, same_name.id.clone());
+            let target_id = same_name.id.clone();
+            existing.retain(|t| t.id != tag.id);
+            remap.insert(tag.id, target_id);
+        } else if let Some(same_id) = existing.iter_mut().find(|t| t.id == tag.id) {
+            *same_id = tag;
         } else {
             existing.push(tag);
         }
@@ -373,6 +383,27 @@ mod tests {
         assert_eq!(
             remap,
             std::collections::HashMap::from([("other-dev".to_string(), "t2".to_string())])
+        );
+    }
+
+    #[test]
+    fn import_merge_rename_collision_unifies_instead_of_duplicating() {
+        // Import renames t1 ("Prod") to "dev", which collides with t2 ("Dev"):
+        // t1 must be unified onto t2, never left as a duplicate name.
+        let mut existing = file_with_tags(&[("t1", "Prod"), ("t2", "Dev")]).tags;
+        let imported = vec![ConnectionTag {
+            id: "t1".into(),
+            name: "dev".into(),
+            color: "#111111".into(),
+        }];
+
+        let remap = merge_imported_tags(&mut existing, imported);
+
+        assert_eq!(existing.len(), 1);
+        assert_eq!(existing[0].id, "t2");
+        assert_eq!(
+            remap,
+            std::collections::HashMap::from([("t1".to_string(), "t2".to_string())])
         );
     }
 }

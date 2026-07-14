@@ -9,7 +9,7 @@ import {
   useDangerousQueryGuard,
   DANGEROUS_QUERY_I18N,
 } from "../hooks/useDangerousQueryGuard";
-import { useProductionGuard } from "../contexts/ProductionGuardContext";
+import { useProductionGuard } from "../hooks/useProductionGuard";
 import {
   generateTempId,
   initializeNewRow,
@@ -1056,7 +1056,7 @@ export const Editor = () => {
       });
       updateTab(targetTabId, { isLoading: false });
     },
-    [activeConnectionId, updateTab, patchResultEntry, settings.resultPageSize, activeSchema, t, isMultiDb, activeDatabaseName, addHistoryEntry, guardDangerousQuery],
+    [activeConnectionId, updateTab, patchResultEntry, settings.resultPageSize, activeSchema, t, isMultiDb, activeDatabaseName, addHistoryEntry, guardDangerousQuery, guardProductionWrite],
   );
 
   // Auto-run entry point for navigation-initiated executions (sidebar "open
@@ -2360,6 +2360,7 @@ export const Editor = () => {
     activeSchema,
     activeCapabilities,
     showAlert,
+    guardProductionWrite,
   ]);
 
   // Cmd/Ctrl+S: commit the active tab's pending grid changes (like TablePlus).

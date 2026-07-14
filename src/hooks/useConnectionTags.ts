@@ -9,16 +9,18 @@ import type { ConnectionTag } from "../types/tags";
 export function useConnectionTags() {
   const [tags, setTags] = useState<ConnectionTag[]>([]);
 
-  const refresh = useCallback(async () => {
-    try {
-      setTags(await invoke<ConnectionTag[]>("list_connection_tags"));
-    } catch (e) {
-      console.error("Failed to load connection tags:", e);
-    }
-  }, []);
+  const refresh = useCallback(
+    () =>
+      invoke<ConnectionTag[]>("list_connection_tags")
+        .then(setTags)
+        .catch((e: unknown) => {
+          console.error("Failed to load connection tags:", e);
+        }),
+    [],
+  );
 
   useEffect(() => {
-    void refresh();
+    refresh();
   }, [refresh]);
 
   const createTag = useCallback(
