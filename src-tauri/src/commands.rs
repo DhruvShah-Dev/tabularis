@@ -4058,6 +4058,152 @@ pub async fn drop_trigger<R: Runtime>(
     result
 }
 
+// --- User management (gated by `DriverCapabilities::user_management`) -------
+
+/// Resolves the connection and driver shared by every user-management command.
+async fn user_mgmt_context<R: Runtime>(
+    app: &AppHandle<R>,
+    connection_id: &str,
+) -> Result<
+    (
+        std::sync::Arc<dyn crate::drivers::driver_trait::DatabaseDriver>,
+        ConnectionParams,
+    ),
+    String,
+> {
+    let saved_conn = find_connection_by_id(app, connection_id)?;
+    let expanded_params = expand_ssh_connection_params(app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(app, &expanded_params).await?;
+    let params = resolve_connection_params_with_id(&expanded_params, connection_id)?;
+    let drv = driver_for(&saved_conn.params.driver).await?;
+    Ok((drv, params))
+}
+
+#[tauri::command]
+pub async fn get_db_privilege_catalog<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+) -> Result<crate::models::DbPrivilegeCatalog, String> {
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let drv = driver_for(&saved_conn.params.driver).await?;
+    drv.get_db_privilege_catalog().await
+}
+
+#[tauri::command]
+pub async fn get_db_users<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+) -> Result<Vec<crate::models::DbUserInfo>, String> {
+    let (drv, params) = user_mgmt_context(&app, &connection_id).await?;
+    drv.get_db_users(&params).await
+}
+
+#[tauri::command]
+pub async fn get_db_user_grants<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    user: String,
+    host: String,
+) -> Result<Vec<String>, String> {
+    let (drv, params) = user_mgmt_context(&app, &connection_id).await?;
+    drv.get_db_user_grants(&params, &user, &host).await
+}
+
+#[tauri::command]
+pub async fn create_db_user<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    user: String,
+    host: String,
+    password: String,
+) -> Result<(), String> {
+    log::info!("Creating database user '{user}'@'{host}'");
+    let (drv, params) = user_mgmt_context(&app, &connection_id).await?;
+    let result = drv.create_db_user(&params, &user, &host, &password).await;
+    if let Err(e) = &result {
+        log::error!("Failed to create user '{user}'@'{host}': {e}");
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn drop_db_user<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    user: String,
+    host: String,
+) -> Result<(), String> {
+    log::info!("Dropping database user '{user}'@'{host}'");
+    let (drv, params) = user_mgmt_context(&app, &connection_id).await?;
+    let result = drv.drop_db_user(&params, &user, &host).await;
+    if let Err(e) = &result {
+        log::error!("Failed to drop user '{user}'@'{host}': {e}");
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn set_db_user_password<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    user: String,
+    host: String,
+    password: String,
+) -> Result<(), String> {
+    log::info!("Changing password for database user '{user}'@'{host}'");
+    let (drv, params) = user_mgmt_context(&app, &connection_id).await?;
+    let result = drv.set_db_user_password(&params, &user, &host, &password).await;
+    if let Err(e) = &result {
+        log::error!("Failed to change password for '{user}'@'{host}': {e}");
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn get_db_user_privileges<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    user: String,
+    host: String,
+) -> Result<Vec<crate::models::DbUserGrantSet>, String> {
+    let (drv, params) = user_mgmt_context(&app, &connection_id).await?;
+    drv.get_db_user_privileges(&params, &user, &host).await
+}
+
+#[tauri::command]
+pub async fn apply_db_user_privileges<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    user: String,
+    host: String,
+    database: Option<String>,
+    table: Option<String>,
+    privileges: Vec<String>,
+    grant: bool,
+) -> Result<(), String> {
+    log::info!(
+        "{} privileges for '{user}'@'{host}' on {}",
+        if grant { "Granting" } else { "Revoking" },
+        database.as_deref().unwrap_or("*.*")
+    );
+    let (drv, params) = user_mgmt_context(&app, &connection_id).await?;
+    let result = drv
+        .apply_db_user_privileges(
+            &params,
+            &user,
+            &host,
+            database.as_deref(),
+            table.as_deref(),
+            &privileges,
+            grant,
+        )
+        .await;
+    if let Err(e) = &result {
+        log::error!("Failed to apply privileges for '{user}'@'{host}': {e}");
+    }
+    result
+}
+
 /// Register a connection as active for health-check pinging.
 #[tauri::command]
 pub async fn register_active_connection<R: Runtime>(app: AppHandle<R>, connection_id: String) {

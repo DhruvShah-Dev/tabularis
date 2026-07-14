@@ -35,6 +35,7 @@ import {
   Clock,
   Clipboard,
   BookOpen,
+  UsersRound,
 } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { toErrorMessage } from "../../utils/errors";
@@ -143,7 +144,25 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     connect,
   } = useDatabase();
   const { allDrivers } = useDrivers();
-  const { tabs, openNotebook, updateTab, closeTab } = useEditor();
+  const { tabs, openNotebook, updateTab, closeTab, addTab, setActiveTabId } =
+    useEditor();
+
+  // Opens (or focuses) the users & privileges tab of the active connection.
+  const openUserManagement = () => {
+    if (!activeConnectionId) return;
+    const existing = tabs.find(
+      (tab) => tab.type === "users" && tab.connectionId === activeConnectionId,
+    );
+    if (existing) {
+      setActiveTabId(existing.id);
+    } else {
+      addTab({
+        type: "users",
+        title: t("userManagement.tabTitle"),
+        connectionId: activeConnectionId,
+      });
+    }
+  };
 
   // Accent color for a connection, matching the tinted editor tab bar / split
   // panel headers. Falls back to the driver manifest color.
@@ -654,6 +673,18 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                         <Network size={16} className="rotate-90 text-orange-400 shrink-0" />
                         <span>View Schema Diagram</span>
                       </button>
+                      {activeCapabilities?.user_management === true && (
+                        <button
+                          onClick={() => {
+                            openUserManagement();
+                            setIsActionsDropdownOpen(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-secondary hover:bg-surface-secondary hover:text-primary transition-colors text-left whitespace-nowrap"
+                        >
+                          <UsersRound size={16} className="text-emerald-400 shrink-0" />
+                          <span>{t("userManagement.tabTitle")}</span>
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
@@ -692,8 +723,28 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                 >
                   <Network size={16} className="rotate-90" />
                 </button>
+                {activeCapabilities?.user_management === true && (
+                  <button
+                    onClick={openUserManagement}
+                    className="text-muted hover:text-emerald-400 transition-colors p-1 hover:bg-surface-secondary rounded"
+                    title={t("userManagement.tabTitle")}
+                  >
+                    <UsersRound size={16} />
+                  </button>
+                )}
               </>
             ))}
+            {/* User management is server-level, so unlike the per-database
+                actions above it stays available in multi-database mode. */}
+            {isMultiDb && activeCapabilities?.user_management === true && (
+              <button
+                onClick={openUserManagement}
+                className="text-muted hover:text-emerald-400 transition-colors p-1 hover:bg-surface-secondary rounded"
+                title={t("userManagement.tabTitle")}
+              >
+                <UsersRound size={16} />
+              </button>
+            )}
             <button
               onClick={onCollapse}
               className="text-muted hover:text-secondary transition-colors p-1 hover:bg-surface-secondary rounded"

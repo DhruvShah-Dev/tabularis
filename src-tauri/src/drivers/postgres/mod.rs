@@ -1599,6 +1599,7 @@ impl PostgresDriver {
                     readonly: false,
                     triggers: true,
                     supports_ssl: true,
+                    user_management: false,
                     sql_dialect: SqlDialect::Postgres,
                 },
                 is_builtin: true,

@@ -1736,5 +1736,35 @@
   "miniGrid": {
     "runningQuery": "Running query...",
     "copyAll": "Copy all"
+  },
+  "userManagement": {
+    "tabTitle": "Users & Privileges",
+    "filterPlaceholder": "Filter users...",
+    "newUser": "New user",
+    "create": "Create user",
+    "userPlaceholder": "username",
+    "passwordPlaceholder": "Password",
+    "newPasswordPlaceholder": "New password",
+    "changePassword": "Change password",
+    "dropUser": "Drop user",
+    "dropTitle": "Drop user",
+    "dropConfirm": "Drop user {{account}}? This cannot be undone.",
+    "locked": "Locked",
+    "loadError": "Failed to load users:",
+    "noUsers": "No users found",
+    "selectPrompt": "Select a user to view its privileges",
+    "currentGrants": "Current grants",
+    "scope": "Database",
+    "scopePlaceholder": "Empty = global (*.*)",
+    "revokeTitle": "Revoke privileges",
+    "revokeConfirm": "Revoke {{privileges}} from {{account}} on {{scope}}?",
+    "add": "Add",
+    "apply": "Apply",
+    "privileges": "Privileges",
+    "globalScope": "Global (*.*)",
+    "addScope": "Add database / table",
+    "databasePlaceholder": "database",
+    "tablePlaceholder": "table (optional)",
+    "initialPrivilegesHint": "Optional: initial privileges granted right after creation. Pick a database, or leave it empty to grant globally."
   }
 }
