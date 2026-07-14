@@ -23,6 +23,16 @@
     "fromPlaceholder": "de",
     "toPlaceholder": "à"
   },
+  "tags": {
+    "label": "Tags",
+    "new": "Nouveau tag",
+    "add": "Ajouter",
+    "namePlaceholder": "Nom du tag…",
+    "manage": "Gérer les tags",
+    "done": "Terminé",
+    "deleteTitle": "Supprimer le tag",
+    "deleteConfirm": "Supprimer le tag « {{name}} » ? Il sera retiré de toutes les connexions."
+  },
   "common": {
     "save": "Enregistrer",
     "close": "Fermer",

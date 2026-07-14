@@ -23,6 +23,16 @@
     "fromPlaceholder": "от",
     "toPlaceholder": "до"
   },
+  "tags": {
+    "label": "Теги",
+    "new": "Новый тег",
+    "add": "Добавить",
+    "namePlaceholder": "Название тега…",
+    "manage": "Управление тегами",
+    "done": "Готово",
+    "deleteTitle": "Удалить тег",
+    "deleteConfirm": "Удалить тег «{{name}}»? Он будет убран со всех подключений."
+  },
   "common": {
     "save": "Сохранить",
     "close": "Закрыть",

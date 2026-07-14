@@ -477,7 +477,7 @@ pub(crate) fn merge_groups(existing: &mut Vec<ConnectionGroup>, incoming: Vec<Co
 
 /// Write the connections file and invalidate the in-memory connection cache so
 /// the next `find_connection_by_id` call re-reads fresh data from disk.
-fn save_connections_and_invalidate<R: Runtime>(
+pub(crate) fn save_connections_and_invalidate<R: Runtime>(
     app: &AppHandle<R>,
     path: &std::path::Path,
     file: &crate::models::ConnectionsFile,
@@ -740,6 +740,7 @@ pub async fn save_connection<R: Runtime>(
         sort_order: None,
         detect_json_in_text_columns,
         appearance: None,
+        tag_ids: None,
     };
     conn_file.connections.push(new_conn.clone());
     save_connections_and_invalidate(&app, &path, &conn_file)?;
@@ -863,6 +864,8 @@ pub async fn update_connection<R: Runtime>(
     let original_db_selection = conn_file.connections[conn_idx].params.database.clone();
     // Preserve user's appearance customization across edits
     let original_appearance = conn_file.connections[conn_idx].appearance.clone();
+    // Tags are managed by set_connection_tags; preserve them across edits.
+    let original_tag_ids = conn_file.connections[conn_idx].tag_ids.clone();
 
     let updated = SavedConnection {
         id: id.clone(),
@@ -872,6 +875,7 @@ pub async fn update_connection<R: Runtime>(
         sort_order: original_sort_order,
         detect_json_in_text_columns,
         appearance: original_appearance,
+        tag_ids: original_tag_ids,
     };
 
     conn_file.connections[conn_idx] = updated.clone();
@@ -1054,6 +1058,7 @@ pub async fn duplicate_connection<R: Runtime>(
         sort_order: None,                    // Will be placed at end of group
         detect_json_in_text_columns: original.detect_json_in_text_columns,
         appearance: new_appearance,
+        tag_ids: original.tag_ids.clone(),
     };
 
     conn_file.connections.push(new_conn.clone());
@@ -1912,6 +1917,7 @@ mod tests {
             sort_order: None,
             detect_json_in_text_columns: None,
             appearance: None,
+            tag_ids: None,
         }
     }
 
@@ -1941,6 +1947,7 @@ mod tests {
                 accent_color: Some("#ff0000".to_string()),
                 icon: Some(IconOverride::Emoji { value: "🐘".to_string() }),
             }),
+            tag_ids: None,
         };
 
         // Simulate the pattern used in update_connection after the fix.
@@ -1954,6 +1961,7 @@ mod tests {
             sort_order: existing.sort_order,
             detect_json_in_text_columns: None,
             appearance: original_appearance,
+            tag_ids: None,
         };
 
         let app = updated.appearance.as_ref().expect("appearance must be preserved");
@@ -1971,10 +1979,12 @@ mod tests {
             sort_order: None,
             detect_json_in_text_columns: None,
             appearance,
+            tag_ids: None,
         };
         ConnectionsFile {
             groups: vec![],
             connections: vec![conn],
+            tags: vec![],
         }
     }
 
@@ -4886,6 +4896,14 @@ pub async fn export_connections_payload<R: Runtime>(
                 .filter_map(|c| c.group_id.as_deref()),
         );
         conn_file.groups.retain(|g| kept_groups.contains(&g.id));
+        // Same for tags: only export the ones the selection actually uses.
+        let kept_tags: std::collections::HashSet<String> = conn_file
+            .connections
+            .iter()
+            .flat_map(|c| c.tag_ids.iter().flatten())
+            .cloned()
+            .collect();
+        conn_file.tags.retain(|t| kept_tags.contains(&t.id));
     }
 
     let cache = app
@@ -4943,6 +4961,7 @@ pub async fn export_connections_payload<R: Runtime>(
         connections: conn_file.connections,
         ssh_connections,
         k8s_connections,
+        tags: conn_file.tags,
     })
 }
 
@@ -4997,6 +5016,16 @@ pub async fn apply_export_payload<R: Runtime>(
 
     // Merge groups (preserves hierarchy; demotes orphaned parent_ids to root)
     merge_groups(&mut current_file.groups, payload.groups);
+
+    // Merge tags: imported tags win on id collision (same rule as connections),
+    // new ones are appended.
+    for tag in payload.tags {
+        if let Some(existing) = current_file.tags.iter_mut().find(|t| t.id == tag.id) {
+            *existing = tag;
+        } else {
+            current_file.tags.push(tag);
+        }
+    }
 
     // Merge connections and handle passwords
     for mut new_conn in payload.connections {

@@ -32,6 +32,7 @@ mod tests {
                 sort_order: Some(0),
                 detect_json_in_text_columns: None,
                 appearance: None,
+                tag_ids: None,
             }],
             ssh_connections: vec![SshConnection {
                 id: "ssh1".to_string(),
@@ -47,6 +48,7 @@ mod tests {
                 save_in_keychain: Some(true),
             }],
             k8s_connections: vec![],
+            tags: vec![],
         };
 
         let json = serde_json::to_string(&payload).unwrap();
@@ -110,6 +112,7 @@ mod tests {
             connections: vec![],
             ssh_connections: vec![],
             k8s_connections: vec![],
+            tags: vec![],
         };
 
         let json = serde_json::to_string(&payload).unwrap();

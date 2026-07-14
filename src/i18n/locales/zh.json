@@ -23,6 +23,16 @@
     "fromPlaceholder": "从",
     "toPlaceholder": "到"
   },
+  "tags": {
+    "label": "标签",
+    "new": "新建标签",
+    "add": "添加",
+    "namePlaceholder": "标签名称…",
+    "manage": "管理标签",
+    "done": "完成",
+    "deleteTitle": "删除标签",
+    "deleteConfirm": "删除标签“{{name}}”？它将从所有连接中移除。"
+  },
   "common": {
     "save": "保存",
     "close": "关闭",

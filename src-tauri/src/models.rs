@@ -263,6 +263,20 @@ pub struct SavedConnection {
     pub detect_json_in_text_columns: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appearance: Option<ConnectionAppearance>,
+    /// Ids of [`ConnectionTag`]s attached to this connection. Unknown ids
+    /// (e.g. after a partial import) are ignored by the UI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag_ids: Option<Vec<String>>,
+}
+
+/// A user-defined colored label. Tags are purely organizational: a
+/// connection can carry any number of them and they never drive behavior.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct ConnectionTag {
+    pub id: String,
+    pub name: String,
+    /// CSS hex color, e.g. `"#f97316"`.
+    pub color: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -285,6 +299,8 @@ pub struct ConnectionsFile {
     pub groups: Vec<ConnectionGroup>,
     #[serde(default)]
     pub connections: Vec<SavedConnection>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<ConnectionTag>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -328,6 +344,8 @@ pub struct ExportPayload {
     pub ssh_connections: Vec<SshConnection>,
     #[serde(default)]
     pub k8s_connections: Vec<K8sConnection>,
+    #[serde(default)]
+    pub tags: Vec<ConnectionTag>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

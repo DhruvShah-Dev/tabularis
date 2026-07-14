@@ -23,6 +23,16 @@
     "fromPlaceholder": "mula",
     "toPlaceholder": "hanggang"
   },
+  "tags": {
+    "label": "Mga tag",
+    "new": "Bagong tag",
+    "add": "Idagdag",
+    "namePlaceholder": "Pangalan ng tag…",
+    "manage": "Pamahalaan ang mga tag",
+    "done": "Tapos na",
+    "deleteTitle": "Tanggalin ang tag",
+    "deleteConfirm": "Tanggalin ang tag na \"{{name}}\"? Aalisin ito sa lahat ng koneksyon."
+  },
   "common": {
     "save": "I-save",
     "close": "Isara",

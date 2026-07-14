@@ -4,18 +4,22 @@ import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
 import type { SavedConnection } from '../../contexts/DatabaseContext';
 import type { PluginManifest } from '../../types/plugins';
+import type { ConnectionTag } from '../../types/tags';
 import { useDatabase } from '../../hooks/useDatabase';
 import { getConnectionAccent, getConnectionIcon } from '../../utils/driverUI';
 import { getCapabilitiesForDriver } from '../../utils/driverCapabilities';
 import { connectionSubtitle, getCardClass } from '../../utils/connections';
 import { StatusBadge } from './StatusBadge';
 import { ActionButtons } from './ActionButtons';
+import { TagChips } from './TagChips';
 
 export interface ConnectionListItemProps {
   conn: SavedConnection;
   connectingId: string | null;
   allDrivers: PluginManifest[];
   enabledDrivers: PluginManifest[];
+  /** All known connection tags, for resolving the row's tag chips. */
+  tags?: ConnectionTag[];
   onConnect: () => void;
   onDisconnect: () => void;
   onEdit: () => void;
@@ -36,6 +40,7 @@ export const ConnectionListItem = ({
   connectingId,
   allDrivers,
   enabledDrivers,
+  tags = [],
   onConnect,
   onDisconnect,
   onEdit,
@@ -110,6 +115,7 @@ export const ConnectionListItem = ({
           isOpen={isOpen}
           isConnecting={isConnecting}
         />
+        <TagChips tagIds={conn.tag_ids} tags={tags} />
         <span className="text-[10px] font-semibold text-secondary bg-surface-secondary border border-strong/40 px-1.5 py-0.5 rounded-md capitalize">
           {conn.params.driver}
         </span>

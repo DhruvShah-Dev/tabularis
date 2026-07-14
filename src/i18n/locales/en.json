@@ -23,6 +23,16 @@
     "fromPlaceholder": "from",
     "toPlaceholder": "to"
   },
+  "tags": {
+    "label": "Tags",
+    "new": "New tag",
+    "add": "Add",
+    "namePlaceholder": "Tag name…",
+    "manage": "Manage tags",
+    "done": "Done",
+    "deleteTitle": "Delete tag",
+    "deleteConfirm": "Delete tag \"{{name}}\"? It will be removed from all connections."
+  },
   "common": {
     "save": "Save",
     "close": "Close",

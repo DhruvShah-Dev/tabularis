@@ -23,6 +23,16 @@
     "fromPlaceholder": "von",
     "toPlaceholder": "bis"
   },
+  "tags": {
+    "label": "Tags",
+    "new": "Neues Tag",
+    "add": "Hinzufügen",
+    "namePlaceholder": "Tag-Name…",
+    "manage": "Tags verwalten",
+    "done": "Fertig",
+    "deleteTitle": "Tag löschen",
+    "deleteConfirm": "Tag \"{{name}}\" löschen? Es wird von allen Verbindungen entfernt."
+  },
   "common": {
     "save": "Speichern",
     "close": "Schließen",

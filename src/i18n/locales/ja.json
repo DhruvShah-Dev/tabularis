@@ -23,6 +23,16 @@
     "fromPlaceholder": "開始",
     "toPlaceholder": "終了"
   },
+  "tags": {
+    "label": "タグ",
+    "new": "新しいタグ",
+    "add": "追加",
+    "namePlaceholder": "タグ名…",
+    "manage": "タグを管理",
+    "done": "完了",
+    "deleteTitle": "タグを削除",
+    "deleteConfirm": "タグ「{{name}}」を削除しますか？すべての接続から削除されます。"
+  },
   "common": {
     "save": "保存",
     "close": "閉じる",

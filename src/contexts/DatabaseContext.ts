@@ -56,6 +56,8 @@ export interface SavedConnection {
   /** Per-connection opt-in: detect JSON in plain text columns. */
   detect_json_in_text_columns?: boolean;
   appearance?: ConnectionAppearance;
+  /** Ids of connection tags attached to this connection. */
+  tag_ids?: string[];
 }
 
 export interface ConnectionGroup {

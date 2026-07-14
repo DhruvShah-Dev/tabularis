@@ -23,6 +23,16 @@
     "fromPlaceholder": "desde",
     "toPlaceholder": "hasta"
   },
+  "tags": {
+    "label": "Etiquetas",
+    "new": "Nueva etiqueta",
+    "add": "Añadir",
+    "namePlaceholder": "Nombre de la etiqueta…",
+    "manage": "Gestionar etiquetas",
+    "done": "Hecho",
+    "deleteTitle": "Eliminar etiqueta",
+    "deleteConfirm": "¿Eliminar la etiqueta \"{{name}}\"? Se quitará de todas las conexiones."
+  },
   "common": {
     "save": "Guardar",
     "close": "Cerrar",

@@ -21,6 +21,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import type { ConnectionAppearance } from "../../contexts/DatabaseContext";
 import { AppearanceSection } from "./NewConnectionModal/AppearanceSection";
+import { TagSelector } from "./NewConnectionModal/TagSelector";
 import { open } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
 import { SshConnectionsModal } from "./SshConnectionsModal";
@@ -95,6 +96,7 @@ interface SavedConnection {
   params: ConnectionParams;
   detect_json_in_text_columns?: boolean;
   appearance?: ConnectionAppearance;
+  tag_ids?: string[];
 }
 
 interface NewConnectionModalProps {
@@ -288,6 +290,11 @@ export const NewConnectionModal = ({
   // ── appearance ──
   const [appearance, setAppearance] = useState<ConnectionAppearance>(
     initialConnection?.appearance ?? {},
+  );
+
+  // ── tags ──
+  const [tagIds, setTagIds] = useState<string[]>(
+    initialConnection?.tag_ids ?? [],
   );
   // Stable UUID used as connectionId for icon uploads on new connections.
   // The backend mints its own id on save_connection, so we use this temp id
@@ -602,6 +609,7 @@ export const NewConnectionModal = ({
           initialConnection.detect_json_in_text_columns === true,
         );
         setAppearance(initialConnection.appearance ?? {});
+        setTagIds(initialConnection.tag_ids ?? []);
         const db = initialConnection.params.database;
         setSshMode(
           initialConnection.params.ssh_connection_id ? "existing" : "inline",
@@ -812,6 +820,10 @@ export const NewConnectionModal = ({
           id: initialConnection.id,
           appearance: appearancePayload ?? null,
         });
+        await invoke("set_connection_tags", {
+          connectionId: initialConnection.id,
+          tagIds,
+        });
       } else {
         const saved = await invoke<{ id: string }>("save_connection", {
           name,
@@ -822,6 +834,12 @@ export const NewConnectionModal = ({
           await invoke("set_connection_appearance", {
             id: saved.id,
             appearance: appearancePayload,
+          });
+        }
+        if (tagIds.length > 0) {
+          await invoke("set_connection_tags", {
+            connectionId: saved.id,
+            tagIds,
           });
         }
       }
@@ -1172,14 +1190,17 @@ export const NewConnectionModal = ({
 
   // ── rendered Appearance tab content (per-connection icon + accent color) ──
   const appearanceTabContent = (
-    <AppearanceSection
-      value={appearance}
-      onChange={setAppearance}
-      connectionId={effectiveConnectionId}
-      driverManifest={activeDriver}
-      connectionName={name || t("newConnection.unnamedConnection", { defaultValue: "Unnamed connection" })}
-      onImageUploaded={handleImageUploaded}
-    />
+    <div className="space-y-5">
+      <AppearanceSection
+        value={appearance}
+        onChange={setAppearance}
+        connectionId={effectiveConnectionId}
+        driverManifest={activeDriver}
+        connectionName={name || t("newConnection.unnamedConnection", { defaultValue: "Unnamed connection" })}
+        onImageUploaded={handleImageUploaded}
+      />
+      <TagSelector selectedIds={tagIds} onChange={setTagIds} />
+    </div>
   );
 
   // ── rendered Advanced tab content (driver-specific options + startup SQL) ──
