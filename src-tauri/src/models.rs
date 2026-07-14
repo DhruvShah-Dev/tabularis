@@ -267,6 +267,11 @@ pub struct SavedConnection {
     /// (e.g. after a partial import) are ignored by the UI.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tag_ids: Option<Vec<String>>,
+    /// Deployment environment: `"development"`, `"staging"` or
+    /// `"production"`. `None` means unclassified. Production drives the
+    /// write-confirmation warning and the visual identity in the UI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment: Option<String>,
 }
 
 /// A user-defined colored label. Tags are purely organizational: a

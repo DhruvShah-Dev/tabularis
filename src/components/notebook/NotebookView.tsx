@@ -67,6 +67,7 @@ import {
   useDangerousQueryGuard,
   DANGEROUS_QUERY_I18N,
 } from "../../hooks/useDangerousQueryGuard";
+import { useProductionGuard } from "../../contexts/ProductionGuardContext";
 import { ConfirmModal } from "../modals/ConfirmModal";
 import { NotebookToolbar } from "./NotebookToolbar";
 import { NotebookHistoryPanel } from "./NotebookHistoryPanel";
@@ -108,6 +109,7 @@ export function NotebookView({
     guardQuery: guardDangerousQuery,
     resolve: resolveDangerousQuery,
   } = useDangerousQueryGuard();
+  const guardProductionWrite = useProductionGuard();
 
   // Local notebook state — loaded from store/disk, NOT from tab
   const [notebook, setNotebook] = useState<NotebookState | null>(() =>
@@ -371,6 +373,11 @@ export function NotebookView({
         return;
       }
 
+      if (!(await guardProductionWrite(connectionId, resolvedSql))) {
+        updateCell(cellId, { isLoading: false });
+        return;
+      }
+
       const start = performance.now();
       try {
         const res = await invoke<QueryResult>("execute_query", {
@@ -425,6 +432,7 @@ export function NotebookView({
       updateCell,
       params,
       guardDangerousQuery,
+      guardProductionWrite,
     ],
   );
 

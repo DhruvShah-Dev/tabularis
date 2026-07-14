@@ -224,6 +224,7 @@ fn build_connection(
         detect_json_in_text_columns: None,
         appearance: None,
         tag_ids: None,
+        environment: None,
     };
     (saved, ssh_record)
 }

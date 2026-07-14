@@ -33,6 +33,19 @@
     "deleteTitle": "Delete tag",
     "deleteConfirm": "Delete tag \"{{name}}\"? It will be removed from all connections."
   },
+  "environment": {
+    "label": "Environment",
+    "none": "No environment",
+    "development": "Development",
+    "staging": "Staging",
+    "production": "Production",
+    "short": { "development": "DEV", "staging": "STAGING", "production": "PROD" },
+    "banner": "Production — {{name}}",
+    "warnTitle": "Production database",
+    "warnMessage": "You are about to modify production data on “{{name}}”. Are you sure you want to continue?",
+    "warnConfirm": "Run anyway",
+    "warnSnooze": "Don't ask again for this connection (this session)"
+  },
   "common": {
     "save": "Save",
     "close": "Close",

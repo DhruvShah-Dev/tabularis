@@ -33,6 +33,19 @@
     "deleteTitle": "タグを削除",
     "deleteConfirm": "タグ「{{name}}」を削除しますか？すべての接続から削除されます。"
   },
+  "environment": {
+    "label": "環境",
+    "none": "環境なし",
+    "development": "開発",
+    "staging": "ステージング",
+    "production": "本番",
+    "short": { "development": "DEV", "staging": "STAGING", "production": "PROD" },
+    "banner": "本番 — {{name}}",
+    "warnTitle": "本番データベース",
+    "warnMessage": "「{{name}}」の本番データを変更しようとしています。続行しますか？",
+    "warnConfirm": "実行する",
+    "warnSnooze": "この接続では今後確認しない（このセッション中）"
+  },
   "common": {
     "save": "保存",
     "close": "閉じる",

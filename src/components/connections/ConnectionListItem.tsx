@@ -12,6 +12,7 @@ import { connectionSubtitle, getCardClass } from '../../utils/connections';
 import { StatusBadge } from './StatusBadge';
 import { ActionButtons } from './ActionButtons';
 import { TagChips } from './TagChips';
+import { EnvironmentBadge } from './EnvironmentBadge';
 
 export interface ConnectionListItemProps {
   conn: SavedConnection;
@@ -115,6 +116,7 @@ export const ConnectionListItem = ({
           isOpen={isOpen}
           isConnecting={isConnecting}
         />
+        <EnvironmentBadge environment={conn.environment} />
         <TagChips tagIds={conn.tag_ids} tags={tags} />
         <span className="text-[10px] font-semibold text-secondary bg-surface-secondary border border-strong/40 px-1.5 py-0.5 rounded-md capitalize">
           {conn.params.driver}

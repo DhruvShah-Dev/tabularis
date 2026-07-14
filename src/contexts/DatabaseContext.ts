@@ -58,6 +58,8 @@ export interface SavedConnection {
   appearance?: ConnectionAppearance;
   /** Ids of connection tags attached to this connection. */
   tag_ids?: string[];
+  /** Deployment environment; production drives warnings and visuals. */
+  environment?: "development" | "staging" | "production";
 }
 
 export interface ConnectionGroup {

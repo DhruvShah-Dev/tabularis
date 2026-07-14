@@ -33,6 +33,19 @@
     "deleteTitle": "Tanggalin ang tag",
     "deleteConfirm": "Tanggalin ang tag na \"{{name}}\"? Aalisin ito sa lahat ng koneksyon."
   },
+  "environment": {
+    "label": "Kapaligiran",
+    "none": "Walang kapaligiran",
+    "development": "Development",
+    "staging": "Staging",
+    "production": "Production",
+    "short": { "development": "DEV", "staging": "STAGING", "production": "PROD" },
+    "banner": "Production — {{name}}",
+    "warnTitle": "Production na database",
+    "warnMessage": "Malapit mo nang baguhin ang production data sa \"{{name}}\". Sigurado ka bang magpapatuloy?",
+    "warnConfirm": "Ituloy pa rin",
+    "warnSnooze": "Huwag nang itanong para sa koneksyong ito (ngayong session)"
+  },
   "common": {
     "save": "I-save",
     "close": "Isara",

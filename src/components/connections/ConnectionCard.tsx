@@ -12,6 +12,7 @@ import { connectionSubtitle, getCardClass } from '../../utils/connections';
 import { StatusBadge } from './StatusBadge';
 import { ActionButtons } from './ActionButtons';
 import { TagChips } from './TagChips';
+import { EnvironmentBadge } from './EnvironmentBadge';
 
 export interface ConnectionCardProps {
   conn: SavedConnection;
@@ -121,6 +122,7 @@ export const ConnectionCard = ({
             <span className="text-[10px] font-semibold text-secondary bg-surface-secondary border border-strong/40 px-1.5 py-0.5 rounded-md capitalize">
               {conn.params.driver}
             </span>
+            <EnvironmentBadge environment={conn.environment} />
             <TagChips tagIds={conn.tag_ids} tags={tags} />
             {conn.params.ssh_enabled && (
               <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-md">

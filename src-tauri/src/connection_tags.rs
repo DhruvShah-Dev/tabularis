@@ -234,6 +234,7 @@ mod tests {
             detect_json_in_text_columns: None,
             appearance: None,
             tag_ids: tag_ids.map(|v| v.iter().map(|s| s.to_string()).collect()),
+            environment: None,
         }
     }
 

@@ -33,6 +33,19 @@
     "deleteTitle": "Elimina tag",
     "deleteConfirm": "Eliminare il tag \"{{name}}\"? Verrà rimosso da tutte le connessioni."
   },
+  "environment": {
+    "label": "Ambiente",
+    "none": "Nessun ambiente",
+    "development": "Sviluppo",
+    "staging": "Staging",
+    "production": "Produzione",
+    "short": { "development": "DEV", "staging": "STAGING", "production": "PROD" },
+    "banner": "Produzione — {{name}}",
+    "warnTitle": "Database di produzione",
+    "warnMessage": "Stai per modificare dati di produzione su \"{{name}}\". Vuoi davvero continuare?",
+    "warnConfirm": "Esegui comunque",
+    "warnSnooze": "Non chiedere più per questa connessione (questa sessione)"
+  },
   "common": {
     "save": "Salva",
     "close": "Chiudi",

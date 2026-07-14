@@ -477,6 +477,16 @@ pub(crate) fn merge_groups(existing: &mut Vec<ConnectionGroup>, incoming: Vec<Co
 
 /// Write the connections file and invalidate the in-memory connection cache so
 /// the next `find_connection_by_id` call re-reads fresh data from disk.
+/// Normalizes and validates a connection environment value. Empty selects
+/// "unclassified" (`None`); anything else must be one of the known tiers.
+fn validate_environment(env: Option<String>) -> Result<Option<String>, String> {
+    match env.as_deref() {
+        None | Some("") => Ok(None),
+        Some("development" | "staging" | "production") => Ok(env),
+        Some(other) => Err(format!("Invalid environment: {other}")),
+    }
+}
+
 pub(crate) fn save_connections_and_invalidate<R: Runtime>(
     app: &AppHandle<R>,
     path: &std::path::Path,
@@ -699,6 +709,7 @@ pub async fn save_connection<R: Runtime>(
     name: String,
     params: ConnectionParams,
     detect_json_in_text_columns: Option<bool>,
+    environment: Option<String>,
 ) -> Result<SavedConnection, String> {
     log::info!("Saving new connection: {}", name);
 
@@ -741,6 +752,7 @@ pub async fn save_connection<R: Runtime>(
         detect_json_in_text_columns,
         appearance: None,
         tag_ids: None,
+        environment: validate_environment(environment)?,
     };
     conn_file.connections.push(new_conn.clone());
     save_connections_and_invalidate(&app, &path, &conn_file)?;
@@ -813,6 +825,7 @@ pub async fn update_connection<R: Runtime>(
     name: String,
     params: ConnectionParams,
     detect_json_in_text_columns: Option<bool>,
+    environment: Option<String>,
 ) -> Result<SavedConnection, String> {
     let path = get_config_path(&app)?;
     let mut conn_file = persistence::load_connections_file(&path)?;
@@ -876,6 +889,7 @@ pub async fn update_connection<R: Runtime>(
         detect_json_in_text_columns,
         appearance: original_appearance,
         tag_ids: original_tag_ids,
+        environment: validate_environment(environment)?,
     };
 
     conn_file.connections[conn_idx] = updated.clone();
@@ -1059,6 +1073,7 @@ pub async fn duplicate_connection<R: Runtime>(
         detect_json_in_text_columns: original.detect_json_in_text_columns,
         appearance: new_appearance,
         tag_ids: original.tag_ids.clone(),
+        environment: original.environment.clone(),
     };
 
     conn_file.connections.push(new_conn.clone());
@@ -1918,6 +1933,7 @@ mod tests {
             detect_json_in_text_columns: None,
             appearance: None,
             tag_ids: None,
+            environment: None,
         }
     }
 
@@ -1948,6 +1964,7 @@ mod tests {
                 icon: Some(IconOverride::Emoji { value: "🐘".to_string() }),
             }),
             tag_ids: None,
+            environment: None,
         };
 
         // Simulate the pattern used in update_connection after the fix.
@@ -1962,6 +1979,7 @@ mod tests {
             detect_json_in_text_columns: None,
             appearance: original_appearance,
             tag_ids: None,
+            environment: None,
         };
 
         let app = updated.appearance.as_ref().expect("appearance must be preserved");
@@ -1980,6 +1998,7 @@ mod tests {
             detect_json_in_text_columns: None,
             appearance,
             tag_ids: None,
+            environment: None,
         };
         ConnectionsFile {
             groups: vec![],

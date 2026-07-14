@@ -33,6 +33,19 @@
     "deleteTitle": "Tag löschen",
     "deleteConfirm": "Tag \"{{name}}\" löschen? Es wird von allen Verbindungen entfernt."
   },
+  "environment": {
+    "label": "Umgebung",
+    "none": "Keine Umgebung",
+    "development": "Entwicklung",
+    "staging": "Staging",
+    "production": "Produktion",
+    "short": { "development": "DEV", "staging": "STAGING", "production": "PROD" },
+    "banner": "Produktion — {{name}}",
+    "warnTitle": "Produktionsdatenbank",
+    "warnMessage": "Sie sind dabei, Produktionsdaten auf \"{{name}}\" zu ändern. Wirklich fortfahren?",
+    "warnConfirm": "Trotzdem ausführen",
+    "warnSnooze": "Für diese Verbindung nicht mehr fragen (diese Sitzung)"
+  },
   "common": {
     "save": "Speichern",
     "close": "Schließen",

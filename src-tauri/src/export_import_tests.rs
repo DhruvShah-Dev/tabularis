@@ -33,6 +33,7 @@ mod tests {
                 detect_json_in_text_columns: None,
                 appearance: None,
                 tag_ids: None,
+                environment: None,
             }],
             ssh_connections: vec![SshConnection {
                 id: "ssh1".to_string(),

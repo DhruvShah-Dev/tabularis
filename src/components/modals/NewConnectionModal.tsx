@@ -97,6 +97,7 @@ interface SavedConnection {
   detect_json_in_text_columns?: boolean;
   appearance?: ConnectionAppearance;
   tag_ids?: string[];
+  environment?: "development" | "staging" | "production";
 }
 
 interface NewConnectionModalProps {
@@ -295,6 +296,11 @@ export const NewConnectionModal = ({
   // ── tags ──
   const [tagIds, setTagIds] = useState<string[]>(
     initialConnection?.tag_ids ?? [],
+  );
+
+  // ── environment ── ("" = unclassified)
+  const [environment, setEnvironment] = useState<string>(
+    initialConnection?.environment ?? "",
   );
   // Stable UUID used as connectionId for icon uploads on new connections.
   // The backend mints its own id on save_connection, so we use this temp id
@@ -610,6 +616,7 @@ export const NewConnectionModal = ({
         );
         setAppearance(initialConnection.appearance ?? {});
         setTagIds(initialConnection.tag_ids ?? []);
+        setEnvironment(initialConnection.environment ?? "");
         const db = initialConnection.params.database;
         setSshMode(
           initialConnection.params.ssh_connection_id ? "existing" : "inline",
@@ -662,6 +669,8 @@ export const NewConnectionModal = ({
         setIsK8sPortOverridden(false);
         setDetectJsonInTextColumns(false);
         setAppearance({});
+        setTagIds([]);
+        setEnvironment("");
       }
 
       await loadSshConnectionsList();
@@ -815,6 +824,7 @@ export const NewConnectionModal = ({
           name,
           params,
           detectJsonInTextColumns: detectJsonInTextColumns ? true : null,
+          environment: environment || null,
         });
         await invoke("set_connection_appearance", {
           id: initialConnection.id,
@@ -829,6 +839,7 @@ export const NewConnectionModal = ({
           name,
           params,
           detectJsonInTextColumns: detectJsonInTextColumns ? true : null,
+          environment: environment || null,
         });
         if (appearancePayload) {
           await invoke("set_connection_appearance", {
@@ -2119,6 +2130,26 @@ export const NewConnectionModal = ({
                 : "text-primary placeholder:text-muted/50",
             )}
           />
+          <select
+            value={environment}
+            onChange={(e) => setEnvironment(e.target.value)}
+            aria-label={t("environment.label")}
+            className={clsx(
+              "text-xs bg-surface-secondary border border-strong rounded-full px-2 py-0.5 font-medium outline-none cursor-pointer",
+              environment === "production"
+                ? "text-red-400 border-red-400/40"
+                : environment === "staging"
+                  ? "text-amber-400 border-amber-400/40"
+                  : environment === "development"
+                    ? "text-emerald-400 border-emerald-400/40"
+                    : "text-muted",
+            )}
+          >
+            <option value="">{t("environment.none")}</option>
+            <option value="development">{t("environment.development")}</option>
+            <option value="staging">{t("environment.staging")}</option>
+            <option value="production">{t("environment.production")}</option>
+          </select>
           <span className="text-xs text-muted bg-surface-secondary px-2 py-0.5 rounded-full font-medium capitalize">
             {activeDriver?.name ?? driver}
           </span>

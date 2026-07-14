@@ -9,6 +9,7 @@ import {
   useDangerousQueryGuard,
   DANGEROUS_QUERY_I18N,
 } from "../hooks/useDangerousQueryGuard";
+import { useProductionGuard } from "../contexts/ProductionGuardContext";
 import {
   generateTempId,
   initializeNewRow,
@@ -347,6 +348,7 @@ export const Editor = () => {
     guardQuery: guardDangerousQuery,
     resolve: resolveDangerousQuery,
   } = useDangerousQueryGuard();
+  const guardProductionWrite = useProductionGuard();
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
   const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
@@ -692,6 +694,7 @@ export const Editor = () => {
       if (!textToRun || !textToRun.trim()) return;
 
       if (!(await guardDangerousQuery(textToRun))) return;
+      if (!(await guardProductionWrite(activeConnectionId, textToRun))) return;
 
       // Check for parameters
       const params = extractQueryParams(textToRun);
@@ -866,6 +869,7 @@ export const Editor = () => {
       activeDatabaseName,
       addHistoryEntry,
       guardDangerousQuery,
+      guardProductionWrite,
     ],
   );
 
@@ -878,6 +882,9 @@ export const Editor = () => {
       if (!targetTab) return;
 
       if (!(await guardDangerousQuery(queries))) return;
+      if (!(await guardProductionWrite(activeConnectionId, queries.join(";\n")))) {
+        return;
+      }
 
       // Collect all unique parameters across all queries
       const allParams = [
@@ -2228,6 +2235,9 @@ export const Editor = () => {
       insertions.length === 0
     )
       return;
+
+    // Production safety: grid edits are writes, confirm before committing.
+    if (!(await guardProductionWrite(activeConnectionId))) return;
 
     updateActiveTab({ isLoading: true });
 
