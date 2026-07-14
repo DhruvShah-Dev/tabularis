@@ -8,6 +8,9 @@ import type { ConnectionTag } from "../../../types/tags";
 import { toErrorMessage } from "../../../utils/errors";
 import { PALETTE } from "./AppearanceSection";
 
+/** Mirrors MAX_TAG_NAME_CHARS enforced by the backend. */
+const MAX_TAG_NAME_CHARS = 32;
+
 interface TagSelectorProps {
   /** Currently selected tag ids (order preserved). */
   selectedIds: string[];
@@ -187,6 +190,7 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
                   if (e.key === "Escape") setCreating(false);
                 }}
                 placeholder={t("tags.namePlaceholder")}
+                maxLength={MAX_TAG_NAME_CHARS}
                 autoFocus
                 spellCheck={false}
                 aria-label={t("tags.namePlaceholder")}
@@ -235,6 +239,7 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
                     }
                     if (e.key === "Escape") setEditingId(null);
                   }}
+                  maxLength={MAX_TAG_NAME_CHARS}
                   autoFocus
                   spellCheck={false}
                   aria-label={t("tags.namePlaceholder")}

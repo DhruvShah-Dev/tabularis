@@ -18,9 +18,18 @@ pub fn is_valid_hex_color(color: &str) -> bool {
     matches!(hex.len(), 3 | 6 | 8) && hex.chars().all(|c| c.is_ascii_hexdigit())
 }
 
+/// Maximum tag name length in characters, enforced on create/update and
+/// mirrored by `maxLength` on the frontend inputs.
+pub const MAX_TAG_NAME_CHARS: usize = 32;
+
 fn validate_tag_input(name: &str, color: &str) -> Result<(), String> {
     if name.trim().is_empty() {
         return Err("Tag name cannot be empty".to_string());
+    }
+    if name.trim().chars().count() > MAX_TAG_NAME_CHARS {
+        return Err(format!(
+            "Tag name cannot exceed {MAX_TAG_NAME_CHARS} characters"
+        ));
     }
     if !is_valid_hex_color(color) {
         return Err(format!("Invalid tag color: {color}"));
@@ -96,8 +105,10 @@ pub fn delete_tag_impl(file: &mut ConnectionsFile, id: &str) -> Result<(), Strin
     Ok(())
 }
 
-/// Replaces the tag set of one connection. Unknown tag ids are rejected and
-/// duplicates dropped, preserving the order given by the caller.
+/// Replaces the tag set of one connection, preserving the order given by
+/// the caller. Duplicates and unknown ids are silently dropped — orphaned
+/// ids legitimately occur after a partial import, and saving a connection
+/// must not fail because of them.
 pub fn set_connection_tags_impl(
     file: &mut ConnectionsFile,
     connection_id: &str,
@@ -106,10 +117,7 @@ pub fn set_connection_tags_impl(
     let mut seen = std::collections::HashSet::new();
     let mut cleaned = Vec::new();
     for tag_id in tag_ids {
-        if !file.tags.iter().any(|t| &t.id == tag_id) {
-            return Err(format!("Unknown tag id: {tag_id}"));
-        }
-        if seen.insert(tag_id.clone()) {
+        if file.tags.iter().any(|t| &t.id == tag_id) && seen.insert(tag_id.clone()) {
             cleaned.push(tag_id.clone());
         }
     }
@@ -124,6 +132,32 @@ pub fn set_connection_tags_impl(
         Some(cleaned)
     };
     Ok(())
+}
+
+/// Merges imported tags into the existing list, used by the import flow.
+/// Same id → the import wins (like connections). Same name (case-insensitive)
+/// under a different id → the tags are unified onto the existing id, and the
+/// returned map (imported id → existing id) lets the caller remap the
+/// imported connections' `tag_ids`, so a "prod" tag created independently on
+/// two machines never ends up duplicated.
+pub fn merge_imported_tags(
+    existing: &mut Vec<ConnectionTag>,
+    imported: Vec<ConnectionTag>,
+) -> std::collections::HashMap<String, String> {
+    let mut remap = std::collections::HashMap::new();
+    for tag in imported {
+        if let Some(same_id) = existing.iter_mut().find(|t| t.id == tag.id) {
+            *same_id = tag;
+        } else if let Some(same_name) = existing
+            .iter()
+            .find(|t| t.name.eq_ignore_ascii_case(&tag.name))
+        {
+            remap.insert(tag.id, same_name.id.clone());
+        } else {
+            existing.push(tag);
+        }
+    }
+    remap
 }
 
 // ---------- Tauri commands ----------
@@ -245,6 +279,17 @@ mod tests {
     }
 
     #[test]
+    fn name_length_is_capped() {
+        let mut file = file_with_tags(&[("t1", "Prod")]);
+        let too_long = "x".repeat(MAX_TAG_NAME_CHARS + 1);
+        assert!(create_tag_impl(&mut file, &too_long, "#00ff00").is_err());
+        assert!(update_tag_impl(&mut file, "t1", &too_long, "#00ff00").is_err());
+        // Exactly at the cap is fine, and multi-byte chars count as 1.
+        let max_ok = "é".repeat(MAX_TAG_NAME_CHARS);
+        assert!(create_tag_impl(&mut file, &max_ok, "#00ff00").is_ok());
+    }
+
+    #[test]
     fn update_renames_and_keeps_own_name_valid() {
         let mut file = file_with_tags(&[("t1", "Prod"), ("t2", "Dev")]);
         // Renaming to its own (case-changed) name is allowed.
@@ -284,10 +329,49 @@ mod tests {
             Some(vec!["t1".to_string(), "t2".to_string()])
         );
 
-        assert!(set_connection_tags_impl(&mut file, "c1", &["nope".to_string()]).is_err());
+        // Unknown ids are dropped, not fatal (orphans after a partial import).
+        set_connection_tags_impl(&mut file, "c1", &["nope".to_string(), "t1".to_string()])
+            .unwrap();
+        assert_eq!(file.connections[0].tag_ids, Some(vec!["t1".to_string()]));
         assert!(set_connection_tags_impl(&mut file, "missing", &[]).is_err());
 
         set_connection_tags_impl(&mut file, "c1", &[]).unwrap();
         assert_eq!(file.connections[0].tag_ids, None);
+    }
+
+    #[test]
+    fn import_merge_unifies_by_id_then_name() {
+        let mut existing = file_with_tags(&[("t1", "Prod"), ("t2", "Dev")]).tags;
+        let imported = vec![
+            // Same id: import wins (renamed + recolored).
+            ConnectionTag {
+                id: "t1".into(),
+                name: "Production".into(),
+                color: "#111111".into(),
+            },
+            // Same name, different id: unified onto the existing tag.
+            ConnectionTag {
+                id: "other-dev".into(),
+                name: "dev".into(),
+                color: "#222222".into(),
+            },
+            // Genuinely new: appended.
+            ConnectionTag {
+                id: "t3".into(),
+                name: "Staging".into(),
+                color: "#333333".into(),
+            },
+        ];
+
+        let remap = merge_imported_tags(&mut existing, imported);
+
+        assert_eq!(existing.len(), 3);
+        assert_eq!(existing[0].name, "Production");
+        assert_eq!(existing[0].color, "#111111");
+        assert_eq!(existing[2].id, "t3");
+        assert_eq!(
+            remap,
+            std::collections::HashMap::from([("other-dev".to_string(), "t2".to_string())])
+        );
     }
 }

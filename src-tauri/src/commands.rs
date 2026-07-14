@@ -5017,18 +5017,27 @@ pub async fn apply_export_payload<R: Runtime>(
     // Merge groups (preserves hierarchy; demotes orphaned parent_ids to root)
     merge_groups(&mut current_file.groups, payload.groups);
 
-    // Merge tags: imported tags win on id collision (same rule as connections),
-    // new ones are appended.
-    for tag in payload.tags {
-        if let Some(existing) = current_file.tags.iter_mut().find(|t| t.id == tag.id) {
-            *existing = tag;
-        } else {
-            current_file.tags.push(tag);
+    // Merge tags (import wins on id collision, name matches are unified onto
+    // the existing tag) and remap the imported connections' tag_ids so
+    // name-merged tags keep resolving.
+    let tag_remap =
+        crate::connection_tags::merge_imported_tags(&mut current_file.tags, payload.tags);
+    let mut payload_connections = payload.connections;
+    if !tag_remap.is_empty() {
+        for conn in &mut payload_connections {
+            if let Some(tag_ids) = &mut conn.tag_ids {
+                let mut seen = std::collections::HashSet::new();
+                *tag_ids = tag_ids
+                    .iter()
+                    .map(|id| tag_remap.get(id).unwrap_or(id).clone())
+                    .filter(|id| seen.insert(id.clone()))
+                    .collect();
+            }
         }
     }
 
     // Merge connections and handle passwords
-    for mut new_conn in payload.connections {
+    for mut new_conn in payload_connections {
         // Handle passwords in keychain
         if new_conn.params.save_in_keychain.unwrap_or(false) {
             if let Some(pwd) = &new_conn.params.password {
