@@ -4181,10 +4181,14 @@ pub async fn apply_db_user_privileges<R: Runtime>(
     privileges: Vec<String>,
     grant: bool,
 ) -> Result<(), String> {
+    let scope = match (database.as_deref(), table.as_deref()) {
+        (Some(db), Some(tbl)) => format!("{db}.{tbl}"),
+        (Some(db), None) => format!("{db}.*"),
+        _ => "*.*".to_string(),
+    };
     log::info!(
-        "{} privileges for '{user}'@'{host}' on {}",
+        "{} privileges for '{user}'@'{host}' on {scope}",
         if grant { "Granting" } else { "Revoking" },
-        database.as_deref().unwrap_or("*.*")
     );
     let (drv, params) = user_mgmt_context(&app, &connection_id).await?;
     let result = drv
