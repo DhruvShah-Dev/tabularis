@@ -10,6 +10,9 @@ pub mod ai_commands;
 pub mod ai_notebook_export;
 #[cfg(test)]
 pub mod ai_notebook_export_tests;
+pub mod ai_schema_context;
+#[cfg(test)]
+pub mod ai_schema_context_tests;
 pub mod askpass;
 pub mod cli;
 pub mod clipboard_import;
@@ -35,6 +38,7 @@ pub mod explain_import;
 #[cfg(test)]
 pub mod explain_import_tests;
 pub mod export;
+pub mod export_crypto;
 #[cfg(test)]
 pub mod export_import_tests;
 pub mod health_check;
@@ -325,10 +329,14 @@ pub fn run() {
             commands::reorder_groups,
             commands::reorder_connections_in_group,
             commands::export_connections_payload,
+            commands::encrypt_export_payload,
+            commands::decrypt_export_payload,
             commands::import_connections_payload,
             connection_import_commands::list_connection_import_sources,
             connection_import_commands::preview_connection_import,
             connection_import_commands::apply_connection_import,
+            connection_import_commands::preview_tabularis_import,
+            connection_import_commands::apply_tabularis_import,
             commands::get_schemas,
             commands::get_available_databases,
             commands::get_tables,
@@ -419,6 +427,7 @@ pub fn run() {
             ai::get_ai_models,
             // Clipboard Import
             clipboard_import::execute_clipboard_import,
+            commands::get_ai_schema_context,
             commands::get_schema_snapshot,
             // DDL generation
             commands::get_create_table_sql,

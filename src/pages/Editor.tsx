@@ -4021,6 +4021,8 @@ export const Editor = () => {
       <AiQueryModal
         isOpen={isAiModalOpen}
         onClose={() => setIsAiModalOpen(false)}
+        connectionId={activeConnectionId ?? undefined}
+        schema={activeTab?.schema ?? activeSchema ?? undefined}
         onInsert={(q) => {
           updateActiveTab({ query: q });
           runQuery(q, 1);

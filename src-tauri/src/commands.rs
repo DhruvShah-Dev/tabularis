@@ -375,7 +375,7 @@ pub fn get_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
     }
-    Ok(config_dir.join("connections.json"))
+    Ok(crate::paths::resolve_connections_path(&config_dir))
 }
 
 pub fn get_ssh_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
@@ -691,6 +691,32 @@ pub async fn get_schema_snapshot<R: Runtime>(
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_schema_snapshot(&params, schema.as_deref()).await
+}
+
+#[tauri::command]
+pub async fn get_ai_schema_context<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    schema: Option<String>,
+) -> Result<String, String> {
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
+    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let driver = driver_for(&saved_conn.params.driver).await?;
+    let identifier_quote = driver.manifest().capabilities.identifier_quote.as_str();
+    let context = driver
+        .get_ai_schema_context(
+            &params,
+            schema.as_deref(),
+            crate::ai_schema_context::DEFAULT_MAX_TABLES,
+        )
+        .await?;
+
+    Ok(crate::ai_schema_context::format_for_prompt(
+        &context,
+        identifier_quote,
+    ))
 }
 
 #[tauri::command]
@@ -4850,7 +4876,10 @@ pub async fn get_server_now<R: Runtime>(
 #[tauri::command]
 pub async fn export_connections_payload<R: Runtime>(
     app: AppHandle<R>,
+    include_secrets: Option<bool>,
+    connection_ids: Option<Vec<String>>,
 ) -> Result<ExportPayload, String> {
+    let include_secrets = include_secrets.unwrap_or(true);
     let conn_path = get_config_path(&app)?;
     let ssh_path = get_ssh_config_path(&app)?;
 
@@ -4861,6 +4890,29 @@ pub async fn export_connections_payload<R: Runtime>(
     } else {
         Vec::new()
     };
+    let mut k8s_connections = load_k8s_connections_sync(&app)?;
+
+    // When a selection is provided, keep only the selected connections (of any
+    // kind) plus the group chains needed to preserve their hierarchy. Done
+    // before password resolution so unselected credentials never leave the
+    // keychain.
+    if let Some(ids) = &connection_ids {
+        let selected: std::collections::HashSet<&str> =
+            ids.iter().map(String::as_str).collect();
+        conn_file
+            .connections
+            .retain(|c| selected.contains(c.id.as_str()));
+        ssh_connections.retain(|s| selected.contains(s.id.as_str()));
+        k8s_connections.retain(|k| selected.contains(k.id.as_str()));
+        let kept_groups = crate::models::collect_group_ancestors(
+            &conn_file.groups,
+            conn_file
+                .connections
+                .iter()
+                .filter_map(|c| c.group_id.as_deref()),
+        );
+        conn_file.groups.retain(|g| kept_groups.contains(&g.id));
+    }
 
     let cache = app
         .state::<std::sync::Arc<crate::credential_cache::CredentialCache>>()
@@ -4869,6 +4921,13 @@ pub async fn export_connections_payload<R: Runtime>(
 
     // Resolve passwords for database connections
     for conn in &mut conn_file.connections {
+        if !include_secrets {
+            // Strip any secrets that may already live in the connections file
+            conn.params.password = None;
+            conn.params.ssh_password = None;
+            conn.params.ssh_key_passphrase = None;
+            continue;
+        }
         if conn.params.save_in_keychain.unwrap_or(false) {
             if let Ok(pwd) = credential_cache::get_db_password_cached(&cache, &conn.id) {
                 conn.params.password = Some(pwd);
@@ -4888,6 +4947,11 @@ pub async fn export_connections_payload<R: Runtime>(
 
     // Resolve passwords for SSH connections
     for ssh in &mut ssh_connections {
+        if !include_secrets {
+            ssh.password = None;
+            ssh.key_passphrase = None;
+            continue;
+        }
         if ssh.save_in_keychain.unwrap_or(false) {
             if let Ok(pwd) = credential_cache::get_ssh_password_cached(&cache, &ssh.id) {
                 ssh.password = Some(pwd);
@@ -4904,8 +4968,26 @@ pub async fn export_connections_payload<R: Runtime>(
         groups: conn_file.groups,
         connections: conn_file.connections,
         ssh_connections,
-        k8s_connections: load_k8s_connections_sync(&app)?,
+        k8s_connections,
     })
+}
+
+#[tauri::command]
+pub async fn encrypt_export_payload(
+    payload: ExportPayload,
+    password: String,
+) -> Result<crate::export_crypto::EncryptedEnvelope, String> {
+    let plaintext = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
+    crate::export_crypto::encrypt(&plaintext, &password)
+}
+
+#[tauri::command]
+pub async fn decrypt_export_payload(
+    envelope: crate::export_crypto::EncryptedEnvelope,
+    password: String,
+) -> Result<ExportPayload, String> {
+    let plaintext = crate::export_crypto::decrypt(&envelope, &password)?;
+    serde_json::from_str(&plaintext).map_err(|e| format!("Invalid export payload: {e}"))
 }
 
 #[tauri::command]
