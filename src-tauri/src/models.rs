@@ -171,11 +171,13 @@ pub struct ConnectionParams {
     pub driver: String,
     pub host: Option<String>,
     pub port: Option<u16>,
-    /// Absolute path of a Unix socket on this machine that the database
-    /// listens on. When set and no tunnel is active, drivers connect to the
-    /// socket directly instead of host:port, and database TLS is disabled
-    /// (TLS cannot be negotiated over a local socket; traffic never leaves
-    /// the machine). Ignored while an SSH or Kubernetes tunnel is enabled.
+    /// Absolute path of the Unix socket the database listens on, at the
+    /// connection's destination — like host/port, its perspective follows the
+    /// tunnel state. Without a tunnel, the drivers dial this socket on the
+    /// local machine instead of host:port. With SSH, the SSH server connects
+    /// to it (the tunnel forwards there instead of host:port). Ignored while
+    /// a Kubernetes tunnel is enabled. Either way database TLS is disabled: a
+    /// socket peer cannot negotiate it, and the path is local or SSH-encrypted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unix_socket_path: Option<String>,
     pub username: Option<String>,
@@ -212,11 +214,6 @@ pub struct ConnectionParams {
     pub ssh_key_passphrase: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ssh_allow_passphrase_prompt: Option<bool>,
-    /// Absolute path of a Unix socket on the SSH server. When set, the tunnel
-    /// forwards to this socket instead of host:port, and database TLS is
-    /// disabled (a socket peer cannot negotiate it; SSH encrypts the path).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ssh_forward_unix_socket_path: Option<String>,
     pub save_in_keychain: Option<bool>,
     // Kubernetes Tunnel (mutually exclusive with SSH)
     #[serde(default)]
@@ -250,17 +247,23 @@ pub struct ConnectionParams {
 }
 
 impl ConnectionParams {
-    /// The local Unix socket path in effect: trimmed and non-empty. `None`
-    /// while an SSH or Kubernetes tunnel is enabled — the tunnel owns the
-    /// route to the database, so the local socket must not override it.
-    pub fn local_unix_socket_path(&self) -> Option<&str> {
-        if self.ssh_enabled.unwrap_or(false) || self.k8s_enabled.unwrap_or(false) {
-            return None;
-        }
+    /// The configured Unix socket path: trimmed and non-empty. Where it is
+    /// dialed from depends on the tunnel state — see `unix_socket_path`.
+    pub fn unix_socket_path(&self) -> Option<&str> {
         self.unix_socket_path
             .as_deref()
             .map(str::trim)
             .filter(|p| !p.is_empty())
+    }
+
+    /// The Unix socket path the drivers dial *locally*: `None` while an SSH
+    /// or Kubernetes tunnel is enabled — the tunnel owns the route to the
+    /// database, so the socket must not override it at the driver level.
+    pub fn local_unix_socket_path(&self) -> Option<&str> {
+        if self.ssh_enabled.unwrap_or(false) || self.k8s_enabled.unwrap_or(false) {
+            return None;
+        }
+        self.unix_socket_path()
     }
 }
 

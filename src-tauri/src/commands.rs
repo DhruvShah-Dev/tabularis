@@ -220,16 +220,13 @@ fn build_tunnel_map_key(
 }
 
 /// The SSH forward destination for a connection: the Unix socket path when one
-/// is configured, otherwise the database host:port.
+/// is configured (with SSH enabled it names a socket on the SSH server, just
+/// like host:port name the destination from the server's perspective),
+/// otherwise the database host:port.
 fn ssh_forward_destination(
     params: &ConnectionParams,
 ) -> crate::ssh_tunnel::SshForwardDestination {
-    let socket_path = params
-        .ssh_forward_unix_socket_path
-        .as_deref()
-        .map(str::trim)
-        .filter(|p| !p.is_empty());
-    match socket_path {
+    match params.unix_socket_path() {
         Some(path) => crate::ssh_tunnel::SshForwardDestination::UnixSocket {
             path: path.to_string(),
         },
@@ -2050,7 +2047,7 @@ mod tests {
     #[test]
     fn forward_destination_ignores_blank_socket_path() {
         let params = ConnectionParams {
-            ssh_forward_unix_socket_path: Some("   ".to_string()),
+            unix_socket_path: Some("   ".to_string()),
             ..base_params()
         };
         assert!(matches!(
@@ -2062,7 +2059,7 @@ mod tests {
     #[test]
     fn forward_destination_uses_trimmed_socket_path() {
         let params = ConnectionParams {
-            ssh_forward_unix_socket_path: Some(" /var/run/mysqld/mysqld.sock ".to_string()),
+            unix_socket_path: Some(" /var/run/mysqld/mysqld.sock ".to_string()),
             ..base_params()
         };
         assert_eq!(
@@ -2090,7 +2087,7 @@ mod tests {
     fn tunnel_params_disable_ssl_for_socket_destination() {
         let params = ConnectionParams {
             ssl_mode: Some("require".to_string()),
-            ssh_forward_unix_socket_path: Some("/tmp/db.sock".to_string()),
+            unix_socket_path: Some("/tmp/db.sock".to_string()),
             ..base_params()
         };
         let destination = ssh_forward_destination(&params);

@@ -17,7 +17,10 @@ export interface ConnectionParams {
   host?: string;
   database: string;
   port?: number;
-  /** Unix socket on this machine the drivers connect to instead of host:port (no tunnel). */
+  /**
+   * Unix socket at the connection's destination, replacing host:port —
+   * dialed locally without a tunnel, by the SSH server with SSH enabled.
+   */
   unix_socket_path?: string;
   username?: string;
   password?: string;
@@ -31,8 +34,6 @@ export interface ConnectionParams {
   ssh_key_file?: string;
   ssh_key_passphrase?: string;
   ssh_allow_passphrase_prompt?: boolean;
-  /** Unix socket on the SSH server the tunnel forwards to instead of host:port. */
-  ssh_forward_unix_socket_path?: string;
   // K8s
   k8s_enabled?: boolean;
   k8s_connection_id?: string;

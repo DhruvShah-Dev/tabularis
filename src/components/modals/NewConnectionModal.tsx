@@ -82,8 +82,8 @@ interface ConnectionParams {
   ssh_key_file?: string;
   ssh_key_passphrase?: string;
   ssh_allow_passphrase_prompt?: boolean;
-  ssh_forward_unix_socket_path?: string;
-  // Local Unix socket the drivers dial instead of host:port (no tunnel)
+  // Unix socket at the connection's destination, replacing host:port:
+  // dialed locally without a tunnel, by the SSH server with SSH enabled
   unix_socket_path?: string;
   save_in_keychain?: boolean;
   // K8s
@@ -1132,18 +1132,16 @@ export const NewConnectionModal = ({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const usesForwardSocket =
-    !!formData.ssh_enabled &&
-    !!formData.ssh_forward_unix_socket_path?.trim();
-  const forwardSocketPathIssue = unixSocketPathIssue(
-    formData.ssh_forward_unix_socket_path ?? "",
-  );
   const tunnelEnabled = !!formData.ssh_enabled || !!formData.k8s_enabled;
+  const socketPathSet = !!formData.unix_socket_path?.trim();
+  // The socket replaces host:port at the destination: dialed by the SSH
+  // server when SSH is enabled, locally otherwise (capability-gated). A K8s
+  // tunnel ignores it.
+  const usesForwardSocket = !!formData.ssh_enabled && socketPathSet;
   const usesLocalSocket =
-    supportsUnixSocket &&
-    !tunnelEnabled &&
-    !!formData.unix_socket_path?.trim();
-  const localSocketPathIssue = unixSocketPathIssue(
+    supportsUnixSocket && !tunnelEnabled && socketPathSet;
+  const usesSocket = usesForwardSocket || usesLocalSocket;
+  const socketPathIssue = unixSocketPathIssue(
     formData.unix_socket_path ?? "",
   );
 
@@ -1890,7 +1888,7 @@ export const NewConnectionModal = ({
               value={formData.host}
               onChange={(v) => updateField("host", v)}
               placeholder="localhost"
-              disabled={usesForwardSocket || usesLocalSocket}
+              disabled={usesSocket}
             />
             <FieldInput
               label={t("newConnection.port")}
@@ -1898,46 +1896,54 @@ export const NewConnectionModal = ({
               onChange={(v) => updateField("port", v)}
               type="number"
               placeholder={driver === "mysql" ? "3306" : "5432"}
-              disabled={usesForwardSocket || usesLocalSocket}
+              disabled={usesSocket}
             />
           </div>
 
-          {/* Local Unix socket instead of host:port (drivers with the unix_socket capability, no tunnel) */}
-          {supportsUnixSocket && (
+          {/* Unix socket instead of host:port — dialed locally (capability-gated)
+              or by the SSH server when the tunnel is enabled */}
+          {(supportsUnixSocket || !!formData.ssh_enabled) && (
             <div className="flex flex-col gap-1">
               <FieldInput
-                label={t("newConnection.localSocketPath")}
+                label={t("newConnection.socketPath")}
                 value={formData.unix_socket_path}
                 onChange={(v) => updateField("unix_socket_path", v)}
                 placeholder={
                   driver === "postgres"
                     ? "/var/run/postgresql/.s.PGSQL.5432"
-                    : "/tmp/mysql.sock"
+                    : formData.ssh_enabled
+                      ? "/var/run/mysqld/mysqld.sock"
+                      : "/tmp/mysql.sock"
                 }
-                disabled={tunnelEnabled}
+                disabled={!!formData.k8s_enabled}
               />
-              {tunnelEnabled && (
+              {formData.k8s_enabled && (
                 <p className="text-[10px] text-muted mt-0.5">
-                  {t("newConnection.localSocketPathTunnel")}
+                  {t("newConnection.socketPathTunnel")}
                 </p>
               )}
-              {!tunnelEnabled && localSocketPathIssue === "notAbsolute" && (
+              {!formData.k8s_enabled && socketPathIssue === "notAbsolute" && (
                 <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
                   <AlertCircle size={10} />{" "}
-                  {t("newConnection.localSocketPathNotAbsolute")}
+                  {t("newConnection.socketPathNotAbsolute")}
                 </p>
               )}
-              {!tunnelEnabled && localSocketPathIssue === "looksLikeDirectory" && (
-                <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
-                  <AlertCircle size={10} />{" "}
-                  {t("newConnection.localSocketPathDirectory")}
-                </p>
-              )}
-              {!tunnelEnabled && !localSocketPathIssue && (
+              {!formData.k8s_enabled &&
+                socketPathIssue === "looksLikeDirectory" && (
+                  <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
+                    <AlertCircle size={10} />{" "}
+                    {t("newConnection.socketPathDirectory")}
+                  </p>
+                )}
+              {!formData.k8s_enabled && !socketPathIssue && (
                 <p className="text-[10px] text-muted mt-0.5">
-                  {usesLocalSocket
-                    ? t("newConnection.localSocketPathActive")
-                    : t("newConnection.localSocketPathHint")}
+                  {formData.ssh_enabled
+                    ? usesForwardSocket
+                      ? t("newConnection.socketPathForwardActive")
+                      : t("newConnection.socketPathForwardHint")
+                    : usesLocalSocket
+                      ? t("newConnection.socketPathActive")
+                      : t("newConnection.socketPathHint")}
                 </p>
               )}
             </div>
@@ -1981,7 +1987,7 @@ export const NewConnectionModal = ({
                   }}
                   disabled={
                     loadingDatabases ||
-                    (!formData.host && !usesLocalSocket) ||
+                    (!formData.host && !usesSocket) ||
                     !formData.username
                   }
                   className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed transition-colors"
@@ -2160,7 +2166,7 @@ export const NewConnectionModal = ({
           }}
           disabled={
             loadingDatabases ||
-            (!formData.host && !usesLocalSocket) ||
+            (!formData.host && !usesSocket) ||
             !formData.username
           }
           className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed transition-colors shrink-0"
@@ -2725,38 +2731,6 @@ export const NewConnectionModal = ({
             </div>
           )}
 
-          {/* Forward destination: Unix socket instead of host:port */}
-          <div className="flex flex-col gap-1">
-            <FieldInput
-              label={t("newConnection.sshForwardSocketPath")}
-              value={formData.ssh_forward_unix_socket_path}
-              onChange={(v) => updateField("ssh_forward_unix_socket_path", v)}
-              placeholder={
-                driver === "postgres"
-                  ? "/var/run/postgresql/.s.PGSQL.5432"
-                  : "/var/run/mysqld/mysqld.sock"
-              }
-            />
-            {forwardSocketPathIssue === "notAbsolute" && (
-              <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
-                <AlertCircle size={10} />{" "}
-                {t("newConnection.sshForwardSocketPathNotAbsolute")}
-              </p>
-            )}
-            {forwardSocketPathIssue === "looksLikeDirectory" && (
-              <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
-                <AlertCircle size={10} />{" "}
-                {t("newConnection.sshForwardSocketPathDirectory")}
-              </p>
-            )}
-            {!forwardSocketPathIssue && (
-              <p className="text-[10px] text-muted mt-0.5">
-                {usesForwardSocket
-                  ? t("newConnection.sshForwardSocketPathActive")
-                  : t("newConnection.sshForwardSocketPathHint")}
-              </p>
-            )}
-          </div>
         </div>
       )}
     </div>
