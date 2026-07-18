@@ -1,18 +1,33 @@
-name: Release
-env:
-  GH_TOKEN: ${{ SECRETS.GITHUB_TOKEN }}
+name: Build
+
+# Reusable build matrix used by nightly.yml (cron). Centralises the
+# signing/notarization config in one place so callers can't drift from it.
 on:
-  push:
-    tags:
-      - "v*"
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      pr_number:
-        description: "PR number to build (from any fork). Builds from refs/pull/<N>/head and is ALWAYS marked as prerelease so it bypasses AUR/Snap/Winget."
+      ref:
+        description: "Git ref to build (branch, tag or SHA)."
+        required: true
+        type: string
+      tag:
+        description: "Release tag to create/upload to."
+        required: true
+        type: string
+      release_name:
+        description: "Release title. Supports tauri-action's __VERSION__ placeholder."
         required: false
-      tag_name:
-        description: "Tag/release name (e.g. v0.10.0-json-beta.1). Required when pr_number is set."
+        default: "v__VERSION__"
+        type: string
+      prerelease:
+        description: "Mark the GitHub Release as a prerelease."
         required: false
+        default: false
+        type: boolean
+      draft:
+        description: "Create the GitHub Release as a draft."
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   publish-tauri:
@@ -40,38 +55,17 @@ jobs:
     runs-on: ${{ matrix.platform }}
     container: ${{ matrix.container }}
     steps:
+      # The bare ubuntu:22.04 image ships neither git nor curl, which checkout
+      # and later steps need. Runs only inside the container.
       - name: Install container prerequisites (ubuntu container only)
         if: matrix.container
         run: |
           apt-get update
           apt-get install -y git ca-certificates curl
-      - name: Resolve build ref + tag
-        id: meta
-        shell: bash
-        run: |
-          if [ -n "${{ inputs.pr_number }}" ]; then
-            echo "ref=refs/pull/${{ inputs.pr_number }}/head" >> "$GITHUB_OUTPUT"
-            if [ -z "${{ inputs.tag_name }}" ]; then
-              echo "::error::tag_name is required when pr_number is provided"
-              exit 1
-            fi
-            echo "tag=${{ inputs.tag_name }}" >> "$GITHUB_OUTPUT"
-            # Fork PR builds are ALWAYS prerelease — release bits must come from main, not a fork.
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
-            echo "tag=${{ inputs.tag_name || github.ref_name }}" >> "$GITHUB_OUTPUT"
-            # Auto-flag prerelease when tag contains a "-" suffix (semver pre-release).
-            if [[ "${{ inputs.tag_name || github.ref_name }}" == *-* ]]; then
-              echo "prerelease=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "prerelease=false" >> "$GITHUB_OUTPUT"
-            fi
-          fi
 
       - uses: actions/checkout@v6
         with:
-          ref: ${{ steps.meta.outputs.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -86,7 +80,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-15-intel' && 'x86_64-apple-darwin' || '' }}
 
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-24.04'
@@ -120,6 +114,10 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Override tauri-cli with custom AppImage format (Linux)
+        if: matrix.platform == 'ubuntu-24.04'
+        run: cargo install tauri-cli --git https://github.com/tauri-apps/tauri --branch feat/truly-portable-appimage --force
+
       # Notarization needs the App Store Connect API key on disk. The .p8 is stored
       # base64-encoded in APPLE_API_KEY_CONTENT and decoded into a temp file (macOS only).
       - name: Prepare Apple API key (macOS only)
@@ -132,6 +130,7 @@ jobs:
       - uses: tauri-apps/tauri-action@v0.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_BUNDLER_NEW_APPIMAGE_FORMAT: "true"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           # macOS code signing (Developer ID Application certificate)
@@ -143,24 +142,22 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
         with:
-          tagName: ${{ steps.meta.outputs.tag }}
-          releaseName: "v__VERSION__"
-          releaseBody: |
-            See the assets below to download this version and install.
-
-            ---
-            **Stay in touch:** [Website](https://tabularis.dev) · [Discord](https://discord.com/invite/K2hmhfHRSt) · [X](https://x.com/tabularisdb) · [Bluesky](https://bsky.app/profile/tabularis.bsky.social) · [Mastodon](https://mastodon.social/@tabularis) · [GitHub](https://github.com/TabularisDB/tabularis)
-          releaseDraft: true
-          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
-          tauriScript: pnpm tauri
+          tagName: ${{ inputs.tag }}
+          releaseName: ${{ inputs.release_name }}
+          releaseBody: "See the assets to download this version and install."
+          releaseDraft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          tauriScript: ${{ matrix.platform == 'ubuntu-24.04' && 'cargo tauri' || 'pnpm tauri' }}
           args: ${{ matrix.args }}
 
       - name: Upload portable executable (Windows only)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $version = "${{ steps.meta.outputs.tag }}".TrimStart('v')
+          $version = "${{ inputs.tag }}".TrimStart('v')
           $src = "src-tauri\target\release\tabularis.exe"
           $portable = "tabularis_${version}_x64-portable.exe"
           Copy-Item $src $portable
-          gh release upload "${{ steps.meta.outputs.tag }}" $portable --clobber
+          gh release upload "${{ inputs.tag }}" $portable --clobber
