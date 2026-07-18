@@ -205,6 +205,11 @@ pub struct ConnectionParams {
     pub ssh_key_passphrase: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ssh_allow_passphrase_prompt: Option<bool>,
+    /// Absolute path of a Unix socket on the SSH server. When set, the tunnel
+    /// forwards to this socket instead of host:port, and database TLS is
+    /// disabled (a socket peer cannot negotiate it; SSH encrypts the path).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_forward_unix_socket_path: Option<String>,
     pub save_in_keychain: Option<bool>,
     // Kubernetes Tunnel (mutually exclusive with SSH)
     #[serde(default)]

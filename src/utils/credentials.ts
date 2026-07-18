@@ -17,6 +17,7 @@ interface ConnectionParams {
   ssh_key_file?: string;
   ssh_key_passphrase?: string;
   ssh_allow_passphrase_prompt?: boolean;
+  ssh_forward_unix_socket_path?: string;
   save_in_keychain?: boolean;
 }
 

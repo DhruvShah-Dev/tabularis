@@ -48,6 +48,7 @@ import { K8sAdvancedSettings } from "../ui/K8sAdvancedSettings";
 import { isMultiDatabaseCapable } from "../../utils/database";
 import { toErrorMessage } from "../../utils/errors";
 import { fetchConnectionWithCredentials } from "../../utils/credentials";
+import { sshForwardSocketPathIssue } from "../../utils/connections";
 import { getDriverIcon, getDriverColorStyle } from "../../utils/driverUI";
 import {
   parseConnectionString,
@@ -81,6 +82,7 @@ interface ConnectionParams {
   ssh_key_file?: string;
   ssh_key_passphrase?: string;
   ssh_allow_passphrase_prompt?: boolean;
+  ssh_forward_unix_socket_path?: string;
   save_in_keychain?: boolean;
   // K8s
   k8s_enabled?: boolean;
@@ -137,6 +139,7 @@ const FieldInput = ({
   placeholder,
   autoFocus,
   className,
+  disabled,
 }: {
   label: string;
   value: string | number | undefined;
@@ -145,6 +148,7 @@ const FieldInput = ({
   placeholder?: string;
   autoFocus?: boolean;
   className?: string;
+  disabled?: boolean;
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === "password";
@@ -161,13 +165,15 @@ const FieldInput = ({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           autoFocus={autoFocus}
+          disabled={disabled}
           autoCorrect="off"
           autoCapitalize="off"
           autoComplete="off"
           spellCheck={false}
           className={clsx(
             "w-full px-3 py-2 bg-base border border-strong rounded-md text-sm text-primary placeholder:text-muted placeholder:italic focus:border-blue-500 focus:outline-none transition-colors",
-            isPassword && "pr-10"
+            isPassword && "pr-10",
+            disabled && "opacity-50 cursor-not-allowed"
           )}
         />
         {isPassword && (
@@ -1123,6 +1129,13 @@ export const NewConnectionModal = ({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const usesForwardSocket =
+    !!formData.ssh_enabled &&
+    !!formData.ssh_forward_unix_socket_path?.trim();
+  const forwardSocketPathIssue = sshForwardSocketPathIssue(
+    formData.ssh_forward_unix_socket_path ?? "",
+  );
+
   const loadDatabases = async (
     overrides?: Partial<ConnectionParams>,
     shouldApply: () => boolean = () => true,
@@ -1866,6 +1879,7 @@ export const NewConnectionModal = ({
               value={formData.host}
               onChange={(v) => updateField("host", v)}
               placeholder="localhost"
+              disabled={usesForwardSocket}
             />
             <FieldInput
               label={t("newConnection.port")}
@@ -1873,6 +1887,7 @@ export const NewConnectionModal = ({
               onChange={(v) => updateField("port", v)}
               type="number"
               placeholder={driver === "mysql" ? "3306" : "5432"}
+              disabled={usesForwardSocket}
             />
           </div>
 
@@ -2651,6 +2666,39 @@ export const NewConnectionModal = ({
               </div>
             </div>
           )}
+
+          {/* Forward destination: Unix socket instead of host:port */}
+          <div className="flex flex-col gap-1">
+            <FieldInput
+              label={t("newConnection.sshForwardSocketPath")}
+              value={formData.ssh_forward_unix_socket_path}
+              onChange={(v) => updateField("ssh_forward_unix_socket_path", v)}
+              placeholder={
+                driver === "postgres"
+                  ? "/var/run/postgresql/.s.PGSQL.5432"
+                  : "/var/run/mysqld/mysqld.sock"
+              }
+            />
+            {forwardSocketPathIssue === "notAbsolute" && (
+              <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
+                <AlertCircle size={10} />{" "}
+                {t("newConnection.sshForwardSocketPathNotAbsolute")}
+              </p>
+            )}
+            {forwardSocketPathIssue === "looksLikeDirectory" && (
+              <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
+                <AlertCircle size={10} />{" "}
+                {t("newConnection.sshForwardSocketPathDirectory")}
+              </p>
+            )}
+            {!forwardSocketPathIssue && (
+              <p className="text-[10px] text-muted mt-0.5">
+                {usesForwardSocket
+                  ? t("newConnection.sshForwardSocketPathActive")
+                  : t("newConnection.sshForwardSocketPathHint")}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

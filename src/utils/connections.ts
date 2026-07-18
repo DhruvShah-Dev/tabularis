@@ -29,6 +29,8 @@ export interface ConnectionParams {
   ssh_key_file?: string;
   ssh_key_passphrase?: string;
   ssh_allow_passphrase_prompt?: boolean;
+  /** Unix socket on the SSH server the tunnel forwards to instead of host:port. */
+  ssh_forward_unix_socket_path?: string;
   // K8s
   k8s_enabled?: boolean;
   k8s_connection_id?: string;
@@ -39,6 +41,30 @@ export interface ConnectionParams {
   k8s_port?: number;
   /** SQL run on every new connection to this data source (e.g. SET / set_config). */
   startup_script?: string;
+}
+
+export type SshForwardSocketPathIssue = "notAbsolute" | "looksLikeDirectory";
+
+/**
+ * Advisory check for the SSH forward socket path. `ssh -L` needs the socket
+ * file itself, as an absolute path on the SSH server.
+ * @param rawPath - The socket path as typed by the user
+ * @returns The detected issue, or null when the path looks plausible or is empty
+ */
+export function sshForwardSocketPathIssue(
+  rawPath: string,
+): SshForwardSocketPathIssue | null {
+  const path = rawPath.trim();
+  if (!path) {
+    return null;
+  }
+  if (!path.startsWith("/")) {
+    return "notAbsolute";
+  }
+  if (path.endsWith("/")) {
+    return "looksLikeDirectory";
+  }
+  return null;
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   generateConnectionName,
   connectionSubtitle,
   getCardClass,
+  sshForwardSocketPathIssue,
   type ConnectionParams,
   type DatabaseDriver,
 } from '../../src/utils/connections';
@@ -493,6 +494,33 @@ describe('connections', () => {
     it('should use localhost when host is missing for remote driver', () => {
       const params: ConnectionParams = { driver: 'duckdb-remote', database: 'analytics' };
       expect(generateConnectionName(params, makeRemoteCaps())).toBe('analytics@localhost');
+    });
+  });
+
+  describe('sshForwardSocketPathIssue', () => {
+    it('should accept an empty path', () => {
+      expect(sshForwardSocketPathIssue('')).toBeNull();
+      expect(sshForwardSocketPathIssue('   ')).toBeNull();
+    });
+
+    it('should accept an absolute socket file path', () => {
+      expect(sshForwardSocketPathIssue('/var/run/mysqld/mysqld.sock')).toBeNull();
+      expect(sshForwardSocketPathIssue('/var/run/postgresql/.s.PGSQL.5432')).toBeNull();
+    });
+
+    it('should flag a relative path', () => {
+      expect(sshForwardSocketPathIssue('mysqld.sock')).toBe('notAbsolute');
+      expect(sshForwardSocketPathIssue('run/mysqld/mysqld.sock')).toBe('notAbsolute');
+    });
+
+    it('should flag a directory-looking path', () => {
+      expect(sshForwardSocketPathIssue('/var/run/mysqld/')).toBe('looksLikeDirectory');
+      expect(sshForwardSocketPathIssue('/')).toBe('looksLikeDirectory');
+    });
+
+    it('should trim surrounding whitespace before checking', () => {
+      expect(sshForwardSocketPathIssue('  /tmp/db.sock  ')).toBeNull();
+      expect(sshForwardSocketPathIssue('  tmp/db.sock  ')).toBe('notAbsolute');
     });
   });
 });
