@@ -17,6 +17,8 @@ export interface ConnectionParams {
   host?: string;
   database: string;
   port?: number;
+  /** Unix socket on this machine the drivers connect to instead of host:port (no tunnel). */
+  unix_socket_path?: string;
   username?: string;
   password?: string;
   ssh_enabled?: boolean;
@@ -43,17 +45,18 @@ export interface ConnectionParams {
   startup_script?: string;
 }
 
-export type SshForwardSocketPathIssue = "notAbsolute" | "looksLikeDirectory";
+export type UnixSocketPathIssue = "notAbsolute" | "looksLikeDirectory";
 
 /**
- * Advisory check for the SSH forward socket path. `ssh -L` needs the socket
- * file itself, as an absolute path on the SSH server.
+ * Advisory check for a Unix socket path (local or SSH forward destination).
+ * Both consumers need the socket file itself, as an absolute path on the
+ * machine that dials it (this one, or the SSH server).
  * @param rawPath - The socket path as typed by the user
  * @returns The detected issue, or null when the path looks plausible or is empty
  */
-export function sshForwardSocketPathIssue(
+export function unixSocketPathIssue(
   rawPath: string,
-): SshForwardSocketPathIssue | null {
+): UnixSocketPathIssue | null {
   const path = rawPath.trim();
   if (!path) {
     return null;
@@ -65,6 +68,25 @@ export function sshForwardSocketPathIssue(
     return "looksLikeDirectory";
   }
   return null;
+}
+
+/**
+ * The local Unix socket path in effect for a connection: set and non-empty,
+ * with no SSH or Kubernetes tunnel overriding it (the tunnel owns the route
+ * to the database, so the socket is ignored while one is enabled).
+ * @param params - Connection parameters (any object carrying the three fields)
+ * @returns The trimmed socket path, or null when none applies
+ */
+export function effectiveLocalSocketPath(params: {
+  unix_socket_path?: string;
+  ssh_enabled?: boolean;
+  k8s_enabled?: boolean;
+}): string | null {
+  if (params.ssh_enabled || params.k8s_enabled) {
+    return null;
+  }
+  const path = params.unix_socket_path?.trim();
+  return path ? path : null;
 }
 
 /**
@@ -84,6 +106,11 @@ export function formatConnectionString(
 
   if (local) {
     return params.database;
+  }
+
+  const socketPath = effectiveLocalSocketPath(params);
+  if (socketPath) {
+    return `${socketPath}/${params.database}`;
   }
 
   const host = params.host || "localhost";
@@ -138,7 +165,7 @@ export function validateConnectionParams(
     capabilities != null
       ? isLocalDriver(capabilities)
       : params.driver === "sqlite";
-  if (!local && !params.host) {
+  if (!local && !params.host && !effectiveLocalSocketPath(params)) {
     return { isValid: false, error: "Host is required for remote databases" };
   }
 
@@ -226,6 +253,10 @@ export function connectionSubtitle(
   }
   const db = conn.params.database;
   const dbStr = Array.isArray(db) ? `${db.length} databases` : db;
+  const socketPath = effectiveLocalSocketPath(conn.params);
+  if (socketPath) {
+    return `${socketPath}  ·  ${dbStr}`;
+  }
   return `${conn.params.host ?? 'localhost'}:${conn.params.port ?? ''}  ·  ${dbStr}`;
 }
 

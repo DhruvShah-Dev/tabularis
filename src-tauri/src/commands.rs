@@ -251,6 +251,9 @@ fn params_through_tunnel(
     let mut new_params = params.clone();
     new_params.host = Some("127.0.0.1".to_string());
     new_params.port = Some(local_port);
+    // The tunnel owns the route: a leftover local socket path would make the
+    // drivers bypass the tunnel's local port and dial the socket instead.
+    new_params.unix_socket_path = None;
     if matches!(
         destination,
         crate::ssh_tunnel::SshForwardDestination::UnixSocket { .. }
@@ -302,6 +305,9 @@ fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, Str
             new_params.k8s_enabled = Some(false);
             new_params.host = Some("127.0.0.1".to_string());
             new_params.port = Some(tunnel.local_port);
+            // See params_through_tunnel: the socket path must not survive past
+            // tunnel resolution, or drivers would bypass the tunnel.
+            new_params.unix_socket_path = None;
             return Ok(new_params);
         }
     }
@@ -336,6 +342,7 @@ fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, Str
     new_params.k8s_enabled = Some(false);
     new_params.host = Some("127.0.0.1".to_string());
     new_params.port = Some(local_port);
+    new_params.unix_socket_path = None;
     Ok(new_params)
 }
 
@@ -1893,6 +1900,7 @@ pub async fn expand_k8s_connection_params<R: Runtime>(
             new_params.k8s_enabled = Some(false);
             new_params.host = Some("127.0.0.1".to_string());
             new_params.port = Some(tunnel.local_port);
+            new_params.unix_socket_path = None;
             return Ok(new_params);
         }
     }
@@ -1932,6 +1940,7 @@ pub async fn expand_k8s_connection_params<R: Runtime>(
     new_params.k8s_enabled = Some(false);
     new_params.host = Some("127.0.0.1".to_string());
     new_params.port = Some(local_port);
+    new_params.unix_socket_path = None;
     Ok(new_params)
 }
 
@@ -2089,6 +2098,19 @@ mod tests {
         assert_eq!(resolved.host.as_deref(), Some("127.0.0.1"));
         assert_eq!(resolved.port, Some(15000));
         assert_eq!(resolved.ssl_mode.as_deref(), Some("disable"));
+    }
+
+    #[test]
+    fn tunnel_params_clear_local_socket_path() {
+        // A leftover local socket path would make the drivers dial the socket
+        // instead of the tunnel's forwarded local port.
+        let params = ConnectionParams {
+            unix_socket_path: Some("/tmp/db.sock".to_string()),
+            ..base_params()
+        };
+        let destination = ssh_forward_destination(&params);
+        let resolved = params_through_tunnel(&params, 15000, &destination);
+        assert_eq!(resolved.unix_socket_path, None);
     }
 
     fn saved_conn(id: &str, password: Option<&str>, save_in_keychain: bool) -> SavedConnection {

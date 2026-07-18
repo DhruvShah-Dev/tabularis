@@ -48,7 +48,7 @@ import { K8sAdvancedSettings } from "../ui/K8sAdvancedSettings";
 import { isMultiDatabaseCapable } from "../../utils/database";
 import { toErrorMessage } from "../../utils/errors";
 import { fetchConnectionWithCredentials } from "../../utils/credentials";
-import { sshForwardSocketPathIssue } from "../../utils/connections";
+import { unixSocketPathIssue } from "../../utils/connections";
 import { getDriverIcon, getDriverColorStyle } from "../../utils/driverUI";
 import {
   parseConnectionString,
@@ -83,6 +83,8 @@ interface ConnectionParams {
   ssh_key_passphrase?: string;
   ssh_allow_passphrase_prompt?: boolean;
   ssh_forward_unix_socket_path?: string;
+  // Local Unix socket the drivers dial instead of host:port (no tunnel)
+  unix_socket_path?: string;
   save_in_keychain?: boolean;
   // K8s
   k8s_enabled?: boolean;
@@ -425,6 +427,7 @@ export const NewConnectionModal = ({
     !noConnectionRequired &&
     activeDriver?.capabilities?.file_based === false &&
     !activeDriver?.capabilities?.folder_based;
+  const supportsUnixSocket = activeDriver?.capabilities?.unix_socket === true;
   const k8sDefaultPort = activeDriver?.default_port ?? undefined;
   // Derive K8s ports instead of seeding formData so edit flows with no saved port are covered.
   const getK8sAutoPort = (params: Partial<ConnectionParams>) =>
@@ -1132,8 +1135,16 @@ export const NewConnectionModal = ({
   const usesForwardSocket =
     !!formData.ssh_enabled &&
     !!formData.ssh_forward_unix_socket_path?.trim();
-  const forwardSocketPathIssue = sshForwardSocketPathIssue(
+  const forwardSocketPathIssue = unixSocketPathIssue(
     formData.ssh_forward_unix_socket_path ?? "",
+  );
+  const tunnelEnabled = !!formData.ssh_enabled || !!formData.k8s_enabled;
+  const usesLocalSocket =
+    supportsUnixSocket &&
+    !tunnelEnabled &&
+    !!formData.unix_socket_path?.trim();
+  const localSocketPathIssue = unixSocketPathIssue(
+    formData.unix_socket_path ?? "",
   );
 
   const loadDatabases = async (
@@ -1879,7 +1890,7 @@ export const NewConnectionModal = ({
               value={formData.host}
               onChange={(v) => updateField("host", v)}
               placeholder="localhost"
-              disabled={usesForwardSocket}
+              disabled={usesForwardSocket || usesLocalSocket}
             />
             <FieldInput
               label={t("newConnection.port")}
@@ -1887,9 +1898,50 @@ export const NewConnectionModal = ({
               onChange={(v) => updateField("port", v)}
               type="number"
               placeholder={driver === "mysql" ? "3306" : "5432"}
-              disabled={usesForwardSocket}
+              disabled={usesForwardSocket || usesLocalSocket}
             />
           </div>
+
+          {/* Local Unix socket instead of host:port (drivers with the unix_socket capability, no tunnel) */}
+          {supportsUnixSocket && (
+            <div className="flex flex-col gap-1">
+              <FieldInput
+                label={t("newConnection.localSocketPath")}
+                value={formData.unix_socket_path}
+                onChange={(v) => updateField("unix_socket_path", v)}
+                placeholder={
+                  driver === "postgres"
+                    ? "/var/run/postgresql/.s.PGSQL.5432"
+                    : "/tmp/mysql.sock"
+                }
+                disabled={tunnelEnabled}
+              />
+              {tunnelEnabled && (
+                <p className="text-[10px] text-muted mt-0.5">
+                  {t("newConnection.localSocketPathTunnel")}
+                </p>
+              )}
+              {!tunnelEnabled && localSocketPathIssue === "notAbsolute" && (
+                <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
+                  <AlertCircle size={10} />{" "}
+                  {t("newConnection.localSocketPathNotAbsolute")}
+                </p>
+              )}
+              {!tunnelEnabled && localSocketPathIssue === "looksLikeDirectory" && (
+                <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
+                  <AlertCircle size={10} />{" "}
+                  {t("newConnection.localSocketPathDirectory")}
+                </p>
+              )}
+              {!tunnelEnabled && !localSocketPathIssue && (
+                <p className="text-[10px] text-muted mt-0.5">
+                  {usesLocalSocket
+                    ? t("newConnection.localSocketPathActive")
+                    : t("newConnection.localSocketPathHint")}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* User + Password */}
           <div className="grid grid-cols-2 gap-3">
@@ -1928,7 +1980,9 @@ export const NewConnectionModal = ({
                     void loadDatabases();
                   }}
                   disabled={
-                    loadingDatabases || !formData.host || !formData.username
+                    loadingDatabases ||
+                    (!formData.host && !usesLocalSocket) ||
+                    !formData.username
                   }
                   className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed transition-colors"
                 >
@@ -2104,7 +2158,11 @@ export const NewConnectionModal = ({
           onClick={() => {
             void loadDatabases();
           }}
-          disabled={loadingDatabases || !formData.host || !formData.username}
+          disabled={
+            loadingDatabases ||
+            (!formData.host && !usesLocalSocket) ||
+            !formData.username
+          }
           className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:text-muted disabled:cursor-not-allowed transition-colors shrink-0"
         >
           {loadingDatabases ? (

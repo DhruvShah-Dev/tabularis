@@ -1579,6 +1579,7 @@ impl MysqlDriver {
                     readonly: false,
                     triggers: true,
                     supports_ssl: true,
+                    unix_socket: true,
                     sql_dialect: SqlDialect::Mysql,
                 },
                 is_builtin: true,
