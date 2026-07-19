@@ -767,6 +767,7 @@
       "categories_notebook": "ノートブック",
       "pasteImportClipboard": "クリップボードからインポート",
       "quickNavigator": "クイックナビゲーター",
+      "commandPaletteActions": "アクションを検索",
       "triggerSuggestions": "候補を表示",
       "formatSql": "SQLをフォーマット",
       "refreshTable": "テーブルを更新"
@@ -2007,6 +2008,29 @@
     "runButton": "実行",
     "runTabPrefix": "実行",
     "returnValue": "戻り値"
+  },
+  "commandPalette": {
+    "title": "コマンドパレット",
+    "searchLabel": "コマンドを検索",
+    "placeholders": {
+      "all": "すべてを検索...",
+      "actions": "アクションを検索...",
+      "objects": "データベースオブジェクトを検索...",
+      "connections": "接続を検索..."
+    },
+    "executionError": "アクションを実行できませんでした",
+    "noResults": "一致するアクションがありません",
+    "navigationHint": "↑↓ 移動",
+    "executeHint": "Enter 実行",
+    "escapeHint": "Esc 閉じる",
+    "categories": {
+      "navigation": "ナビゲーション",
+      "table": "テーブル"
+    },
+    "commands": {
+      "openSettings": "設定を開く",
+      "openTableInConsole": "現在のテーブルをSQLコンソールで開く"
+    }
   },
   "pagination": {
     "firstPage": "最初のページ",

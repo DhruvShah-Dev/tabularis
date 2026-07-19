@@ -75,7 +75,7 @@ export const CommandPaletteProvider = ({
         navigationCategory: t("commandPalette.categories.navigation"),
         tableCategory: t("commandPalette.categories.table"),
       }),
-    [context.resource, t],
+    [context, t],
   );
 
   const commands = useMemo(

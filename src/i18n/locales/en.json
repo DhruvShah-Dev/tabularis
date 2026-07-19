@@ -796,6 +796,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Import from Clipboard",
       "quickNavigator": "Quick Navigator",
+      "commandPaletteActions": "Search actions",
       "triggerSuggestions": "Trigger suggestions",
       "formatSql": "Format SQL",
       "refreshTable": "Refresh table"
@@ -2078,6 +2079,29 @@
     "runButton": "Run",
     "runTabPrefix": "Run",
     "returnValue": "returns"
+  },
+  "commandPalette": {
+    "title": "Command Palette",
+    "searchLabel": "Search commands",
+    "placeholders": {
+      "all": "Search everything...",
+      "actions": "Search actions...",
+      "objects": "Search database objects...",
+      "connections": "Search connections..."
+    },
+    "executionError": "The action could not be completed",
+    "noResults": "No matching actions found",
+    "navigationHint": "↑↓ Navigate",
+    "executeHint": "Enter Execute",
+    "escapeHint": "Esc Close",
+    "categories": {
+      "navigation": "Navigation",
+      "table": "Table"
+    },
+    "commands": {
+      "openSettings": "Open settings",
+      "openTableInConsole": "Open current table in SQL console"
+    }
   },
   "pagination": {
     "firstPage": "First page",

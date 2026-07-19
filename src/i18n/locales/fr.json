@@ -787,6 +787,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Importer depuis le Presse-papiers",
       "quickNavigator": "Navigateur rapide",
+      "commandPaletteActions": "Rechercher des actions",
       "triggerSuggestions": "Afficher les suggestions",
       "formatSql": "Formater SQL",
       "refreshTable": "Actualiser la table"
@@ -2067,6 +2068,29 @@
     "runButton": "Exécuter",
     "runTabPrefix": "Exécuter",
     "returnValue": "retourne"
+  },
+  "commandPalette": {
+    "title": "Palette de commandes",
+    "searchLabel": "Rechercher des commandes",
+    "placeholders": {
+      "all": "Tout rechercher...",
+      "actions": "Rechercher des actions...",
+      "objects": "Rechercher des objets de base de données...",
+      "connections": "Rechercher des connexions..."
+    },
+    "executionError": "L’action n’a pas pu être exécutée",
+    "noResults": "Aucune action correspondante",
+    "navigationHint": "↑↓ Naviguer",
+    "executeHint": "Entrée Exécuter",
+    "escapeHint": "Échap Fermer",
+    "categories": {
+      "navigation": "Navigation",
+      "table": "Table"
+    },
+    "commands": {
+      "openSettings": "Ouvrir les paramètres",
+      "openTableInConsole": "Ouvrir la table actuelle dans la console SQL"
+    }
   },
   "pagination": {
     "firstPage": "Première page",

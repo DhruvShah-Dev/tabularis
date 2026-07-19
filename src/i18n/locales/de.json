@@ -753,6 +753,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Aus Zwischenablage importieren",
       "quickNavigator": "Schnellnavigation",
+      "commandPaletteActions": "Aktionen suchen",
       "triggerSuggestions": "Vorschläge anzeigen",
       "formatSql": "SQL formatieren",
       "refreshTable": "Tabelle aktualisieren"
@@ -1989,6 +1990,29 @@
     "runButton": "Ausführen",
     "runTabPrefix": "Ausführen",
     "returnValue": "Rückgabe"
+  },
+  "commandPalette": {
+    "title": "Befehlspalette",
+    "searchLabel": "Befehle suchen",
+    "placeholders": {
+      "all": "Alles durchsuchen...",
+      "actions": "Aktionen suchen...",
+      "objects": "Datenbankobjekte suchen...",
+      "connections": "Verbindungen suchen..."
+    },
+    "executionError": "Die Aktion konnte nicht ausgeführt werden",
+    "noResults": "Keine passenden Aktionen gefunden",
+    "navigationHint": "↑↓ Navigieren",
+    "executeHint": "Enter Ausführen",
+    "escapeHint": "Esc Schließen",
+    "categories": {
+      "navigation": "Navigation",
+      "table": "Tabelle"
+    },
+    "commands": {
+      "openSettings": "Einstellungen öffnen",
+      "openTableInConsole": "Aktuelle Tabelle in SQL-Konsole öffnen"
+    }
   },
   "pagination": {
     "firstPage": "Erste Seite",

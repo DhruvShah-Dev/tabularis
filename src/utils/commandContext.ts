@@ -41,8 +41,12 @@ export function createCommandContext(
     activeTab,
     pathname,
   } = options;
+  const isEditor = pathname === "/editor";
   const resource =
-    activeConnectionId && activeTab?.type === "table" && activeTab.activeTable
+    isEditor &&
+    activeConnectionId &&
+    activeTab?.type === "table" &&
+    activeTab.activeTable
       ? {
           type: "table" as const,
           connectionId: activeTab.connectionId,
@@ -50,13 +54,13 @@ export function createCommandContext(
           database: activeDatabaseName ?? undefined,
           schema: activeTab.schema ?? activeSchema ?? undefined,
         }
-      : activeConnectionId && activeTab?.type === "console"
+      : isEditor && activeConnectionId && activeTab?.type === "console"
         ? {
             type: "console" as const,
             connectionId: activeTab.connectionId,
             tabId: activeTab.id,
           }
-        : activeConnectionId
+        : pathname === "/connections" && activeConnectionId
           ? {
               type: "connection" as const,
               connectionId: activeConnectionId,

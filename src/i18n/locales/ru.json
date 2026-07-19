@@ -746,6 +746,7 @@
       "categories_notebook": "Ноутбук",
       "pasteImportClipboard": "Импортировать из буфера обмена",
       "quickNavigator": "Быстрый навигатор",
+      "commandPaletteActions": "Поиск действий",
       "triggerSuggestions": "Показать подсказки",
       "formatSql": "Форматировать SQL",
       "refreshTable": "Обновить таблицу"
@@ -2060,6 +2061,29 @@
     "runButton": "Выполнить",
     "runTabPrefix": "Выполнить",
     "returnValue": "возвращает"
+  },
+  "commandPalette": {
+    "title": "Панель команд",
+    "searchLabel": "Поиск команд",
+    "placeholders": {
+      "all": "Искать везде...",
+      "actions": "Искать действия...",
+      "objects": "Искать объекты базы данных...",
+      "connections": "Искать подключения..."
+    },
+    "executionError": "Не удалось выполнить действие",
+    "noResults": "Подходящие действия не найдены",
+    "navigationHint": "↑↓ Навигация",
+    "executeHint": "Enter Выполнить",
+    "escapeHint": "Esc Закрыть",
+    "categories": {
+      "navigation": "Навигация",
+      "table": "Таблица"
+    },
+    "commands": {
+      "openSettings": "Открыть настройки",
+      "openTableInConsole": "Открыть текущую таблицу в SQL-консоли"
+    }
   },
   "pagination": {
     "firstPage": "Первая страница",

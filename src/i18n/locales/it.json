@@ -778,6 +778,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Importa dagli Appunti",
       "quickNavigator": "Navigatore rapido",
+      "commandPaletteActions": "Cerca azioni",
       "triggerSuggestions": "Mostra suggerimenti",
       "formatSql": "Formatta SQL",
       "refreshTable": "Aggiorna tabella"
@@ -1991,6 +1992,29 @@
     "runButton": "Esegui",
     "runTabPrefix": "Esegui",
     "returnValue": "ritorna"
+  },
+  "commandPalette": {
+    "title": "Tavolozza dei comandi",
+    "searchLabel": "Cerca comandi",
+    "placeholders": {
+      "all": "Cerca ovunque...",
+      "actions": "Cerca azioni...",
+      "objects": "Cerca oggetti del database...",
+      "connections": "Cerca connessioni..."
+    },
+    "executionError": "Impossibile completare l’azione",
+    "noResults": "Nessuna azione corrispondente",
+    "navigationHint": "↑↓ Naviga",
+    "executeHint": "Invio Esegui",
+    "escapeHint": "Esc Chiudi",
+    "categories": {
+      "navigation": "Navigazione",
+      "table": "Tabella"
+    },
+    "commands": {
+      "openSettings": "Apri impostazioni",
+      "openTableInConsole": "Apri la tabella corrente nella console SQL"
+    }
   },
   "pagination": {
     "firstPage": "Prima pagina",

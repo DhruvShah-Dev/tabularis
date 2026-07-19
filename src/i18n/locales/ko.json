@@ -730,7 +730,8 @@
       "categories_notebook": "노트북",
       "pasteImportClipboard": "클립보드에서 가져오기",
       "quickNavigator": "빠른 탐색기",
-      "formatSql": "SQL 포맷"
+      "formatSql": "SQL 포맷",
+      "commandPaletteActions": "작업 검색"
     },
     "aiActivity": "AI 활동",
     "backup": {
@@ -1993,6 +1994,29 @@
     "runButton": "실행",
     "runTabPrefix": "실행",
     "returnValue": "반환"
+  },
+  "commandPalette": {
+    "title": "명령 팔레트",
+    "searchLabel": "명령 검색",
+    "placeholders": {
+      "all": "전체 검색...",
+      "actions": "작업 검색...",
+      "objects": "데이터베이스 개체 검색...",
+      "connections": "연결 검색..."
+    },
+    "executionError": "작업을 완료할 수 없습니다",
+    "noResults": "일치하는 작업이 없습니다",
+    "navigationHint": "↑↓ 이동",
+    "executeHint": "Enter 실행",
+    "escapeHint": "Esc 닫기",
+    "categories": {
+      "navigation": "탐색",
+      "table": "테이블"
+    },
+    "commands": {
+      "openSettings": "설정 열기",
+      "openTableInConsole": "현재 테이블을 SQL 콘솔에서 열기"
+    }
   },
   "pagination": {
     "firstPage": "첫 페이지",

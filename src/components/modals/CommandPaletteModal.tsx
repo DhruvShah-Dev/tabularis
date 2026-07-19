@@ -67,7 +67,7 @@ export const CommandPaletteModal = () => {
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setSelectedIndex((current) =>
+      setSelectedIndex(
         results.length === 0 ? 0 : (activeIndex + 1) % results.length,
       );
       return;
@@ -75,7 +75,7 @@ export const CommandPaletteModal = () => {
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      setSelectedIndex(() =>
+      setSelectedIndex(
         results.length === 0
           ? 0
           : (activeIndex - 1 + results.length) % results.length,
