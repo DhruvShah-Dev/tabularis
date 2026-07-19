@@ -17,14 +17,14 @@ export function createCommandContext(
     activeTab,
     pathname,
   } = options;
-  const isEditor = pathname === "/editor";
-  const isTable =
-    isEditor &&
-    activeConnectionId !== null &&
-    activeTab?.type === "table" &&
-    activeTab.activeTable !== null;
-
-  if (!isTable) return { resource: { type: "none" } };
+  if (
+    pathname !== "/editor" ||
+    activeConnectionId === null ||
+    activeTab?.type !== "table" ||
+    activeTab.activeTable === null
+  ) {
+    return { resource: { type: "none" } };
+  }
 
   return {
     resource: {
