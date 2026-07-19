@@ -98,4 +98,16 @@ describe("CommandPaletteModal", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
+
+  it("should clear its busy state after successful execution", async () => {
+    const { executeCommand } = renderPalette();
+
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
+
+    await waitFor(() => expect(executeCommand).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("dialog")).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
+  });
 });

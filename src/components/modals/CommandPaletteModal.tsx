@@ -53,6 +53,7 @@ export const CommandPaletteModal = () => {
       restoreFocus();
     } catch {
       setExecutionError(t("commandPalette.executionError"));
+    } finally {
       setIsExecuting(false);
     }
   };

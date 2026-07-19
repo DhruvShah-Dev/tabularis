@@ -80,6 +80,7 @@ export const SpotlightPalette = ({
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
+        aria-busy={isBusy}
         className="flex max-h-[60vh] w-[min(640px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-strong bg-elevated shadow-2xl"
       >
         <div className="flex items-center gap-3 border-b border-default bg-base px-4 py-3">
