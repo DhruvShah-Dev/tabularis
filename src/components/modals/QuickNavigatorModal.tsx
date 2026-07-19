@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Search, X, Table, Eye, Code2, Zap, Database, Play, Copy, Hash, FileText, FileCode } from "lucide-react";
+import { Table, Eye, Code2, Zap, Database, Play, Copy, Hash, FileText, FileCode } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useAlert } from "../../hooks/useAlert";
@@ -10,6 +10,7 @@ import { isMultiDatabaseCapable, getDatabaseList } from "../../utils/database";
 import { getNavigatorItems, filterNavigatorItems } from "../../utils/quickNavigator";
 import { newConsoleForTable } from "../../utils/newConsole";
 import type { RoutineInfo, TriggerInfo } from "../../contexts/DatabaseContext";
+import { SpotlightPalette } from "../ui/SpotlightPalette";
 
 interface QuickNavigatorModalProps {
   isOpen: boolean;
@@ -277,81 +278,45 @@ export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql, onInspect 
     });
   }, [activeConnectionId, activeDriver, navigate, onClose]);
 
-  // Keyboard navigation
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSelectedIndex((prev) =>
-          filteredItems.length > 0 ? (prev + 1) % filteredItems.length : 0
-        );
-        return;
-      }
-
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSelectedIndex((prev) =>
-          filteredItems.length > 0
-            ? (prev - 1 + filteredItems.length) % filteredItems.length
-            : 0
-        );
-        return;
-      }
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const activeItem = filteredItems[selectedIndex];
-        if (activeItem) {
-          handleSelect(activeItem);
-        }
-        return;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [isOpen, filteredItems, selectedIndex, handleSelect, onClose]);
-
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-start justify-center z-[100] backdrop-blur-sm pt-[15vh]"
-      onClick={onClose}
+    <SpotlightPalette
+      ariaLabel={t("settings.shortcuts.quickNavigator")}
+      searchLabel={t("editor.quickNavigator.placeholder")}
+      closeLabel={t("common.close")}
+      placeholder={t("editor.quickNavigator.placeholder")}
+      query={search}
+      itemCount={filteredItems.length}
+      selectedIndex={selectedIndex}
+      onClose={onClose}
+      onQueryChange={setSearch}
+      onSelectedIndexChange={setSelectedIndex}
+      onSubmit={(index) => {
+        const item = filteredItems[index];
+        if (item) void handleSelect(item);
+      }}
+      resultsId="quick-navigator-results"
+      footer={
+        <>
+          <span>
+            {filteredItems.length === 1
+              ? t("editor.quickNavigator.count_one")
+              : t("editor.quickNavigator.count_other", { count: filteredItems.length })}
+          </span>
+          <div className="flex gap-4">
+            <span>{t("editor.quickNavigator.navigationHint")}</span>
+            <span>{t("editor.quickNavigator.escHint")}</span>
+          </div>
+        </>
+      }
     >
-      <div
-        className="bg-elevated border border-strong rounded-xl shadow-2xl w-[600px] max-h-[60vh] overflow-hidden flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Search Header */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-default bg-base">
-          <Search size={18} className="text-secondary shrink-0" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setSelectedIndex(0);
-            }}
-            className="flex-1 bg-transparent text-primary placeholder-muted outline-none text-sm"
-            placeholder={t("editor.quickNavigator.placeholder")}
-            autoFocus
-          />
-          <button onClick={onClose} className="text-secondary hover:text-primary transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Results List */}
-        <div ref={listRef} className="overflow-y-auto flex-1 flex flex-col py-1">
+        <div
+          id="quick-navigator-results"
+          ref={listRef}
+          role="listbox"
+          className="overflow-y-auto flex-1 flex flex-col py-1"
+        >
           {filteredItems.length === 0 ? (
             <div className="px-4 py-8 text-center text-muted text-sm">
               {t("editor.quickNavigator.noResults")}
@@ -498,19 +463,6 @@ export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql, onInspect 
           )}
         </div>
 
-        {/* Footer info & keyboard guides */}
-        <div className="px-4 py-2 border-t border-default bg-base/50 flex justify-between text-[11px] text-muted select-none">
-          <span>
-            {filteredItems.length === 1
-              ? t("editor.quickNavigator.count_one")
-              : t("editor.quickNavigator.count_other", { count: filteredItems.length })}
-          </span>
-          <div className="flex gap-4">
-            <span>{t("editor.quickNavigator.navigationHint")}</span>
-            <span>{t("editor.quickNavigator.escHint")}</span>
-          </div>
-        </div>
-      </div>
-    </div>
+    </SpotlightPalette>
   );
 };
