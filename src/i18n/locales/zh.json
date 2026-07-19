@@ -1934,12 +1934,7 @@
   "commandPalette": {
     "title": "命令面板",
     "searchLabel": "搜索命令",
-    "placeholders": {
-      "all": "搜索全部内容...",
-      "actions": "搜索操作...",
-      "objects": "搜索数据库对象...",
-      "connections": "搜索连接..."
-    },
+    "placeholder": "搜索操作...",
     "executionError": "无法完成操作",
     "noResults": "未找到匹配的操作",
     "navigationHint": "↑↓ 导航",

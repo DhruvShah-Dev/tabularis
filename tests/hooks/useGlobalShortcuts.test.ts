@@ -50,7 +50,7 @@ describe("useGlobalShortcuts", () => {
       shiftKey: true,
     });
 
-    expect(openPaletteMock).toHaveBeenCalledWith("actions");
+    expect(openPaletteMock).toHaveBeenCalledWith();
     input.remove();
   });
 });

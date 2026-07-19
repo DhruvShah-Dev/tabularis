@@ -10,7 +10,6 @@ const settingsCommand: CommandDefinition = {
   id: "settings",
   title: "Open settings",
   category: "Navigation",
-  modes: ["actions"],
   execute: vi.fn(),
 };
 
@@ -18,7 +17,6 @@ const consoleCommand: CommandDefinition = {
   id: "console",
   title: "Open table in console",
   category: "Table",
-  modes: ["actions"],
   execute: vi.fn(),
 };
 
@@ -29,25 +27,9 @@ function renderPalette(
   const executeCommand = vi.fn().mockResolvedValue(undefined);
   const commands = [settingsCommand, consoleCommand];
   const value: CommandPaletteContextType = {
-    commands,
-    context: {
-      surface: "table",
-      connectionId: "connection-1",
-      driver: "postgres",
-      database: "app",
-      schema: "public",
-      resource: {
-        type: "table",
-        connectionId: "connection-1",
-        tableName: "users",
-        schema: "public",
-      },
-    },
     isOpen: true,
-    mode: "actions",
     openPalette: vi.fn(),
     closePalette,
-    registerCommand: vi.fn(),
     getResults: (query) =>
       commands
         .filter((command) =>

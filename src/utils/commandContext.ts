@@ -1,33 +1,11 @@
-import type {
-  CommandContext,
-  CommandSurface,
-} from "../types/commands";
-
-interface CommandContextTab {
-  id: string;
-  type: "console" | "table" | "query_builder" | "notebook";
-  connectionId: string;
-  activeTable: string | null;
-  schema?: string;
-}
+import type { CommandContext } from "../types/commands";
+import type { Tab } from "../types/editor";
 
 interface CreateCommandContextOptions {
   pathname: string;
   activeConnectionId: string | null;
-  activeDriver: string | null;
-  activeDatabaseName: string | null;
   activeSchema: string | null;
-  activeTab: CommandContextTab | null;
-}
-
-function getSurface(pathname: string, activeTabType?: string): CommandSurface {
-  if (pathname === "/connections") return "connections";
-  if (pathname === "/settings") return "settings";
-  if (pathname === "/schema-diagram") return "schema-diagram";
-  if (pathname !== "/editor") return "other";
-  if (activeTabType === "table") return "table";
-  if (activeTabType === "notebook") return "notebook";
-  return "console";
+  activeTab: Pick<Tab, "type" | "activeTable" | "schema"> | null;
 }
 
 export function createCommandContext(
@@ -35,44 +13,24 @@ export function createCommandContext(
 ): CommandContext {
   const {
     activeConnectionId,
-    activeDatabaseName,
-    activeDriver,
     activeSchema,
     activeTab,
     pathname,
   } = options;
   const isEditor = pathname === "/editor";
-  const resource =
+  const isTable =
     isEditor &&
-    activeConnectionId &&
+    activeConnectionId !== null &&
     activeTab?.type === "table" &&
-    activeTab.activeTable
-      ? {
-          type: "table" as const,
-          connectionId: activeTab.connectionId,
-          tableName: activeTab.activeTable,
-          database: activeDatabaseName ?? undefined,
-          schema: activeTab.schema ?? activeSchema ?? undefined,
-        }
-      : isEditor && activeConnectionId && activeTab?.type === "console"
-        ? {
-            type: "console" as const,
-            connectionId: activeTab.connectionId,
-            tabId: activeTab.id,
-          }
-        : pathname === "/connections" && activeConnectionId
-          ? {
-              type: "connection" as const,
-              connectionId: activeConnectionId,
-            }
-          : { type: "none" as const };
+    activeTab.activeTable !== null;
+
+  if (!isTable) return { resource: { type: "none" } };
 
   return {
-    surface: getSurface(pathname, activeTab?.type),
-    connectionId: activeConnectionId,
-    driver: activeDriver,
-    database: activeDatabaseName,
-    schema: activeTab?.schema ?? activeSchema,
-    resource,
+    resource: {
+      type: "table",
+      tableName: activeTab.activeTable,
+      schema: activeTab.schema ?? activeSchema ?? undefined,
+    },
   };
 }

@@ -80,7 +80,7 @@ export function useGlobalShortcuts() {
 
       if (matchesShortcut(e, "command_palette_actions")) {
         e.preventDefault();
-        openPalette("actions");
+        openPalette();
         return;
       }
 

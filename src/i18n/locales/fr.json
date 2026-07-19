@@ -2072,12 +2072,7 @@
   "commandPalette": {
     "title": "Palette de commandes",
     "searchLabel": "Rechercher des commandes",
-    "placeholders": {
-      "all": "Tout rechercher...",
-      "actions": "Rechercher des actions...",
-      "objects": "Rechercher des objets de base de données...",
-      "connections": "Rechercher des connexions..."
-    },
+    "placeholder": "Rechercher des actions...",
     "executionError": "L’action n’a pas pu être exécutée",
     "noResults": "Aucune action correspondante",
     "navigationHint": "↑↓ Naviguer",

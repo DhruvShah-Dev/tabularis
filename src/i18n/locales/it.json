@@ -1996,12 +1996,7 @@
   "commandPalette": {
     "title": "Tavolozza dei comandi",
     "searchLabel": "Cerca comandi",
-    "placeholders": {
-      "all": "Cerca ovunque...",
-      "actions": "Cerca azioni...",
-      "objects": "Cerca oggetti del database...",
-      "connections": "Cerca connessioni..."
-    },
+    "placeholder": "Cerca azioni...",
     "executionError": "Impossibile completare l’azione",
     "noResults": "Nessuna azione corrispondente",
     "navigationHint": "↑↓ Naviga",

@@ -2012,12 +2012,7 @@
   "commandPalette": {
     "title": "コマンドパレット",
     "searchLabel": "コマンドを検索",
-    "placeholders": {
-      "all": "すべてを検索...",
-      "actions": "アクションを検索...",
-      "objects": "データベースオブジェクトを検索...",
-      "connections": "接続を検索..."
-    },
+    "placeholder": "アクションを検索...",
     "executionError": "アクションを実行できませんでした",
     "noResults": "一致するアクションがありません",
     "navigationHint": "↑↓ 移動",

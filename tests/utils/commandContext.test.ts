@@ -15,16 +15,14 @@ describe("createCommandContext", () => {
     const context = createCommandContext({
       pathname: "/editor",
       activeConnectionId: "connection-1",
-      activeDriver: "postgres",
-      activeDatabaseName: "app",
       activeSchema: "public",
       activeTab: tableTab,
     });
 
-    expect(context.surface).toBe("table");
-    expect(context.resource).toMatchObject({
+    expect(context.resource).toEqual({
       type: "table",
       tableName: "users",
+      schema: "public",
     });
   });
 
@@ -32,13 +30,10 @@ describe("createCommandContext", () => {
     const context = createCommandContext({
       pathname: "/settings",
       activeConnectionId: "connection-1",
-      activeDriver: "postgres",
-      activeDatabaseName: "app",
       activeSchema: "public",
       activeTab: tableTab,
     });
 
-    expect(context.surface).toBe("settings");
     expect(context.resource).toEqual({ type: "none" });
   });
 });

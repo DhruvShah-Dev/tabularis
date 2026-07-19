@@ -1994,12 +1994,7 @@
   "commandPalette": {
     "title": "Befehlspalette",
     "searchLabel": "Befehle suchen",
-    "placeholders": {
-      "all": "Alles durchsuchen...",
-      "actions": "Aktionen suchen...",
-      "objects": "Datenbankobjekte suchen...",
-      "connections": "Verbindungen suchen..."
-    },
+    "placeholder": "Aktionen suchen...",
     "executionError": "Die Aktion konnte nicht ausgeführt werden",
     "noResults": "Keine passenden Aktionen gefunden",
     "navigationHint": "↑↓ Navigieren",

@@ -1998,12 +1998,7 @@
   "commandPalette": {
     "title": "명령 팔레트",
     "searchLabel": "명령 검색",
-    "placeholders": {
-      "all": "전체 검색...",
-      "actions": "작업 검색...",
-      "objects": "데이터베이스 개체 검색...",
-      "connections": "연결 검색..."
-    },
+    "placeholder": "작업 검색...",
     "executionError": "작업을 완료할 수 없습니다",
     "noResults": "일치하는 작업이 없습니다",
     "navigationHint": "↑↓ 이동",

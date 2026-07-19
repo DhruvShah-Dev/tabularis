@@ -13,7 +13,6 @@ export const CommandPaletteModal = () => {
     executeCommand,
     getResults,
     isOpen,
-    mode,
   } = useCommandPalette();
   const previousFocusRef = useRef<HTMLElement | null>(
     document.activeElement instanceof HTMLElement
@@ -26,8 +25,8 @@ export const CommandPaletteModal = () => {
   const [executionError, setExecutionError] = useState<string | null>(null);
 
   const results = useMemo(
-    () => getResults(query, mode),
-    [getResults, mode, query],
+    () => getResults(query),
+    [getResults, query],
   );
   const activeIndex = Math.min(
     selectedIndex,
@@ -63,7 +62,7 @@ export const CommandPaletteModal = () => {
       ariaLabel={t("commandPalette.title")}
       searchLabel={t("commandPalette.searchLabel")}
       closeLabel={t("common.close")}
-      placeholder={t(`commandPalette.placeholders.${mode}`)}
+      placeholder={t("commandPalette.placeholder")}
       query={query}
       itemCount={results.length}
       selectedIndex={activeIndex}

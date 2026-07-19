@@ -6,34 +6,11 @@ import type {
   ResolveCommandsOptions,
 } from "../types/commands";
 
-export function addCommand(
-  commands: CommandDefinition[],
-  command: CommandDefinition,
-): CommandDefinition[] {
-  if (commands.some((registered) => registered.id === command.id)) {
-    throw new Error(`Command "${command.id}" is already registered`);
-  }
-
-  return [...commands, command];
-}
-
-export function removeCommand(
-  commands: CommandDefinition[],
-  commandId: string,
-): CommandDefinition[] {
-  return commands.filter((command) => command.id !== commandId);
-}
-
 export function resolveCommands(
   commands: CommandDefinition[],
   options: ResolveCommandsOptions,
 ): CommandResult[] {
-  const eligible = commands
-    .filter(
-      (command) =>
-        options.mode === "all" || command.modes.includes(options.mode),
-    )
-    .filter(
+  const eligible = commands.filter(
       (command) =>
         !command.isAvailable || command.isAvailable(options.context),
     );

@@ -1916,12 +1916,7 @@
   "commandPalette": {
     "title": "Paleta de comandos",
     "searchLabel": "Buscar comandos",
-    "placeholders": {
-      "all": "Buscar en todo...",
-      "actions": "Buscar acciones...",
-      "objects": "Buscar objetos de base de datos...",
-      "connections": "Buscar conexiones..."
-    },
+    "placeholder": "Buscar acciones...",
     "executionError": "No se pudo completar la acción",
     "noResults": "No se encontraron acciones coincidentes",
     "navigationHint": "↑↓ Navegar",

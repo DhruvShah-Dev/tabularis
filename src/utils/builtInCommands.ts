@@ -20,7 +20,6 @@ export function createBuiltInCommands(
       title: labels.openSettings,
       category: labels.navigationCategory,
       keywords: ["preferences", "configuration"],
-      modes: ["actions"],
       execute: ({ navigate }) => navigate("/settings"),
     },
     {
@@ -32,11 +31,10 @@ export function createBuiltInCommands(
           : undefined,
       category: labels.tableCategory,
       keywords: ["sql", "query", "console"],
-      modes: ["actions"],
       isAvailable: (currentContext) =>
         currentContext.resource.type === "table",
       getRelevance: (currentContext) =>
-        currentContext.surface === "table" ? 100 : 0,
+        currentContext.resource.type === "table" ? 100 : 0,
       execute: (runtime, currentContext) => {
         if (currentContext.resource.type !== "table") return;
         runtime.openTableConsole(currentContext.resource);

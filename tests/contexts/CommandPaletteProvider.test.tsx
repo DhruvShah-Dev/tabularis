@@ -69,15 +69,10 @@ describe("CommandPaletteProvider", () => {
       </CommandPaletteProvider>,
     );
 
-    expect(palette!.commands.map((command) => command.id)).toEqual([
-      "app.open-settings",
+    expect(palette!.getResults("").map((result) => result.command.id)).toEqual([
       "table.open-in-console",
+      "app.open-settings",
     ]);
-    expect(
-      palette!
-        .getResults("", "actions")
-        .map((result) => result.command.id),
-    ).toContain("table.open-in-console");
   });
 
   it("should open the current table in a new SQL console", async () => {
@@ -89,9 +84,10 @@ describe("CommandPaletteProvider", () => {
       </CommandPaletteProvider>,
     );
 
-    const command = palette!.commands.find(
-      (candidate) => candidate.id === "table.open-in-console",
-    );
+    const command = palette!
+      .getResults("")
+      .find((result) => result.command.id === "table.open-in-console")
+      ?.command;
 
     await act(async () => {
       await palette!.executeCommand(command!);
@@ -106,34 +102,4 @@ describe("CommandPaletteProvider", () => {
     expect(navigateMock).toHaveBeenCalledWith("/editor");
   });
 
-  it("should register and unregister an external command", () => {
-    let palette: CommandPaletteContextType | undefined;
-
-    render(
-      <CommandPaletteProvider>
-        <ContextConsumer onContext={(context) => { palette = context; }} />
-      </CommandPaletteProvider>,
-    );
-
-    let unregister: (() => void) | undefined;
-    act(() => {
-      unregister = palette!.registerCommand({
-        id: "test.external",
-        title: "External command",
-        category: "test",
-        modes: ["actions"],
-        execute: vi.fn(),
-      });
-    });
-
-    expect(palette!.commands.map((command) => command.id)).toContain(
-      "test.external",
-    );
-
-    act(() => unregister!());
-
-    expect(palette!.commands.map((command) => command.id)).not.toContain(
-      "test.external",
-    );
-  });
 });
