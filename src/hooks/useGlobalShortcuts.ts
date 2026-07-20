@@ -72,15 +72,13 @@ export function useGlobalShortcuts() {
 
       if (matchesShortcut(e, "quick_navigator")) {
         e.preventDefault();
-        window.dispatchEvent(
-          new CustomEvent("tabularis:open-quick-navigator"),
-        );
+        openPalette("objects");
         return;
       }
 
       if (matchesShortcut(e, "command_palette_actions")) {
         e.preventDefault();
-        openPalette();
+        openPalette("actions");
         return;
       }
 

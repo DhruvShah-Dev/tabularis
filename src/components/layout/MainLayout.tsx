@@ -2,7 +2,6 @@ import { Outlet, useLocation } from "react-router-dom";
 
 import { CommandPaletteProvider } from "../../contexts/CommandPaletteProvider";
 import { useAutoConnectFromUrl } from "../../hooks/useAutoConnectFromUrl";
-import { useCommandPalette } from "../../hooks/useCommandPalette";
 import { useConnectionLayoutContext } from "../../hooks/useConnectionLayoutContext";
 import { useConnectionWindowLifecycle } from "../../hooks/useConnectionWindowLifecycle";
 import { useGlobalShortcuts } from "../../hooks/useGlobalShortcuts";
@@ -14,7 +13,6 @@ import { SplitPaneLayout } from "./SplitPaneLayout";
 
 const MainLayoutContent = () => {
   const { splitView, isSplitVisible } = useConnectionLayoutContext();
-  const { isOpen: isCommandPaletteOpen } = useCommandPalette();
   const location = useLocation();
   useGlobalShortcuts();
   useAutoConnectFromUrl();
@@ -35,7 +33,7 @@ const MainLayoutContent = () => {
         {showSplit ? <SplitPaneLayout {...splitView} /> : <Outlet />}
       </main>
       <RightSidebar />
-      {isCommandPaletteOpen && <CommandPaletteModal />}
+      <CommandPaletteModal />
     </div>
   );
 };

@@ -6,6 +6,38 @@ import type { CommandPaletteContextType } from "../../../src/contexts/CommandPal
 import { CommandPaletteModal } from "../../../src/components/modals/CommandPaletteModal";
 import type { CommandDefinition } from "../../../src/types/commands";
 
+vi.mock("../../../src/components/modals/QuickNavigatorModal", () => ({
+  QuickNavigatorModal: ({
+    onClose,
+    onGenerateSql,
+  }: {
+    onClose: () => void;
+    onGenerateSql?: (tableName: string) => void;
+  }) => (
+    <div role="dialog" aria-label="Object search">
+      <button
+        type="button"
+        onClick={() => {
+          onClose();
+          onGenerateSql?.("users");
+        }}
+      >
+        Generate SQL
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock("../../../src/components/modals/GenerateSQLModal", () => ({
+  GenerateSQLModal: ({ tableName }: { tableName: string }) => (
+    <div>Generate SQL for {tableName}</div>
+  ),
+}));
+
+vi.mock("../../../src/components/modals/SchemaModal", () => ({
+  SchemaModal: () => <div>Inspect table</div>,
+}));
+
 const settingsCommand: CommandDefinition = {
   id: "settings",
   title: "Open settings",
@@ -28,6 +60,7 @@ function renderPalette(
   const commands = [settingsCommand, consoleCommand];
   const value: CommandPaletteContextType = {
     isOpen: true,
+    mode: "actions",
     openPalette: vi.fn(),
     closePalette,
     getResults: (query) =>
@@ -109,5 +142,23 @@ describe("CommandPaletteModal", () => {
       "aria-busy",
       "false",
     );
+  });
+
+  it("should render the existing object navigator in objects mode", () => {
+    renderPalette({ mode: "objects" });
+
+    expect(
+      screen.getByRole("dialog", { name: "Object search" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Open settings")).not.toBeInTheDocument();
+  });
+
+  it("should preserve object quick actions in the shared host", () => {
+    const { closePalette } = renderPalette({ mode: "objects" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate SQL" }));
+
+    expect(closePalette).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Generate SQL for users")).toBeInTheDocument();
   });
 });

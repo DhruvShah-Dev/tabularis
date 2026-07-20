@@ -17,6 +17,7 @@ import { resolveCommands } from "../utils/commands";
 import type {
   CommandContext,
   CommandDefinition,
+  CommandPaletteMode,
   CommandRuntime,
 } from "../types/commands";
 
@@ -38,6 +39,7 @@ export const CommandPaletteProvider = ({
   const { activeTab, addTab } = useEditor();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState<CommandPaletteMode>("actions");
 
   const context = useMemo<CommandContext>(() => createCommandContext({
     pathname: location.pathname,
@@ -85,7 +87,11 @@ export const CommandPaletteProvider = ({
     [activeDriver, addTab, navigate],
   );
 
-  const openPalette = useCallback(() => setIsOpen(true), []);
+  const openPalette = useCallback((nextMode: CommandPaletteMode) => {
+    if (nextMode === "objects" && activeConnectionId === null) return;
+    setMode(nextMode);
+    setIsOpen(true);
+  }, [activeConnectionId]);
 
   const closePalette = useCallback(() => setIsOpen(false), []);
 
@@ -109,6 +115,7 @@ export const CommandPaletteProvider = ({
   const value = useMemo(
     () => ({
       isOpen,
+      mode,
       openPalette,
       closePalette,
       getResults,
@@ -119,6 +126,7 @@ export const CommandPaletteProvider = ({
       executeCommand,
       getResults,
       isOpen,
+      mode,
       openPalette,
     ],
   );

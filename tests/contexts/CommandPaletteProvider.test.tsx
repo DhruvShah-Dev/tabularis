@@ -9,7 +9,12 @@ import { CommandPaletteProvider } from "../../src/contexts/CommandPaletteProvide
 const navigateMock = vi.fn();
 const addTabMock = vi.fn(() => "console-tab");
 
-const databaseState = {
+const databaseState: {
+  activeConnectionId: string | null;
+  activeDriver: string | null;
+  activeDatabaseName: string | null;
+  activeSchema: string | null;
+} = {
   activeConnectionId: "connection-1",
   activeDriver: "postgres",
   activeDatabaseName: "app",
@@ -58,6 +63,7 @@ describe("CommandPaletteProvider", () => {
   beforeEach(() => {
     navigateMock.mockClear();
     addTabMock.mockClear();
+    databaseState.activeConnectionId = "connection-1";
   });
 
   it("should expose global and contextual built-in commands", () => {
@@ -73,6 +79,38 @@ describe("CommandPaletteProvider", () => {
       "table.open-in-console",
       "app.open-settings",
     ]);
+  });
+
+  it("should open the shared palette in the requested live mode", () => {
+    let palette: CommandPaletteContextType | undefined;
+
+    render(
+      <CommandPaletteProvider>
+        <ContextConsumer onContext={(context) => { palette = context; }} />
+      </CommandPaletteProvider>,
+    );
+
+    expect(palette!.mode).toBe("actions");
+
+    act(() => palette!.openPalette("objects"));
+
+    expect(palette!.isOpen).toBe(true);
+    expect(palette!.mode).toBe("objects");
+  });
+
+  it("should keep object search closed without an active connection", () => {
+    databaseState.activeConnectionId = null;
+    let palette: CommandPaletteContextType | undefined;
+
+    render(
+      <CommandPaletteProvider>
+        <ContextConsumer onContext={(context) => { palette = context; }} />
+      </CommandPaletteProvider>,
+    );
+
+    act(() => palette!.openPalette("objects"));
+
+    expect(palette!.isOpen).toBe(false);
   });
 
   it("should open the current table in a new SQL console", async () => {

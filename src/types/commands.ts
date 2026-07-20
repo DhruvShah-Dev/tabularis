@@ -1,3 +1,5 @@
+export type CommandPaletteMode = "actions" | "objects";
+
 export interface TableCommandResource {
   type: "table";
   tableName: string;

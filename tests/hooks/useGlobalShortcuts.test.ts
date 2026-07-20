@@ -5,8 +5,9 @@ import { useGlobalShortcuts } from "../../src/hooks/useGlobalShortcuts";
 
 const navigateMock = vi.fn();
 const openPaletteMock = vi.fn();
+let activeShortcutId = "command_palette_actions";
 const matchesShortcutMock = vi.fn(
-  (_event: KeyboardEvent, id: string) => id === "command_palette_actions",
+  (_event: KeyboardEvent, id: string) => id === activeShortcutId,
 );
 
 vi.mock("react-router-dom", () => ({
@@ -36,6 +37,7 @@ describe("useGlobalShortcuts", () => {
     navigateMock.mockClear();
     openPaletteMock.mockClear();
     matchesShortcutMock.mockClear();
+    activeShortcutId = "command_palette_actions";
   });
 
   it("should open action search while focus is inside an input", () => {
@@ -50,7 +52,19 @@ describe("useGlobalShortcuts", () => {
       shiftKey: true,
     });
 
-    expect(openPaletteMock).toHaveBeenCalledWith();
+    expect(openPaletteMock).toHaveBeenCalledWith("actions");
     input.remove();
+  });
+
+  it("should open object search through the shared palette controller", () => {
+    activeShortcutId = "quick_navigator";
+    renderHook(() => useGlobalShortcuts());
+
+    fireEvent.keyDown(window, {
+      key: "p",
+      metaKey: true,
+    });
+
+    expect(openPaletteMock).toHaveBeenCalledWith("objects");
   });
 });
