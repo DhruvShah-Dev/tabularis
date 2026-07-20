@@ -1234,6 +1234,10 @@ export const NewConnectionModal = ({
 
   const tunnelEnabled = !!formData.ssh_enabled || !!formData.k8s_enabled;
   const socketPathSet = !!formData.unix_socket_path?.trim();
+  const canUseSocket =
+    (supportsUnixSocket || !!formData.ssh_enabled) && !formData.k8s_enabled;
+  const socketMode =
+    canUseSocket && formData.unix_socket_path !== undefined;
   // The socket replaces host:port at the destination: dialed by the SSH
   // server when SSH is enabled, locally otherwise (capability-gated). A K8s
   // tunnel ignores it.
@@ -2048,34 +2052,79 @@ export const NewConnectionModal = ({
             </div>
           )}
 
-          {/* Host + Port */}
-          <div
-            className={clsx(
-              "grid gap-3",
-              driver === "postgres" ? "grid-cols-4" : "grid-cols-3",
-            )}
-          >
-            <FieldInput
-              className="col-span-2"
-              label={t("newConnection.host")}
-              value={formData.host}
-              onChange={(v) => updateField("host", v)}
-              placeholder="localhost"
-              disabled={usesSocket}
-            />
-            <FieldInput
-              label={t("newConnection.port")}
-              value={formData.port}
-              onChange={(v) => updateField("port", v)}
-              type="number"
-              placeholder={driver === "mysql" ? "3306" : "5432"}
-              disabled={usesSocket}
-            />
-          </div>
+          {/* DataGrip-style endpoint type selector. */}
+          {canUseSocket && (
+            <div
+              role="group"
+              aria-label={`${t("newConnection.host")} / ${t("newConnection.socketPath")}`}
+              className="grid grid-cols-2 gap-1 p-1 bg-base border border-strong rounded-md"
+            >
+              <button
+                type="button"
+                aria-pressed={!socketMode}
+                onClick={() => updateField("unix_socket_path", undefined)}
+                className={clsx(
+                  "px-3 py-1.5 rounded text-xs font-medium transition-colors",
+                  !socketMode
+                    ? "bg-surface-secondary text-primary shadow-sm"
+                    : "text-muted hover:text-secondary hover:bg-surface-secondary/50",
+                )}
+              >
+                {t("newConnection.host")} / {t("newConnection.port")}
+              </button>
+              <button
+                type="button"
+                aria-pressed={socketMode}
+                onClick={() =>
+                  updateField(
+                    "unix_socket_path",
+                    driver === "postgres"
+                      ? "/var/run/postgresql/.s.PGSQL.5432"
+                      : formData.ssh_enabled
+                        ? "/var/run/mysqld/mysqld.sock"
+                        : "/tmp/mysql.sock",
+                  )
+                }
+                className={clsx(
+                  "px-3 py-1.5 rounded text-xs font-medium transition-colors",
+                  socketMode
+                    ? "bg-surface-secondary text-primary shadow-sm"
+                    : "text-muted hover:text-secondary hover:bg-surface-secondary/50",
+                )}
+              >
+                {t("newConnection.socketPath")}
+              </button>
+            </div>
+          )}
+
+          {/* A Unix socket replaces the database host and port entirely. */}
+          {!socketMode && (
+            <div
+              className={clsx(
+                "grid gap-3",
+                driver === "postgres" ? "grid-cols-4" : "grid-cols-3",
+              )}
+            >
+              <FieldInput
+                className="col-span-2"
+                label={t("newConnection.host")}
+                value={formData.host}
+                onChange={(v) => updateField("host", v)}
+                placeholder="localhost"
+              />
+              <FieldInput
+                label={t("newConnection.port")}
+                value={formData.port}
+                onChange={(v) => updateField("port", v)}
+                type="number"
+                placeholder={driver === "mysql" ? "3306" : "5432"}
+              />
+            </div>
+          )}
 
           {/* Unix socket instead of host:port — dialed locally (capability-gated)
-              or by the SSH server when the tunnel is enabled */}
-          {(supportsUnixSocket || !!formData.ssh_enabled) && (
+              or by the SSH server when the tunnel is enabled. */}
+          {socketMode && (
             <div className="flex flex-col gap-1">
               <FieldInput
                 label={t("newConnection.socketPath")}
@@ -2088,27 +2137,20 @@ export const NewConnectionModal = ({
                       ? "/var/run/mysqld/mysqld.sock"
                       : "/tmp/mysql.sock"
                 }
-                disabled={!!formData.k8s_enabled}
               />
-              {formData.k8s_enabled && (
-                <p className="text-[10px] text-muted mt-0.5">
-                  {t("newConnection.socketPathTunnel")}
-                </p>
-              )}
-              {!formData.k8s_enabled && socketPathIssue === "notAbsolute" && (
+              {socketPathIssue === "notAbsolute" && (
                 <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
                   <AlertCircle size={10} />{" "}
                   {t("newConnection.socketPathNotAbsolute")}
                 </p>
               )}
-              {!formData.k8s_enabled &&
-                socketPathIssue === "looksLikeDirectory" && (
+              {socketPathIssue === "looksLikeDirectory" && (
                   <p className="text-[10px] text-amber-500 flex items-center gap-1 mt-0.5">
                     <AlertCircle size={10} />{" "}
                     {t("newConnection.socketPathDirectory")}
                   </p>
                 )}
-              {!formData.k8s_enabled && !socketPathIssue && (
+              {!socketPathIssue && (
                 <p className="text-[10px] text-muted mt-0.5">
                   {formData.ssh_enabled
                     ? usesForwardSocket

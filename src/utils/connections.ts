@@ -166,7 +166,14 @@ export function validateConnectionParams(
     capabilities != null
       ? isLocalDriver(capabilities)
       : params.driver === "sqlite";
-  if (!local && !params.host && !effectiveLocalSocketPath(params)) {
+  const socketDestination =
+    !params.k8s_enabled &&
+    !!params.unix_socket_path?.trim() &&
+    (params.ssh_enabled ||
+      capabilities?.unix_socket === true ||
+      (capabilities == null &&
+        (params.driver === "mysql" || params.driver === "postgres")));
+  if (!local && !params.host && !socketDestination) {
     return { isValid: false, error: "Host is required for remote databases" };
   }
 

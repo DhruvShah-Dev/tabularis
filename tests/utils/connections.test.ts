@@ -579,6 +579,42 @@ describe('connections', () => {
       expect(validateConnectionParams(params).isValid).toBe(true);
     });
 
+    it('validateConnectionParams should not require host for an SSH-forwarded socket', () => {
+      const params: Partial<ConnectionParams> = {
+        driver: 'mysql',
+        database: 'mydb',
+        unix_socket_path: '/var/run/mysqld/mysqld.sock',
+        ssh_enabled: true,
+        ssh_host: 'bastion.example.com',
+        ssh_user: 'deploy',
+        ssh_password: 'secret',
+      };
+      expect(validateConnectionParams(params).isValid).toBe(true);
+    });
+
+    it('validateConnectionParams should ignore a socket path for Kubernetes', () => {
+      const params: Partial<ConnectionParams> = {
+        driver: 'mysql',
+        database: 'mydb',
+        unix_socket_path: '/tmp/mysql.sock',
+        k8s_enabled: true,
+      };
+      const result = validateConnectionParams(params);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Host is required for remote databases');
+    });
+
+    it('validateConnectionParams should capability-gate a local socket', () => {
+      const params: Partial<ConnectionParams> = {
+        driver: 'custom',
+        database: 'mydb',
+        unix_socket_path: '/tmp/custom.sock',
+      };
+      const result = validateConnectionParams(params, makeRemoteCaps());
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Host is required for remote databases');
+    });
+
     it('validateConnectionParams should still require host when the socket is blank', () => {
       const params: Partial<ConnectionParams> = {
         driver: 'mysql',
