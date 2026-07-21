@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { TableInfo } from "../contexts/DatabaseContext";
 import { formatSqlIdentifier, getQuoteChar, quoteIdentifier } from "./identifiers";
 import { getCurrentStatement, parseTablesFromQuery, type ParsedTableRef } from "./sqlAnalysis";
-import { analyzeSqlContext, findStatementScopeEnd, getSuggestionKinds } from "./sqlContext";
+import { analyzeSqlContext, findStatementScopeEnd, getKeywordRelevance, getSuggestionKinds } from "./sqlContext";
 
 // Lightweight column cache with TTL and size limits
 interface CachedColumns {
@@ -359,16 +359,22 @@ export const registerSqlAutocomplete = (
       // ============================================
       // 3. KEYWORD SUGGESTIONS
       // ============================================
+      // Keywords irrelevant in the current clause are dropped (WHEN outside
+      // CASE, ...); likely continuations get a higher rank (`2_0_`) so a
+      // short prefix + Enter picks the right one (e.g. "wh" after FROM →
+      // WHERE, not WHEN).
       const colLabels = new Set(contextColumnSuggestions.map(s => s.label.toUpperCase()));
       const keywordSuggestions = suggestionKinds.keywords
         ? SQL_KEYWORDS
             .filter(kw => !colLabels.has(kw))
-            .map((kw) => ({
+            .map((kw) => ({ kw, relevance: getKeywordRelevance(sqlContext.clause, kw) }))
+            .filter(({ relevance }) => relevance !== 'hidden')
+            .map(({ kw, relevance }) => ({
               label: kw,
               kind: monaco.languages.CompletionItemKind.Keyword,
               insertText: kw,
               range,
-              sortText: `2_${kw}`
+              sortText: relevance === 'high' ? `2_0_${kw}` : `2_1_${kw}`
             }))
         : [];
 

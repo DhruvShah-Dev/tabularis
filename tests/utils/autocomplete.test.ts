@@ -673,6 +673,19 @@ describe('autocomplete', () => {
       expect(result.suggestions.length).toBeGreaterThan(0);
     });
 
+    it('ranks WHERE above WHEN after FROM (keyword relevance)', async () => {
+      const provider = setup();
+      const model = createMockModel('SELECT * FROM users ');
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: 21 });
+
+      const labels = result.suggestions.map((s: { label: string }) => s.label);
+      expect(labels).not.toContain('WHEN'); // CASE-only keyword is hidden here
+      const where = result.suggestions.find((s: { label: string }) => s.label === 'WHERE');
+      const notBoosted = result.suggestions.find((s: { label: string }) => s.label === 'SELECT');
+      expect(where?.sortText).toBe('2_0_WHERE');
+      expect(notBoosted?.sortText).toBe('2_1_SELECT');
+    });
+
     it('suggests only keywords on an empty buffer', async () => {
       const provider = setup();
       const model = createMockModel('');

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   analyzeSqlContext,
   findStatementScopeEnd,
+  getKeywordRelevance,
   getSuggestionKinds,
   SQL_CLAUSES,
   type SqlClause,
@@ -395,6 +396,61 @@ describe('sqlContext', () => {
         tables: true,
         keywords: true,
       });
+    });
+  });
+
+  describe('getKeywordRelevance', () => {
+    it('hides WHEN outside CASE so "wh" selects WHERE', () => {
+      expect(getKeywordRelevance('from', 'WHEN')).toBe('hidden');
+      expect(getKeywordRelevance('from', 'WHERE')).toBe('high');
+      expect(getKeywordRelevance('where', 'WHEN')).toBe('hidden');
+      expect(getKeywordRelevance('select', 'WHEN')).toBe('hidden');
+    });
+
+    it('shows CASE-only keywords inside CASE, boosted', () => {
+      for (const kw of ['WHEN', 'THEN', 'ELSE', 'END']) {
+        expect(getKeywordRelevance('case', kw)).toBe('high');
+      }
+    });
+
+    it('restricts ON to join conditions and upsert clauses', () => {
+      expect(getKeywordRelevance('join', 'ON')).toBe('high');
+      expect(getKeywordRelevance('values', 'ON')).toBe('normal');
+      expect(getKeywordRelevance('select', 'ON')).toBe('hidden');
+      expect(getKeywordRelevance('where', 'ON')).toBe('hidden');
+    });
+
+    it('restricts VALUES, SET, and INTO to their statements', () => {
+      expect(getKeywordRelevance('insert-into', 'VALUES')).toBe('high');
+      expect(getKeywordRelevance('where', 'VALUES')).toBe('hidden');
+      expect(getKeywordRelevance('update', 'SET')).toBe('high');
+      expect(getKeywordRelevance('from', 'SET')).toBe('hidden');
+      expect(getKeywordRelevance('insert-into', 'INTO')).toBe('high');
+      expect(getKeywordRelevance('order-by', 'INTO')).toBe('hidden');
+    });
+
+    it('boosts likely continuations per clause', () => {
+      expect(getKeywordRelevance('start', 'SELECT')).toBe('high');
+      expect(getKeywordRelevance('select', 'FROM')).toBe('high');
+      expect(getKeywordRelevance('from', 'GROUP BY')).toBe('high');
+      expect(getKeywordRelevance('where', 'AND')).toBe('high');
+      expect(getKeywordRelevance('group-by', 'HAVING')).toBe('high');
+      expect(getKeywordRelevance('order-by', 'LIMIT')).toBe('high');
+      expect(getKeywordRelevance('delete', 'FROM')).toBe('high');
+      expect(getKeywordRelevance('in-list', 'SELECT')).toBe('high');
+      expect(getKeywordRelevance('union', 'SELECT')).toBe('high');
+    });
+
+    it('leaves unrelated keywords at normal relevance', () => {
+      expect(getKeywordRelevance('select', 'COUNT')).toBe('normal');
+      expect(getKeywordRelevance('from', 'SELECT')).toBe('normal');
+      expect(getKeywordRelevance('where', 'CASE')).toBe('normal');
+    });
+
+    it('never hides or boosts anything for unknown', () => {
+      for (const kw of ['WHEN', 'ON', 'VALUES', 'WHERE', 'SELECT']) {
+        expect(getKeywordRelevance('unknown', kw)).toBe('normal');
+      }
     });
   });
 });

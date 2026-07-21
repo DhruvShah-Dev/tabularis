@@ -103,6 +103,64 @@ const CLAUSE_SUGGESTION_KINDS: Record<SqlClause, SuggestionKinds> = {
 export const getSuggestionKinds = (clause: SqlClause): SuggestionKinds =>
   CLAUSE_SUGGESTION_KINDS[clause];
 
+/**
+ * How relevant a keyword is in the current clause:
+ * - 'high': a likely continuation, ranked above other keywords
+ * - 'normal': shown with default ranking
+ * - 'hidden': meaningless here (e.g. WHEN outside CASE), not offered at all
+ */
+export type KeywordRelevance = 'high' | 'normal' | 'hidden';
+
+// Keywords that only make sense inside specific clauses; everywhere else they
+// are hidden so they cannot outrank useful ones (typing "wh" after FROM must
+// select WHERE, not WHEN).
+const KEYWORD_ALLOWED_CLAUSES: Record<string, readonly SqlClause[]> = {
+  WHEN: ['case'],
+  THEN: ['case'],
+  ELSE: ['case'],
+  END: ['case'],
+  ON: ['join', 'values'], // values: MySQL `... VALUES (...) ON DUPLICATE KEY UPDATE`
+  VALUES: ['insert-into', 'insert-columns', 'values', 'start'],
+  SET: ['update', 'start'], // start: MySQL `SET @var = ...`
+  INTO: ['insert-into', 'select', 'start'], // select: `SELECT ... INTO`
+};
+
+// Likely next keywords per clause, ranked above the rest.
+const BOOSTED_KEYWORDS: Partial<Record<SqlClause, ReadonlySet<string>>> = {
+  start: new Set(['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE']),
+  select: new Set(['FROM', 'DISTINCT', 'CASE']),
+  from: new Set(['WHERE', 'JOIN', 'LEFT JOIN', 'INNER JOIN', 'GROUP BY', 'ORDER BY', 'LIMIT']),
+  join: new Set(['ON']),
+  on: new Set(['AND', 'OR', 'WHERE', 'JOIN', 'LEFT JOIN']),
+  where: new Set(['AND', 'OR', 'GROUP BY', 'ORDER BY', 'LIMIT', 'IN', 'BETWEEN', 'LIKE', 'IS', 'NOT']),
+  'group-by': new Set(['HAVING', 'ORDER BY', 'LIMIT']),
+  having: new Set(['AND', 'OR', 'ORDER BY', 'LIMIT']),
+  'order-by': new Set(['LIMIT']),
+  limit: new Set(['OFFSET']),
+  update: new Set(['SET']),
+  set: new Set(['WHERE']),
+  delete: new Set(['FROM']),
+  'insert-into': new Set(['INTO', 'VALUES']),
+  case: new Set(['WHEN', 'THEN', 'ELSE', 'END']),
+  'in-list': new Set(['SELECT']),
+  union: new Set(['SELECT']),
+  with: new Set(['AS']),
+  create: new Set(['TABLE', 'INDEX']),
+  drop: new Set(['TABLE', 'INDEX']),
+  alter: new Set(['TABLE']),
+  truncate: new Set(['TABLE']),
+};
+
+export const getKeywordRelevance = (clause: SqlClause, keyword: string): KeywordRelevance => {
+  // An analyzer miss must never hide keywords.
+  if (clause === 'unknown') return 'normal';
+
+  const allowed = KEYWORD_ALLOWED_CLAUSES[keyword];
+  if (allowed && !allowed.includes(clause)) return 'hidden';
+
+  return BOOSTED_KEYWORDS[clause]?.has(keyword) ? 'high' : 'normal';
+};
+
 // Words that can never be a table/function identifier. Used to tell a
 // function call `count(` or a table name `users (` apart from a plain
 // expression group `WHERE (`.
