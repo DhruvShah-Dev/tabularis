@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   analyzeSqlContext,
+  findStatementScopeEnd,
   getSuggestionKinds,
   SQL_CLAUSES,
   type SqlClause,
@@ -260,6 +261,87 @@ describe('sqlContext', () => {
 
     it('never goes below 0 on unbalanced closes', () => {
       expect(analyzeSqlContext('SELECT a) ) ').nestingLevel).toBe(0);
+    });
+  });
+
+  describe('analyzeSqlContext - statement scope', () => {
+    it('is 0 at the top level', () => {
+      expect(analyzeSqlContext('SELECT * FROM t WHERE ').statementStart).toBe(0);
+    });
+
+    it('starts after the last top-level semicolon', () => {
+      const text = 'SELECT 1; SELECT * FROM ';
+      expect(analyzeSqlContext(text).statementStart).toBe(text.indexOf(';') + 1);
+    });
+
+    it('starts after the ( of a FROM subquery', () => {
+      const text = 'SELECT * FROM (SELECT id FROM ';
+      expect(analyzeSqlContext(text).statementStart).toBe(text.indexOf('(') + 1);
+    });
+
+    it('starts after the ( of an IN subquery', () => {
+      const text = 'SELECT * FROM sessions WHERE id IN (SELECT session_id FROM ';
+      expect(analyzeSqlContext(text).statementStart).toBe(text.indexOf('(') + 1);
+    });
+
+    it('starts after the ( of a CTE body once its statement begins', () => {
+      const text = 'WITH x AS (SELECT a FROM ';
+      expect(analyzeSqlContext(text).statementStart).toBe(text.indexOf('(') + 1);
+    });
+
+    it('tracks the innermost of nested subqueries', () => {
+      const text = 'SELECT * FROM (SELECT * FROM (SELECT id FROM ';
+      expect(analyzeSqlContext(text).statementStart).toBe(text.lastIndexOf('(') + 1);
+    });
+
+    it('does not narrow for expression groups or function args', () => {
+      expect(analyzeSqlContext('SELECT * FROM t WHERE (a = 1 AND ').statementStart).toBe(0);
+      expect(analyzeSqlContext('SELECT count(').statementStart).toBe(0);
+      expect(analyzeSqlContext('INSERT INTO t (id) VALUES (').statementStart).toBe(0);
+    });
+
+    it('does not narrow for a plain IN value list', () => {
+      expect(analyzeSqlContext('SELECT * FROM t WHERE id IN (1, ').statementStart).toBe(0);
+    });
+
+    it('restores the outer scope after a subquery closes', () => {
+      expect(analyzeSqlContext('SELECT * FROM (SELECT id FROM u) x WHERE ').statementStart).toBe(0);
+    });
+
+    it('does not treat FOR UPDATE as a statement boundary', () => {
+      const text = 'SELECT * FROM (SELECT id FROM u FOR UPDATE';
+      expect(analyzeSqlContext(text).statementStart).toBe(text.indexOf('(') + 1);
+    });
+  });
+
+  describe('findStatementScopeEnd', () => {
+    it('returns the text length when nothing closes the scope', () => {
+      expect(findStatementScopeEnd('WHERE a = 1', 0)).toBe(11);
+    });
+
+    it('stops at the unmatched closing parenthesis', () => {
+      const text = 'FROM inner_t) outer_rest';
+      expect(findStatementScopeEnd(text, 0)).toBe(text.indexOf(')'));
+    });
+
+    it('skips balanced pairs before the scope close', () => {
+      const text = 'FROM t WHERE f(a, b) > 1) rest';
+      expect(findStatementScopeEnd(text, 0)).toBe(text.lastIndexOf(')'));
+    });
+
+    it('stops at a top-level semicolon', () => {
+      const text = 'FROM t; SELECT 1';
+      expect(findStatementScopeEnd(text, 0)).toBe(text.indexOf(';'));
+    });
+
+    it('ignores parentheses and semicolons inside strings and comments', () => {
+      const text = "FROM t WHERE a = ');' -- );\n)";
+      expect(findStatementScopeEnd(text, 0)).toBe(text.length - 1);
+    });
+
+    it('starts scanning from the given offset', () => {
+      const text = '(inner) outer)';
+      expect(findStatementScopeEnd(text, 7)).toBe(text.length - 1);
     });
   });
 

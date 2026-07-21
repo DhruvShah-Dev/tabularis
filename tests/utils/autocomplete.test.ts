@@ -621,6 +621,58 @@ describe('autocomplete', () => {
       expect(groups.keywords).toBe(0);
     });
 
+    it('resolves context columns from the innermost subquery scope only', async () => {
+      const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
+      mockInvoke.mockResolvedValue([{ name: 'session_id', data_type: 'INT' }]);
+      const { parseTablesFromQuery } = await import('../../src/utils/sqlAnalysis');
+      const mockParse = parseTablesFromQuery as unknown as ReturnType<typeof vi.fn>;
+      // The scoped slice contains only the subquery; the full statement both tables.
+      mockParse.mockImplementation((sql: string) =>
+        sql.startsWith('SELECT session_id')
+          ? new Map([['page_views', { name: 'page_views' }]])
+          : new Map([
+              ['sessions', { name: 'sessions' }],
+              ['page_views', { name: 'page_views' }],
+            ])
+      );
+
+      const value = 'SELECT * FROM sessions WHERE id IN (SELECT session_id FROM page_views WHERE ';
+      const provider = setup([{ name: 'sessions' }, { name: 'page_views' }]);
+      const model = createMockModel(value);
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: value.length + 1 });
+
+      // The scoped parse received exactly the subquery text...
+      expect(mockParse).toHaveBeenCalledWith('SELECT session_id FROM page_views WHERE ');
+      // ...and columns were fetched for the subquery's table only.
+      expect(mockInvoke).toHaveBeenCalledWith('get_columns', expect.objectContaining({ tableName: 'page_views' }));
+      expect(mockInvoke).not.toHaveBeenCalledWith('get_columns', expect.objectContaining({ tableName: 'sessions' }));
+      expect(groupsOf(result.suggestions).columns).toBeGreaterThan(0);
+    });
+
+    it('still resolves outer aliases via dot trigger inside a subquery (correlated)', async () => {
+      const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
+      mockInvoke.mockResolvedValue([{ name: 'id', data_type: 'INT' }]);
+      const { parseTablesFromQuery } = await import('../../src/utils/sqlAnalysis');
+      const mockParse = parseTablesFromQuery as unknown as ReturnType<typeof vi.fn>;
+      mockParse.mockImplementation((sql: string) =>
+        sql.startsWith('SELECT 1')
+          ? new Map([['p', { name: 'page_views' }]])
+          : new Map([
+              ['s', { name: 'sessions' }],
+              ['p', { name: 'page_views' }],
+            ])
+      );
+
+      const value = 'SELECT * FROM sessions s WHERE EXISTS (SELECT 1 FROM page_views p WHERE p.session_id = s.';
+      const provider = setup([{ name: 'sessions' }, { name: 'page_views' }]);
+      const model = createMockModel(value);
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: value.length + 1 });
+
+      // `s.` is not in the subquery scope, but the merged alias map resolves it.
+      expect(mockInvoke).toHaveBeenCalledWith('get_columns', expect.objectContaining({ tableName: 'sessions' }));
+      expect(result.suggestions.length).toBeGreaterThan(0);
+    });
+
     it('suggests only keywords on an empty buffer', async () => {
       const provider = setup();
       const model = createMockModel('');

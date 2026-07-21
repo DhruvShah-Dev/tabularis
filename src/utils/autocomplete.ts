@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { TableInfo } from "../contexts/DatabaseContext";
 import { formatSqlIdentifier, getQuoteChar, quoteIdentifier } from "./identifiers";
 import { getCurrentStatement, parseTablesFromQuery, type ParsedTableRef } from "./sqlAnalysis";
-import { analyzeSqlContext, getSuggestionKinds } from "./sqlContext";
+import { analyzeSqlContext, findStatementScopeEnd, getSuggestionKinds } from "./sqlContext";
 
 // Lightweight column cache with TTL and size limits
 interface CachedColumns {
@@ -201,9 +201,23 @@ export const registerSqlAutocomplete = (
       }
       const suggestionKinds = getSuggestionKinds(sqlContext.clause);
 
-      // Get current statement context
+      // Get current statement context. When the cursor sits inside a
+      // subquery/CTE body, context columns must come from that scope's own
+      // FROM list, so the scoped refs are parsed separately. Outer refs stay
+      // resolvable through the merged map so correlated references
+      // (`WHERE o.user_id = u.id`) keep completing via the dot trigger.
       const currentStatement = getCurrentStatement(model, position);
-      const tableAliases = parseTablesFromQuery(currentStatement);
+      const outerAliases = parseTablesFromQuery(currentStatement);
+      let scopedAliases = outerAliases;
+      if (sqlContext.statementStart > 0) {
+        const fullText = model.getValue();
+        const scopeEnd = findStatementScopeEnd(fullText, fullTextUntilPosition.length);
+        scopedAliases = parseTablesFromQuery(fullText.slice(sqlContext.statementStart, scopeEnd));
+      }
+      const tableAliases =
+        scopedAliases === outerAliases
+          ? outerAliases
+          : new Map([...(outerAliases ?? []), ...(scopedAliases ?? [])]);
 
 
       // ============================================
@@ -281,10 +295,10 @@ export const registerSqlAutocomplete = (
         filterText?: string;
       }> = [];
       
-      if (suggestionKinds.columns && tableAliases && tableAliases.size > 0) {
+      if (suggestionKinds.columns && scopedAliases && scopedAliases.size > 0) {
         // Deduplicate parsed refs by (schema, name) — multiple aliases can point to the same table
         const seenRefs = new Set<string>();
-        const uniqueRefs = Array.from(tableAliases.values()).filter(ref => {
+        const uniqueRefs = Array.from(scopedAliases.values()).filter(ref => {
           const key = `${ref.schema ?? ''}:${ref.name}`;
           return seenRefs.has(key) ? false : (seenRefs.add(key), true);
         });
@@ -323,7 +337,7 @@ export const registerSqlAutocomplete = (
 
               // Find alias for this table (if any)
               let aliasHint = "";
-              for (const [alias, ref] of tableAliases.entries()) {
+              for (const [alias, ref] of scopedAliases.entries()) {
                 if (ref.name.toLowerCase() === table.name.toLowerCase() && alias !== table.name.toLowerCase()) {
                   aliasHint = ` (${alias})`;
                   break;

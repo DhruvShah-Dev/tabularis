@@ -50,6 +50,13 @@ export interface SqlContextInfo {
   inComment: boolean;
   /** Parenthesis depth at the cursor (0 = top level of the statement). */
   nestingLevel: number;
+  /**
+   * Offset (into the analyzed text) where the innermost statement scope
+   * containing the cursor begins: right after the `(` of the enclosing
+   * subquery/CTE body, or after the last `;` at top level. Expression groups
+   * like `WHERE (...)` are not statement scopes and do not narrow it.
+   */
+  statementStart: number;
 }
 
 export interface SuggestionKinds {
@@ -115,6 +122,11 @@ interface Frame {
   clause: SqlClause;
   // Clauses saved when entering CASE expressions (they nest), restored on END.
   caseSaved: SqlClause[];
+  // Offset where this frame's content begins (after its `(` or `;`).
+  contentStart: number;
+  // True once the frame is known to hold its own statement (a SELECT/INSERT/
+  // UPDATE/DELETE was seen directly in it) rather than a plain expression.
+  isStatement: boolean;
 }
 
 interface WordToken {
@@ -128,7 +140,10 @@ const isWordChar = (ch: string): boolean => /[A-Za-z0-9_$]/.test(ch);
 // keywords (identifiers, no-op keywords like AND/NOT) leave the clause as-is.
 const applyWord = (frame: Frame, upper: string, prev: WordToken | null): void => {
   switch (upper) {
-    case 'SELECT': frame.clause = 'select'; break;
+    case 'SELECT':
+      frame.clause = 'select';
+      frame.isStatement = true;
+      break;
     case 'FROM': frame.clause = 'from'; break;
     case 'JOIN':
     case 'STRAIGHT_JOIN': frame.clause = 'join'; break;
@@ -144,11 +159,22 @@ const applyWord = (frame: Frame, upper: string, prev: WordToken | null): void =>
     case 'LIMIT':
     case 'OFFSET':
     case 'FETCH': frame.clause = 'limit'; break;
-    case 'UPDATE': frame.clause = 'update'; break;
+    case 'UPDATE':
+      // FOR UPDATE (locking) and ON DUPLICATE KEY UPDATE are not statements.
+      if (prev?.upper === 'FOR' || prev?.upper === 'KEY') break;
+      frame.clause = 'update';
+      frame.isStatement = true;
+      break;
     case 'SET': frame.clause = 'set'; break;
-    case 'DELETE': frame.clause = 'delete'; break;
+    case 'DELETE':
+      frame.clause = 'delete';
+      frame.isStatement = true;
+      break;
     case 'INSERT':
     case 'REPLACE':
+      frame.clause = 'insert-into';
+      frame.isStatement = true;
+      break;
     case 'INTO': frame.clause = 'insert-into'; break;
     case 'VALUES':
     case 'VALUE': frame.clause = 'values'; break;
@@ -201,7 +227,8 @@ const openFrameClause = (outer: Frame, prev: WordToken | null): SqlClause => {
  * the current one.
  */
 export const analyzeSqlContext = (textBeforeCursor: string): SqlContextInfo => {
-  let stack: Frame[] = [{ clause: 'start', caseSaved: [] }];
+  // The root frame is always a statement scope.
+  let stack: Frame[] = [{ clause: 'start', caseSaved: [], contentStart: 0, isStatement: true }];
   let stringDelim: '\'' | null = null;
   let inLineComment = false;
   let inBlockComment = false;
@@ -270,13 +297,18 @@ export const analyzeSqlContext = (textBeforeCursor: string): SqlContextInfo => {
     flushWord(i);
 
     if (ch === '(') {
-      stack.push({ clause: openFrameClause(top(), prev), caseSaved: [] });
+      stack.push({
+        clause: openFrameClause(top(), prev),
+        caseSaved: [],
+        contentStart: i + 1,
+        isStatement: false,
+      });
       prev = null;
     } else if (ch === ')') {
       if (stack.length > 1) stack.pop();
       prev = null;
     } else if (ch === ';') {
-      stack = [{ clause: 'start', caseSaved: [] }];
+      stack = [{ clause: 'start', caseSaved: [], contentStart: i + 1, isStatement: true }];
       prev = null;
     } else if (ch === '.' || /\s/.test(ch)) {
       // Whitespace and the qualifier dot keep the previous word visible so
@@ -290,10 +322,73 @@ export const analyzeSqlContext = (textBeforeCursor: string): SqlContextInfo => {
 
   flushWord(n);
 
+  // Innermost frame that holds its own statement; the root always qualifies.
+  let statementStart = 0;
+  for (let f = stack.length - 1; f >= 0; f--) {
+    if (stack[f].isStatement) {
+      statementStart = stack[f].contentStart;
+      break;
+    }
+  }
+
   return {
     clause: top().clause,
     inString: stringDelim !== null,
     inComment: inLineComment || inBlockComment,
     nestingLevel: stack.length - 1,
+    statementStart,
   };
+};
+
+/**
+ * Finds where the statement scope that is open at `from` ends: the position
+ * of its unmatched closing parenthesis, a top-level `;`, or the end of the
+ * text. Used together with `SqlContextInfo.statementStart` to slice the
+ * innermost subquery around the cursor out of the full buffer.
+ */
+export const findStatementScopeEnd = (text: string, from: number): number => {
+  let depth = 0;
+  let stringDelim: string | null = null;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let i = from;
+  const n = text.length;
+
+  while (i < n) {
+    const ch = text[i];
+
+    if (inLineComment) {
+      if (ch === '\n') inLineComment = false;
+      i++;
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === '*' && text[i + 1] === '/') { inBlockComment = false; i += 2; continue; }
+      i++;
+      continue;
+    }
+    if (stringDelim) {
+      if (ch === '\\' && stringDelim === '\'') { i += 2; continue; }
+      if (ch === stringDelim) {
+        if (text[i + 1] === stringDelim) { i += 2; continue; }
+        stringDelim = null;
+      }
+      i++;
+      continue;
+    }
+
+    if (ch === '\'' || ch === '"' || ch === '`') { stringDelim = ch; i++; continue; }
+    if (ch === '-' && text[i + 1] === '-') { inLineComment = true; i += 2; continue; }
+    if (ch === '/' && text[i + 1] === '*') { inBlockComment = true; i += 2; continue; }
+
+    if (ch === '(') depth++;
+    else if (ch === ')') {
+      if (depth === 0) return i;
+      depth--;
+    } else if (ch === ';' && depth === 0) {
+      return i;
+    }
+    i++;
+  }
+  return n;
 };
