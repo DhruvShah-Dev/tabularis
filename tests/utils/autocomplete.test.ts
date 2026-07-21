@@ -601,6 +601,26 @@ describe('autocomplete', () => {
       expect(groups.keywords).toBeGreaterThan(0);
     });
 
+    it('suggests only columns inside an INSERT column list', async () => {
+      const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
+      mockInvoke.mockResolvedValue([
+        { name: 'customer_id', data_type: 'INT' },
+        { name: 'total', data_type: 'DECIMAL' },
+      ]);
+      const { parseTablesFromQuery } = await import('../../src/utils/sqlAnalysis');
+      (parseTablesFromQuery as unknown as ReturnType<typeof vi.fn>)
+        .mockReturnValue(new Map([['orders', { name: 'orders' }]]));
+
+      const provider = setup([{ name: 'orders' }]);
+      const model = createMockModel('INSERT INTO orders (');
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: 21 });
+
+      const groups = groupsOf(result.suggestions);
+      expect(groups.columns).toBe(2);
+      expect(groups.tables).toBe(0);
+      expect(groups.keywords).toBe(0);
+    });
+
     it('suggests only keywords on an empty buffer', async () => {
       const provider = setup();
       const model = createMockModel('');
