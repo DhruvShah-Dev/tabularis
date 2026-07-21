@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { TableInfo } from "../contexts/DatabaseContext";
 import { formatSqlIdentifier, getQuoteChar, quoteIdentifier } from "./identifiers";
 import { getCurrentStatement, parseTablesFromQuery, type ParsedTableRef } from "./sqlAnalysis";
+import { analyzeSqlContext, getSuggestionKinds } from "./sqlContext";
 
 // Lightweight column cache with TTL and size limits
 interface CachedColumns {
@@ -185,6 +186,21 @@ export const registerSqlAutocomplete = (
         endColumn: position.column,
       });
 
+      // Clause-aware context: figure out where the cursor sits so only the
+      // relevant suggestion kinds are offered (and nothing inside strings or
+      // comments).
+      const fullTextUntilPosition = model.getValueInRange({
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: position.lineNumber,
+        endColumn: position.column,
+      });
+      const sqlContext = analyzeSqlContext(fullTextUntilPosition);
+      if (sqlContext.inString || sqlContext.inComment) {
+        return { suggestions: [] };
+      }
+      const suggestionKinds = getSuggestionKinds(sqlContext.clause);
+
       // Get current statement context
       const currentStatement = getCurrentStatement(model, position);
       const tableAliases = parseTablesFromQuery(currentStatement);
@@ -265,7 +281,7 @@ export const registerSqlAutocomplete = (
         filterText?: string;
       }> = [];
       
-      if (tableAliases && tableAliases.size > 0) {
+      if (suggestionKinds.columns && tableAliases && tableAliases.size > 0) {
         // Deduplicate parsed refs by (schema, name) — multiple aliases can point to the same table
         const seenRefs = new Set<string>();
         const uniqueRefs = Array.from(tableAliases.values()).filter(ref => {
@@ -330,26 +346,30 @@ export const registerSqlAutocomplete = (
       // 3. KEYWORD SUGGESTIONS
       // ============================================
       const colLabels = new Set(contextColumnSuggestions.map(s => s.label.toUpperCase()));
-      const keywordSuggestions = SQL_KEYWORDS
-        .filter(kw => !colLabels.has(kw))
-        .map((kw) => ({
-          label: kw,
-          kind: monaco.languages.CompletionItemKind.Keyword,
-          insertText: kw,
-          range,
-          sortText: `2_${kw}`
-        }));
+      const keywordSuggestions = suggestionKinds.keywords
+        ? SQL_KEYWORDS
+            .filter(kw => !colLabels.has(kw))
+            .map((kw) => ({
+              label: kw,
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: kw,
+              range,
+              sortText: `2_${kw}`
+            }))
+        : [];
 
       // ============================================
       // 4. TABLE SUGGESTIONS
       // ============================================
-      const tableSuggestions = tables.map((t) => ({
-        label: t.name,
-        kind: monaco.languages.CompletionItemKind.Class,
-        detail: "Table",
-        ...buildIdentifierInsert(t.name, range),
-        sortText: `1_${t.name}`
-      }));
+      const tableSuggestions = suggestionKinds.tables
+        ? tables.map((t) => ({
+            label: t.name,
+            kind: monaco.languages.CompletionItemKind.Class,
+            detail: "Table",
+            ...buildIdentifierInsert(t.name, range),
+            sortText: `1_${t.name}`
+          }))
+        : [];
 
       return {
         suggestions: [

@@ -353,8 +353,9 @@ describe('autocomplete', () => {
       );
 
       const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
-      const model = createMockModel('SELECT * FROM users');
-      const position = { lineNumber: 1, column: 20 };
+      // Cursor sits in the WHERE clause, a column-suggesting context
+      const model = createMockModel('SELECT * FROM users WHERE ');
+      const position = { lineNumber: 1, column: 27 };
 
       // First call - should fetch from backend because we have tables in context
       await provider.provideCompletionItems(model, position);
@@ -530,6 +531,85 @@ describe('autocomplete', () => {
         s.sortText?.startsWith('1_')
       );
       expect(tableSuggestions.length).toBe(100);
+    });
+  });
+
+  describe('clause-aware gating', () => {
+    const setup = (tables: TableInfo[] = [{ name: 'users' }]) => {
+      const monaco = createMockMonaco();
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        tables
+      );
+      return monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+    };
+
+    // Suggestion groups are distinguished by their sortText prefix:
+    // '0_' columns, '1_' tables, '2_' keywords.
+    const groupsOf = (suggestions: Array<{ sortText?: string }>) => ({
+      columns: suggestions.filter((s) => s.sortText?.startsWith('0_')).length,
+      tables: suggestions.filter((s) => s.sortText?.startsWith('1_')).length,
+      keywords: suggestions.filter((s) => s.sortText?.startsWith('2_')).length,
+    });
+
+    it('returns no suggestions inside a string literal', async () => {
+      const provider = setup();
+      const model = createMockModel("SELECT * FROM users WHERE name = 'jo");
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: 38 });
+      expect(result.suggestions).toHaveLength(0);
+    });
+
+    it('returns no suggestions inside a comment', async () => {
+      const provider = setup();
+      const model = createMockModel('SELECT 1 -- fetch users');
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: 24 });
+      expect(result.suggestions).toHaveLength(0);
+    });
+
+    it('suggests tables but no columns after FROM', async () => {
+      const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
+      mockInvoke.mockResolvedValue([{ name: 'id', data_type: 'INTEGER' }]);
+      const { parseTablesFromQuery } = await import('../../src/utils/sqlAnalysis');
+      (parseTablesFromQuery as unknown as ReturnType<typeof vi.fn>)
+        .mockReturnValue(new Map([['users', { name: 'users' }]]));
+
+      const provider = setup();
+      const model = createMockModel('SELECT * FROM ');
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: 15 });
+
+      const groups = groupsOf(result.suggestions);
+      expect(groups.tables).toBeGreaterThan(0);
+      expect(groups.columns).toBe(0);
+      expect(mockInvoke).not.toHaveBeenCalledWith('get_columns', expect.anything());
+    });
+
+    it('suggests columns but no tables after WHERE', async () => {
+      const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
+      mockInvoke.mockResolvedValue([{ name: 'id', data_type: 'INTEGER' }]);
+      const { parseTablesFromQuery } = await import('../../src/utils/sqlAnalysis');
+      (parseTablesFromQuery as unknown as ReturnType<typeof vi.fn>)
+        .mockReturnValue(new Map([['users', { name: 'users' }]]));
+
+      const provider = setup();
+      const model = createMockModel('SELECT * FROM users WHERE ');
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: 27 });
+
+      const groups = groupsOf(result.suggestions);
+      expect(groups.columns).toBeGreaterThan(0);
+      expect(groups.tables).toBe(0);
+      expect(groups.keywords).toBeGreaterThan(0);
+    });
+
+    it('suggests only keywords on an empty buffer', async () => {
+      const provider = setup();
+      const model = createMockModel('');
+      const result = await provider.provideCompletionItems(model, { lineNumber: 1, column: 1 });
+
+      const groups = groupsOf(result.suggestions);
+      expect(groups.keywords).toBeGreaterThan(0);
+      expect(groups.tables).toBe(0);
+      expect(groups.columns).toBe(0);
     });
   });
 });
