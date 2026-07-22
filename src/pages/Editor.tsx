@@ -3198,9 +3198,10 @@ export const Editor = () => {
 
       {/* Toolbar — hidden for notebook tabs. A size container so buttons can
           collapse to icon-only in narrow split panes; the explicit z-index
-          keeps its dropdowns above the editor (the container creates a
-          stacking context that would otherwise paint below later siblings). */}
-      {!isNotebookTab && <div className="@container relative z-20 flex items-center py-2 pl-2 pr-3 border-b border-default bg-elevated gap-1.5 @[560px]:gap-2 h-[50px]">
+          keeps its dropdowns above the editor and the table toolbar (z-30):
+          the container creates a stacking context that would otherwise paint
+          below later siblings. */}
+      {!isNotebookTab && <div className="@container relative z-40 flex items-center py-2 pl-2 pr-3 border-b border-default bg-elevated gap-1.5 @[560px]:gap-2 h-[50px]">
         {!activeTab.readOnly && activeTab.isLoading ? (
           <button
             onClick={stopQuery}
