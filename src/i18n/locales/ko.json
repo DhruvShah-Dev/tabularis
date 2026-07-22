@@ -199,7 +199,8 @@
       "renamePlaceholder": "노트북 이름"
     },
     "addToSplitGroup": "분할 그룹에 추가",
-    "removeFromSplitGroup": "그룹에서 제거"
+    "removeFromSplitGroup": "그룹에서 제거",
+    "movePanel": "패널 이동"
   },
   "mcp": {
     "title": "MCP 서버 연동",

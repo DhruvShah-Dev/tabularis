@@ -199,7 +199,8 @@
       "renamePlaceholder": "Pangalan ng notebook"
     },
     "addToSplitGroup": "Idagdag sa Split Group",
-    "removeFromSplitGroup": "Alisin sa Grupo"
+    "removeFromSplitGroup": "Alisin sa Grupo",
+    "movePanel": "Ilipat ang panel"
   },
   "mcp": {
     "title": "Integrasyon ng MCP Server",

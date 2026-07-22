@@ -199,7 +199,8 @@
       "renamePlaceholder": "ノートブック名"
     },
     "addToSplitGroup": "分割グループに追加",
-    "removeFromSplitGroup": "グループから削除"
+    "removeFromSplitGroup": "グループから削除",
+    "movePanel": "パネルを移動"
   },
   "mcp": {
     "title": "MCP サーバー連携",

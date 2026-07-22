@@ -1,5 +1,5 @@
-import { useRef, Fragment } from 'react';
-import { X } from 'lucide-react';
+import { useRef, useState, Fragment } from 'react';
+import { GripHorizontal, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
 import { PanelDatabaseProvider } from './PanelDatabaseProvider';
@@ -10,16 +10,23 @@ import { useConnectionLayoutContext } from '../../hooks/useConnectionLayoutConte
 import { useDatabase } from '../../hooks/useDatabase';
 import { useDrivers } from '../../hooks/useDrivers';
 import { getConnectionAccent } from '../../utils/driverUI';
-import type { SplitView } from '../../utils/connectionLayout';
+import { getPanelDropEdge } from '../../utils/connectionLayout';
+import type { SplitEdge, SplitView } from '../../utils/connectionLayout';
+
+const EDGE_OVERLAY_CLASS: Record<SplitEdge, string> = {
+  left: 'left-0 top-0 bottom-0 w-1/2',
+  right: 'right-0 top-0 bottom-0 w-1/2',
+  top: 'top-0 left-0 right-0 h-1/2',
+  bottom: 'bottom-0 left-0 right-0 h-1/2',
+};
 
 export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { splitRatio, startResize } = useSplitPaneResize(mode, containerRef);
+  const { sizes, startResize } = useSplitPaneResize(mode, containerRef, connectionIds.length);
   const isVertical = mode === 'vertical';
-  // The drag handle only controls the first/second boundary; with 3+ panes
-  // every pane gets an equal share instead
-  const isResizable = connectionIds.length === 2;
-  const { deactivateSplit, removeConnectionFromSplit, explorerConnectionId, setExplorerConnectionId } = useConnectionLayoutContext();
+  const { deactivateSplit, removeConnectionFromSplit, moveSplitConnection, explorerConnectionId, setExplorerConnectionId } = useConnectionLayoutContext();
+  const [draggedPanelId, setDraggedPanelId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ connId: string; edge: SplitEdge } | null>(null);
   const { switchConnection, connectionDataMap, connections } = useDatabase();
   const { allDrivers } = useDrivers();
   const { t } = useTranslation();
@@ -54,22 +61,42 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
       {connectionIds.map((connId, i) => {
         const accent = accentFor(connId);
         const isActivePanel = explorerConnectionId === connId;
+        const isDropCandidate = !!draggedPanelId && draggedPanelId !== connId;
         return (
         <Fragment key={connId}>
           <div
-            className="flex flex-col min-w-0 min-h-0"
+            className="relative flex flex-col min-w-0 min-h-0"
             onClickCapture={() => {
               if (explorerConnectionId !== connId) setExplorerConnectionId(connId);
             }}
-            style={
-              isResizable && i === 0
-                ? {
-                    [isVertical ? 'width' : 'height']: `${splitRatio}%`,
-                    flexShrink: 0,
-                  }
-                : { flex: 1 }
-            }
+            onDragOver={(e) => {
+              if (!isDropCandidate) return;
+              e.preventDefault();
+              const rect = e.currentTarget.getBoundingClientRect();
+              setDropTarget({ connId, edge: getPanelDropEdge(rect, e.clientX, e.clientY) });
+            }}
+            onDragLeave={() => {
+              setDropTarget(prev => (prev?.connId === connId ? null : prev));
+            }}
+            onDrop={(e) => {
+              if (!isDropCandidate) return;
+              e.preventDefault();
+              const rect = e.currentTarget.getBoundingClientRect();
+              moveSplitConnection(draggedPanelId, connId, getPanelDropEdge(rect, e.clientX, e.clientY));
+              setDraggedPanelId(null);
+              setDropTarget(null);
+            }}
+            style={{ flexGrow: sizes[i] ?? 1, flexBasis: 0, flexShrink: 0 }}
           >
+            {/* Drop-zone highlight while dragging a panel over this one */}
+            {isDropCandidate && dropTarget?.connId === connId && (
+              <div
+                className={clsx(
+                  'absolute z-20 pointer-events-none bg-blue-500/20 border-2 border-blue-400/60 rounded-sm',
+                  EDGE_OVERLAY_CLASS[dropTarget.edge],
+                )}
+              />
+            )}
             {/* Panel header — same accent wash as the editor tab bar below,
                 with the connection's accent color for the title text. */}
             <div
@@ -81,12 +108,30 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
                 borderBottomColor: `${accent}${isActivePanel ? '50' : '26'}`,
               }}
             >
-              <span
-                className="text-xs truncate transition-colors"
-                style={{ color: `${accent}${isActivePanel ? 'ff' : 'b3'}` }}
-              >
-                {connectionDataMap[connId]?.connectionName ?? connId}
-              </span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', connId);
+                    setDraggedPanelId(connId);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedPanelId(null);
+                    setDropTarget(null);
+                  }}
+                  className="shrink-0 cursor-grab active:cursor-grabbing text-muted hover:text-primary"
+                  title={t('sidebar.movePanel')}
+                >
+                  <GripHorizontal size={12} />
+                </div>
+                <span
+                  className="text-xs truncate transition-colors"
+                  style={{ color: `${accent}${isActivePanel ? 'ff' : 'b3'}` }}
+                >
+                  {connectionDataMap[connId]?.connectionName ?? connId}
+                </span>
+              </div>
               <button
                 onClick={() => handleClosePanel(connId)}
                 className="ml-2 p-0.5 rounded text-muted hover:text-primary hover:bg-surface-secondary transition-colors shrink-0"
@@ -108,12 +153,10 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
 
           {i < connectionIds.length - 1 && (
             <div
-              onMouseDown={isResizable ? startResize : undefined}
+              onMouseDown={(e) => startResize(i, e)}
               className={clsx(
-                'bg-default shrink-0 z-10',
-                isVertical ? 'w-1' : 'h-1',
-                isResizable && 'hover:bg-blue-500/50 transition-colors',
-                isResizable && (isVertical ? 'cursor-col-resize' : 'cursor-row-resize'),
+                'bg-default hover:bg-blue-500/50 transition-colors shrink-0 z-10',
+                isVertical ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize',
               )}
             />
           )}

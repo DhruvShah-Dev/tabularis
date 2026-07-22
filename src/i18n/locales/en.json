@@ -199,7 +199,8 @@
       "renamePlaceholder": "Notebook name"
     },
     "addToSplitGroup": "Add to Split Group",
-    "removeFromSplitGroup": "Remove from Group"
+    "removeFromSplitGroup": "Remove from Group",
+    "movePanel": "Move panel"
   },
   "mcp": {
     "title": "MCP Server Integration",

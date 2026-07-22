@@ -1,21 +1,41 @@
-import { useState, useCallback, useEffect, type RefObject } from 'react';
+import { useState, useCallback, useEffect, useRef, type RefObject } from 'react';
+import { defaultSplitSizes, resizeSplitSizes } from '../utils/connectionLayout';
 
-const STORAGE_KEY = 'tabularis_split_pane_ratio';
-const DEFAULT_RATIO = 50;
-const MIN_RATIO = 15;
-const MAX_RATIO = 85;
+const STORAGE_KEY = 'tabularis_split_pane_sizes';
 
+function loadSizes(paneCount: number): number[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+    const sizes = saved[paneCount];
+    if (Array.isArray(sizes) && sizes.length === paneCount && sizes.every(s => typeof s === 'number')) {
+      return sizes;
+    }
+  } catch {
+    // Corrupt storage falls through to the default
+  }
+  return defaultSplitSizes(paneCount);
+}
+
+/**
+ * Resizable shares for an N-pane split. Sizes are percentages summing to 100,
+ * meant to be used as flex-grow factors; each divider drags independently.
+ * Shares are persisted per pane count.
+ */
 export const useSplitPaneResize = (
   mode: 'vertical' | 'horizontal',
   containerRef: RefObject<HTMLDivElement | null>,
+  paneCount: number,
 ) => {
-  const [splitRatio, setSplitRatio] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? parseFloat(saved) : DEFAULT_RATIO;
-  });
+  const [sizes, setSizes] = useState<number[]>(() => loadSizes(paneCount));
+  const sizesRef = useRef(sizes);
+  sizesRef.current = sizes;
+
+  useEffect(() => {
+    setSizes(loadSizes(paneCount));
+  }, [paneCount]);
 
   const startResize = useCallback(
-    (e: React.MouseEvent) => {
+    (dividerIndex: number, e: React.MouseEvent) => {
       e.preventDefault();
       const cursorStyle = mode === 'vertical' ? 'col-resize' : 'row-resize';
       document.body.style.cursor = cursorStyle;
@@ -25,18 +45,17 @@ export const useSplitPaneResize = (
       overlay.style.cssText = `position:fixed;inset:0;z-index:9999;cursor:${cursorStyle}`;
       document.body.appendChild(overlay);
 
+      const startPos = mode === 'vertical' ? e.clientX : e.clientY;
+      const startSizes = sizesRef.current;
+
       const handleMouseMove = (moveEvent: MouseEvent) => {
         if (!containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
-
-        let ratio: number;
-        if (mode === 'vertical') {
-          ratio = ((moveEvent.clientX - rect.left) / rect.width) * 100;
-        } else {
-          ratio = ((moveEvent.clientY - rect.top) / rect.height) * 100;
-        }
-
-        setSplitRatio(Math.max(MIN_RATIO, Math.min(MAX_RATIO, ratio)));
+        const containerSize = mode === 'vertical' ? rect.width : rect.height;
+        if (containerSize === 0) return;
+        const currentPos = mode === 'vertical' ? moveEvent.clientX : moveEvent.clientY;
+        const deltaPercent = ((currentPos - startPos) / containerSize) * 100;
+        setSizes(resizeSplitSizes(startSizes, dividerIndex, deltaPercent));
       };
 
       const handleMouseUp = () => {
@@ -53,8 +72,14 @@ export const useSplitPaneResize = (
   );
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, splitRatio.toString());
-  }, [splitRatio]);
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+      saved[sizes.length] = sizes;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    } catch {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ [sizes.length]: sizes }));
+    }
+  }, [sizes]);
 
-  return { splitRatio, startResize };
+  return { sizes, startResize };
 };

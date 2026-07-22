@@ -186,7 +186,8 @@
       "renamePlaceholder": "Nome del notebook"
     },
     "addToSplitGroup": "Aggiungi al Gruppo Split",
-    "removeFromSplitGroup": "Rimuovi dal Gruppo"
+    "removeFromSplitGroup": "Rimuovi dal Gruppo",
+    "movePanel": "Sposta pannello"
   },
   "groups": {
     "title": "Gruppi",

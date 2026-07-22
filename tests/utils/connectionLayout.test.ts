@@ -7,7 +7,12 @@ import {
   canAddToSplit,
   addToSplit,
   reorderSplit,
+  defaultSplitSizes,
+  resizeSplitSizes,
+  moveInSplit,
+  getPanelDropEdge,
   MAX_SPLIT_CONNECTIONS,
+  MIN_SPLIT_PANE_SIZE,
   type SplitView,
 } from '../../src/utils/connectionLayout';
 import type { ConnectionData } from '../../src/contexts/DatabaseContext';
@@ -205,6 +210,110 @@ describe('connectionLayout', () => {
     it('returns the original view when either id is not in the group', () => {
       expect(reorderSplit(view, 'x', 'a')).toBe(view);
       expect(reorderSplit(view, 'a', 'x')).toBe(view);
+    });
+  });
+
+  describe('defaultSplitSizes', () => {
+    it('returns equal shares summing to 100', () => {
+      expect(defaultSplitSizes(2)).toEqual([50, 50]);
+      expect(defaultSplitSizes(4)).toEqual([25, 25, 25, 25]);
+      const three = defaultSplitSizes(3);
+      expect(three).toHaveLength(3);
+      expect(three.reduce((a, b) => a + b, 0)).toBeCloseTo(100);
+    });
+  });
+
+  describe('resizeSplitSizes', () => {
+    it('moves share between the two panes around the divider', () => {
+      expect(resizeSplitSizes([50, 50], 0, 10)).toEqual([60, 40]);
+      expect(resizeSplitSizes([25, 25, 25, 25], 1, -5)).toEqual([25, 20, 30, 25]);
+    });
+
+    it('leaves panes not adjacent to the divider untouched', () => {
+      const result = resizeSplitSizes([25, 25, 25, 25], 2, 10);
+      expect(result[0]).toBe(25);
+      expect(result[1]).toBe(25);
+    });
+
+    it('keeps the total share constant', () => {
+      const result = resizeSplitSizes([40, 30, 30], 0, 17);
+      expect(result.reduce((a, b) => a + b, 0)).toBeCloseTo(100);
+    });
+
+    it('clamps both panes to the minimum size', () => {
+      expect(resizeSplitSizes([50, 50], 0, 60)).toEqual([100 - MIN_SPLIT_PANE_SIZE, MIN_SPLIT_PANE_SIZE]);
+      expect(resizeSplitSizes([50, 50], 0, -60)).toEqual([MIN_SPLIT_PANE_SIZE, 100 - MIN_SPLIT_PANE_SIZE]);
+    });
+
+    it('returns the original array when the delta is fully clamped away', () => {
+      const sizes = [MIN_SPLIT_PANE_SIZE, 100 - MIN_SPLIT_PANE_SIZE];
+      expect(resizeSplitSizes(sizes, 0, -5)).toBe(sizes);
+    });
+
+    it('ignores out-of-range divider indices', () => {
+      const sizes = [50, 50];
+      expect(resizeSplitSizes(sizes, -1, 10)).toBe(sizes);
+      expect(resizeSplitSizes(sizes, 1, 10)).toBe(sizes);
+    });
+  });
+
+  describe('moveInSplit', () => {
+    const view = makeSplitView({ connectionIds: ['a', 'b', 'c'], mode: 'vertical' });
+
+    it('places the panel before the target on a left drop and keeps vertical mode', () => {
+      const result = moveInSplit(view, 'c', 'a', 'left');
+      expect(result.connectionIds).toEqual(['c', 'a', 'b']);
+      expect(result.mode).toBe('vertical');
+    });
+
+    it('places the panel after the target on a right drop', () => {
+      const result = moveInSplit(view, 'a', 'b', 'right');
+      expect(result.connectionIds).toEqual(['b', 'a', 'c']);
+      expect(result.mode).toBe('vertical');
+    });
+
+    it('switches to horizontal mode on a top drop', () => {
+      const result = moveInSplit(view, 'c', 'b', 'top');
+      expect(result.connectionIds).toEqual(['a', 'c', 'b']);
+      expect(result.mode).toBe('horizontal');
+    });
+
+    it('switches to horizontal mode on a bottom drop', () => {
+      const result = moveInSplit(view, 'a', 'c', 'bottom');
+      expect(result.connectionIds).toEqual(['b', 'c', 'a']);
+      expect(result.mode).toBe('horizontal');
+    });
+
+    it('switches back to vertical mode on a side drop from horizontal', () => {
+      const horizontal = makeSplitView({ connectionIds: ['a', 'b'], mode: 'horizontal' });
+      expect(moveInSplit(horizontal, 'b', 'a', 'left').mode).toBe('vertical');
+    });
+
+    it('returns the original view for self-drops or unknown ids', () => {
+      expect(moveInSplit(view, 'a', 'a', 'left')).toBe(view);
+      expect(moveInSplit(view, 'x', 'a', 'left')).toBe(view);
+      expect(moveInSplit(view, 'a', 'x', 'left')).toBe(view);
+    });
+  });
+
+  describe('getPanelDropEdge', () => {
+    const rect = { left: 0, top: 0, width: 100, height: 100 };
+
+    it('returns the edge closest to the pointer', () => {
+      expect(getPanelDropEdge(rect, 10, 50)).toBe('left');
+      expect(getPanelDropEdge(rect, 90, 50)).toBe('right');
+      expect(getPanelDropEdge(rect, 50, 10)).toBe('top');
+      expect(getPanelDropEdge(rect, 50, 90)).toBe('bottom');
+    });
+
+    it('accounts for the rect offset', () => {
+      const offset = { left: 200, top: 100, width: 100, height: 100 };
+      expect(getPanelDropEdge(offset, 210, 150)).toBe('left');
+      expect(getPanelDropEdge(offset, 250, 190)).toBe('bottom');
+    });
+
+    it('handles degenerate rects without dividing by zero', () => {
+      expect(() => getPanelDropEdge({ left: 0, top: 0, width: 0, height: 0 }, 5, 5)).not.toThrow();
     });
   });
 });

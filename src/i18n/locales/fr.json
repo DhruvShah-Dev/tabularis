@@ -199,7 +199,8 @@
       "renamePlaceholder": "Nom du notebook"
     },
     "addToSplitGroup": "Ajouter au groupe divisé",
-    "removeFromSplitGroup": "Retirer du groupe"
+    "removeFromSplitGroup": "Retirer du groupe",
+    "movePanel": "Déplacer le panneau"
   },
   "mcp": {
     "title": "Intégration du serveur MCP",
