@@ -16,6 +16,9 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { splitRatio, startResize } = useSplitPaneResize(mode, containerRef);
   const isVertical = mode === 'vertical';
+  // The drag handle only controls the first/second boundary; with 3+ panes
+  // every pane gets an equal share instead
+  const isResizable = connectionIds.length === 2;
   const { deactivateSplit, removeConnectionFromSplit, explorerConnectionId, setExplorerConnectionId } = useConnectionLayoutContext();
   const { switchConnection, connectionDataMap, connections } = useDatabase();
   const { allDrivers } = useDrivers();
@@ -59,7 +62,7 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
               if (explorerConnectionId !== connId) setExplorerConnectionId(connId);
             }}
             style={
-              i === 0
+              isResizable && i === 0
                 ? {
                     [isVertical ? 'width' : 'height']: `${splitRatio}%`,
                     flexShrink: 0,
@@ -105,10 +108,12 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
 
           {i < connectionIds.length - 1 && (
             <div
-              onMouseDown={startResize}
+              onMouseDown={isResizable ? startResize : undefined}
               className={clsx(
-                'bg-default hover:bg-blue-500/50 transition-colors shrink-0 z-10',
-                isVertical ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize',
+                'bg-default shrink-0 z-10',
+                isVertical ? 'w-1' : 'h-1',
+                isResizable && 'hover:bg-blue-500/50 transition-colors',
+                isResizable && (isVertical ? 'cursor-col-resize' : 'cursor-row-resize'),
               )}
             />
           )}

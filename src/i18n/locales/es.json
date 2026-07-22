@@ -184,7 +184,9 @@
       "delete": "Eliminar",
       "deleteConfirm": "¿Eliminar el notebook \"{{title}}\"? Esta acción no se puede deshacer.",
       "renamePlaceholder": "Nombre del notebook"
-    }
+    },
+    "addToSplitGroup": "Añadir al Grupo Dividido",
+    "removeFromSplitGroup": "Quitar del Grupo"
   },
   "groups": {
     "title": "Grupos",

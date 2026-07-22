@@ -197,7 +197,9 @@
       "delete": "Delete",
       "deleteConfirm": "Delete notebook \"{{title}}\"? This cannot be undone.",
       "renamePlaceholder": "Notebook name"
-    }
+    },
+    "addToSplitGroup": "Add to Split Group",
+    "removeFromSplitGroup": "Remove from Group"
   },
   "mcp": {
     "title": "MCP Server Integration",

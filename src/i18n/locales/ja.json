@@ -197,7 +197,9 @@
       "delete": "削除",
       "deleteConfirm": "ノートブック「{{title}}」を削除しますか？この操作は元に戻せません。",
       "renamePlaceholder": "ノートブック名"
-    }
+    },
+    "addToSplitGroup": "分割グループに追加",
+    "removeFromSplitGroup": "グループから削除"
   },
   "mcp": {
     "title": "MCP サーバー連携",

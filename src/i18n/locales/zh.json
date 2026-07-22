@@ -183,7 +183,9 @@
       "delete": "删除",
       "deleteConfirm": "删除笔记本“{{title}}”？此操作无法撤销。",
       "renamePlaceholder": "笔记本名称"
-    }
+    },
+    "addToSplitGroup": "添加到拆分组",
+    "removeFromSplitGroup": "从组中移除"
   },
   "mcp": {
     "title": "MCP 服务器集成",

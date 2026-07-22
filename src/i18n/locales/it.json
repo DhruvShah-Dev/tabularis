@@ -184,7 +184,9 @@
       "delete": "Elimina",
       "deleteConfirm": "Eliminare il notebook \"{{title}}\"? L'operazione non è reversibile.",
       "renamePlaceholder": "Nome del notebook"
-    }
+    },
+    "addToSplitGroup": "Aggiungi al Gruppo Split",
+    "removeFromSplitGroup": "Rimuovi dal Gruppo"
   },
   "groups": {
     "title": "Gruppi",

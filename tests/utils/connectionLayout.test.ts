@@ -4,6 +4,10 @@ import {
   buildSplitContainerClass,
   buildPanelDatabaseData,
   canActivateSplit,
+  canAddToSplit,
+  addToSplit,
+  reorderSplit,
+  MAX_SPLIT_CONNECTIONS,
   type SplitView,
 } from '../../src/utils/connectionLayout';
 import type { ConnectionData } from '../../src/contexts/DatabaseContext';
@@ -125,6 +129,82 @@ describe('connectionLayout', () => {
 
     it('returns true for 3 or more connections', () => {
       expect(canActivateSplit(new Set(['conn-a', 'conn-b', 'conn-c']))).toBe(true);
+    });
+
+    it('returns true for exactly MAX_SPLIT_CONNECTIONS connections', () => {
+      expect(canActivateSplit(new Set(['a', 'b', 'c', 'd']))).toBe(true);
+    });
+
+    it('returns false beyond MAX_SPLIT_CONNECTIONS', () => {
+      expect(canActivateSplit(new Set(['a', 'b', 'c', 'd', 'e']))).toBe(false);
+    });
+  });
+
+  describe('canAddToSplit', () => {
+    it('returns false when there is no split view', () => {
+      expect(canAddToSplit(null, 'conn-c')).toBe(false);
+    });
+
+    it('returns true for a new connection when the group has room', () => {
+      expect(canAddToSplit(makeSplitView(), 'conn-c')).toBe(true);
+    });
+
+    it('returns false for a connection already in the group', () => {
+      expect(canAddToSplit(makeSplitView(), 'conn-a')).toBe(false);
+    });
+
+    it('returns false when the group is full', () => {
+      const full = makeSplitView({ connectionIds: ['a', 'b', 'c', 'd'] });
+      expect(full.connectionIds).toHaveLength(MAX_SPLIT_CONNECTIONS);
+      expect(canAddToSplit(full, 'conn-e')).toBe(false);
+    });
+  });
+
+  describe('addToSplit', () => {
+    it('appends the connection at the end', () => {
+      const result = addToSplit(makeSplitView(), 'conn-c');
+      expect(result.connectionIds).toEqual(['conn-a', 'conn-b', 'conn-c']);
+    });
+
+    it('preserves the split mode', () => {
+      const result = addToSplit(makeSplitView({ mode: 'horizontal' }), 'conn-c');
+      expect(result.mode).toBe('horizontal');
+    });
+
+    it('returns the original view when the connection is already grouped', () => {
+      const view = makeSplitView();
+      expect(addToSplit(view, 'conn-a')).toBe(view);
+    });
+
+    it('returns the original view when the group is full', () => {
+      const full = makeSplitView({ connectionIds: ['a', 'b', 'c', 'd'] });
+      expect(addToSplit(full, 'conn-e')).toBe(full);
+    });
+  });
+
+  describe('reorderSplit', () => {
+    const view = makeSplitView({ connectionIds: ['a', 'b', 'c', 'd'] });
+
+    it('moves a connection forward to the target position', () => {
+      expect(reorderSplit(view, 'a', 'c').connectionIds).toEqual(['b', 'c', 'a', 'd']);
+    });
+
+    it('moves a connection backward to the target position', () => {
+      expect(reorderSplit(view, 'd', 'b').connectionIds).toEqual(['a', 'd', 'b', 'c']);
+    });
+
+    it('swaps adjacent connections', () => {
+      expect(reorderSplit(view, 'a', 'b').connectionIds).toEqual(['b', 'a', 'c', 'd']);
+      expect(reorderSplit(view, 'b', 'a').connectionIds).toEqual(['b', 'a', 'c', 'd']);
+    });
+
+    it('returns the original view when dragged and target are the same', () => {
+      expect(reorderSplit(view, 'a', 'a')).toBe(view);
+    });
+
+    it('returns the original view when either id is not in the group', () => {
+      expect(reorderSplit(view, 'x', 'a')).toBe(view);
+      expect(reorderSplit(view, 'a', 'x')).toBe(view);
     });
   });
 });

@@ -197,7 +197,9 @@
       "delete": "Удалить",
       "deleteConfirm": "Удалить блокнот «{{title}}»? Это действие нельзя отменить.",
       "renamePlaceholder": "Имя блокнота"
-    }
+    },
+    "addToSplitGroup": "Добавить в группу разделения",
+    "removeFromSplitGroup": "Убрать из группы"
   },
   "mcp": {
     "title": "Интеграция MCP-сервера",

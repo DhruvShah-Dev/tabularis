@@ -197,7 +197,9 @@
       "delete": "Supprimer",
       "deleteConfirm": "Supprimer le notebook « {{title}} » ? Cette action est irréversible.",
       "renamePlaceholder": "Nom du notebook"
-    }
+    },
+    "addToSplitGroup": "Ajouter au groupe divisé",
+    "removeFromSplitGroup": "Retirer du groupe"
   },
   "mcp": {
     "title": "Intégration du serveur MCP",

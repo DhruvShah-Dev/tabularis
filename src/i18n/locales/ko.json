@@ -197,7 +197,9 @@
       "delete": "삭제",
       "deleteConfirm": "\"{{title}}\" 노트북을 삭제할까요? 되돌릴 수 없습니다.",
       "renamePlaceholder": "노트북 이름"
-    }
+    },
+    "addToSplitGroup": "분할 그룹에 추가",
+    "removeFromSplitGroup": "그룹에서 제거"
   },
   "mcp": {
     "title": "MCP 서버 연동",

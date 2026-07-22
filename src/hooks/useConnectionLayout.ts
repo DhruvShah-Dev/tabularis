@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { canActivateSplit } from '../utils/connectionLayout';
+import { addToSplit, canActivateSplit, reorderSplit } from '../utils/connectionLayout';
 import type { SplitView } from '../utils/connectionLayout';
 
 export interface ConnectionLayoutState {
@@ -12,6 +12,8 @@ export interface ConnectionLayoutState {
   activateSplit: (mode: 'vertical' | 'horizontal') => void;
   deactivateSplit: () => void;
   removeConnectionFromSplit: (id: string) => void;
+  addConnectionToSplit: (id: string) => void;
+  reorderSplitConnections: (draggedId: string, targetId: string) => void;
   showSplitView: () => void;
   hideSplitView: () => void;
   clearSelection: () => void;
@@ -73,6 +75,14 @@ export function useConnectionLayout(): ConnectionLayoutState {
     });
   }, []);
 
+  const addConnectionToSplit = useCallback((connectionId: string) => {
+    setSplitView(prev => (prev ? addToSplit(prev, connectionId) : prev));
+  }, []);
+
+  const reorderSplitConnections = useCallback((draggedId: string, targetId: string) => {
+    setSplitView(prev => (prev ? reorderSplit(prev, draggedId, targetId) : prev));
+  }, []);
+
   const showSplitView = useCallback(() => {
     setIsSplitVisible(true);
   }, []);
@@ -94,6 +104,8 @@ export function useConnectionLayout(): ConnectionLayoutState {
     activateSplit,
     deactivateSplit,
     removeConnectionFromSplit,
+    addConnectionToSplit,
+    reorderSplitConnections,
     showSplitView,
     hideSplitView,
     clearSelection,

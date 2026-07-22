@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Loader2, Shield, X, AlertCircle, Terminal, Check, Copy, Power, Columns2, Rows2, AppWindow } from "lucide-react";
+import { Loader2, Shield, X, AlertCircle, Terminal, Check, Copy, Power, Columns2, Rows2, AppWindow, SquarePlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ConnectionStatus } from "../../../hooks/useConnectionManager";
 import { getConnectionItemClass, getStatusDotClass } from "../../../utils/connectionManager";
-import { canActivateSplit } from "../../../utils/connectionLayout";
+import { canActivateSplit, canAddToSplit } from "../../../utils/connectionLayout";
+import { useConnectionLayoutContext } from "../../../hooks/useConnectionLayoutContext";
 import { ContextMenu } from "../../ui/ContextMenu";
 import { RailIndicator } from "./RailIndicator";
 import type { PluginManifest } from "../../../types/plugins";
@@ -65,6 +66,8 @@ export const OpenConnectionItem = ({
   const driverColor = getConnectionAccent(savedConnection, driverManifest);
   const hasError = !!error;
   const canSplit = canActivateSplit(selectedConnectionIds);
+  const { splitView, addConnectionToSplit } = useConnectionLayoutContext();
+  const canJoinSplit = canAddToSplit(splitView, connection.id);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -97,8 +100,20 @@ export const OpenConnectionItem = ({
       ]
     : [];
 
+  const joinSplitItems = canJoinSplit
+    ? [
+        {
+          label: t('sidebar.addToSplitGroup'),
+          icon: SquarePlus,
+          action: () => addConnectionToSplit(connection.id),
+        },
+        { separator: true as const },
+      ]
+    : [];
+
   const menuItems = [
     ...splitItems,
+    ...joinSplitItems,
     {
       label: t("sidebar.openInEditor"),
       icon: Terminal,
