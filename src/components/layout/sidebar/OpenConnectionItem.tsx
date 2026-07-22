@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Loader2, Shield, X, AlertCircle, Terminal, Check, Copy, Power, Columns2, Rows2, AppWindow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { ConnectionStatus } from "../../../hooks/useConnectionManager";
 import { getConnectionItemClass, getStatusDotClass } from "../../../utils/connectionManager";
 import { canActivateSplit } from "../../../utils/connectionLayout";
 import { ContextMenu } from "../../ui/ContextMenu";
+import { RailIndicator } from "./RailIndicator";
 import type { PluginManifest } from "../../../types/plugins";
 import { getConnectionAccent, getConnectionIcon } from "../../../utils/driverUI";
 import { useDatabase } from "../../../hooks/useDatabase";
@@ -22,7 +24,6 @@ interface Props {
   onActivateSplit: (mode: 'vertical' | 'horizontal') => void;
   shortcutIndex?: number;
   showShortcutHint?: boolean;
-  showLabel?: boolean;
   draggable?: boolean;
   onReorderDragStart?: (e: React.DragEvent) => void;
   onReorderDragOver?: (e: React.DragEvent) => void;
@@ -45,7 +46,6 @@ export const OpenConnectionItem = ({
   onActivateSplit,
   shortcutIndex,
   showShortcutHint = false,
-  showLabel = false,
   draggable: isDraggable = false,
   onReorderDragStart,
   onReorderDragOver,
@@ -56,7 +56,11 @@ export const OpenConnectionItem = ({
 }: Props) => {
   const { t } = useTranslation();
   const { connections } = useDatabase();
+  const location = useLocation();
   const { isActive, isConnecting, name, database, sshEnabled, error } = connection;
+  // The rail indicator marks the current view: a connection "owns" it only in
+  // the editor, otherwise it belongs to the active nav item (connections/mcp/settings)
+  const isCurrentView = isActive && location.pathname === "/editor";
   const savedConnection = connections.find(c => c.id === connection.id);
   const driverColor = getConnectionAccent(savedConnection, driverManifest);
   const hasError = !!error;
@@ -129,7 +133,7 @@ export const OpenConnectionItem = ({
   return (
     <>
       <div
-        className={`relative group w-full flex flex-col items-center ${showLabel ? 'mb-0.5' : 'mb-1'}`}
+        className="relative group w-full flex flex-col items-center mb-1"
         draggable={isDraggable}
         onDragStart={onReorderDragStart}
         onDragOver={onReorderDragOver}
@@ -141,6 +145,8 @@ export const OpenConnectionItem = ({
         {dropIndicator === 'above' && (
           <div className="absolute -top-0.5 left-2 right-2 h-0.5 bg-blue-400 rounded-full z-30" />
         )}
+
+        <RailIndicator isActive={isCurrentView} />
 
         <button
           onClick={handleClick}
@@ -155,10 +161,10 @@ export const OpenConnectionItem = ({
             <Loader2 size={20} className="animate-spin text-blue-400" />
           ) : (
             <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-md"
+              className="w-11 h-11 rounded-lg flex items-center justify-center text-white shadow-md"
               style={{ backgroundColor: driverColor }}
             >
-              {getConnectionIcon(savedConnection, driverManifest, 16)}
+              {getConnectionIcon(savedConnection, driverManifest, 20)}
             </div>
           )}
 
@@ -226,13 +232,6 @@ export const OpenConnectionItem = ({
           )}
           {hasError && <div className="text-red-400 text-[10px] mt-0.5 max-w-[180px] truncate">{error}</div>}
         </div>
-
-        {/* Connection name label */}
-        {showLabel && (
-          <span className="text-[9px] text-muted leading-tight max-w-[56px] truncate text-center select-none mt-0.5">
-            {name}
-          </span>
-        )}
 
         {/* Drop indicator - below */}
         {dropIndicator === 'below' && (

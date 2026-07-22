@@ -11,6 +11,7 @@ import { SlotAnchor } from "../ui/SlotAnchor";
 
 // Sub-components
 import { NavItem } from "./sidebar/NavItem";
+import { RailIndicator } from "./sidebar/RailIndicator";
 import { OpenConnectionItem } from "./sidebar/OpenConnectionItem";
 import { ConnectionGroupItem } from "./sidebar/ConnectionGroupItem";
 import { ExplorerSidebar, type SidebarTab } from "./ExplorerSidebar";
@@ -118,15 +119,6 @@ export const Sidebar = () => {
       return oa - ob;
     });
   }, [openConnections, splitView, sidebarOrder]);
-
-  // Track which connections have a group (to show labels)
-  const groupedIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of connections) {
-      if (c.group_id) set.add(c.id);
-    }
-    return set;
-  }, [connections]);
 
   // Drag-and-drop reorder state
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -277,7 +269,6 @@ export const Sidebar = () => {
                   onActivateSplit={activateSplit}
                   shortcutIndex={idx + 1}
                   showShortcutHint={showShortcutHints && idx < 9}
-                  showLabel={groupedIds.has(conn.id)}
                   draggable
                   onReorderDragStart={(e) => handleReorderDragStart(conn.id, e)}
                   onReorderDragOver={(e) => handleReorderDragOver(conn.id, e)}
@@ -297,6 +288,7 @@ export const Sidebar = () => {
               onClick={() => openUrl(DISCORD_URL)}
               className="flex items-center justify-center w-12 h-12 rounded-lg transition-colors relative group text-secondary hover:bg-surface-secondary hover:text-indigo-400"
             >
+              <RailIndicator isActive={false} className="-left-2" />
               <div className="relative">
                 <DiscordIcon size={24} />
               </div>

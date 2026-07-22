@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Database, Unlink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useConnectionLayoutContext } from '../../../hooks/useConnectionLayoutContext';
 import { ContextMenu } from '../../ui/ContextMenu';
+import { RailIndicator } from './RailIndicator';
 import type { ConnectionStatus } from '../../../hooks/useConnectionManager';
 
 interface Props {
@@ -14,7 +15,8 @@ interface Props {
 export const ConnectionGroupItem = ({ connections, mode }: Props) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { deactivateSplit, showSplitView } = useConnectionLayoutContext();
+  const location = useLocation();
+  const { deactivateSplit, showSplitView, isSplitVisible } = useConnectionLayoutContext();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -33,6 +35,7 @@ export const ConnectionGroupItem = ({ connections, mode }: Props) => {
   return (
     <>
       <div className="relative group w-full flex justify-center mb-1">
+        <RailIndicator isActive={isSplitVisible && location.pathname === "/editor"} />
         <button
           onClick={() => { showSplitView(); navigate('/editor'); }}
           onContextMenu={handleContextMenu}
