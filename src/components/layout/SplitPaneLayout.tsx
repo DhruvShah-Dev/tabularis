@@ -96,12 +96,19 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
     }
   };
 
+  // Panels are rendered in a stable order and arranged visually with the
+  // flexbox `order` property: reordering keyed children would move their DOM
+  // nodes, and Monaco crashes when its container gets reparented mid-render.
+  // Panels take even order slots, dividers the odd ones in between.
+  const stableIds = [...connectionIds].sort();
+
   return (
     <div
       ref={containerRef}
       className={clsx('flex h-full w-full', isVertical ? 'flex-row' : 'flex-col')}
     >
-      {connectionIds.map((connId, i) => {
+      {stableIds.map((connId) => {
+        const visualIndex = connectionIds.indexOf(connId);
         const accent = accentFor(connId);
         const isActivePanel = explorerConnectionId === connId;
         const isDropCandidate = !!draggedPanelId && draggedPanelId !== connId;
@@ -116,7 +123,12 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
             onClickCapture={() => {
               if (explorerConnectionId !== connId) setExplorerConnectionId(connId);
             }}
-            style={{ flexGrow: sizes[i] ?? 1, flexBasis: 0, flexShrink: 0 }}
+            style={{
+              order: visualIndex * 2,
+              flexGrow: sizes[visualIndex] ?? 1,
+              flexBasis: 0,
+              flexShrink: 0,
+            }}
           >
             {/* Drop-zone highlight while dragging a panel over this one */}
             {isDropCandidate && dropTarget?.connId === connId && (
@@ -171,19 +183,21 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
               </PanelDatabaseProvider>
             </div>
           </div>
-
-          {i < connectionIds.length - 1 && (
-            <div
-              onMouseDown={(e) => startResize(i, e)}
-              className={clsx(
-                'bg-default hover:bg-blue-500/50 transition-colors shrink-0 z-10',
-                isVertical ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize',
-              )}
-            />
-          )}
         </Fragment>
         );
       })}
+
+      {Array.from({ length: connectionIds.length - 1 }, (_, k) => (
+        <div
+          key={`divider-${k}`}
+          onMouseDown={(e) => startResize(k, e)}
+          style={{ order: k * 2 + 1 }}
+          className={clsx(
+            'bg-default hover:bg-blue-500/50 transition-colors shrink-0 z-10',
+            isVertical ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize',
+          )}
+        />
+      ))}
     </div>
   );
 };
