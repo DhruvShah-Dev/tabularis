@@ -1,7 +1,16 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { addToSplit, canActivateSplit, moveInSplit, reorderSplit } from '../utils/connectionLayout';
-import type { SplitEdge, SplitView } from '../utils/connectionLayout';
+import {
+  addToSplit,
+  canActivateSplit,
+  layoutFromIds,
+  makeSplitView,
+  moveInSplit,
+  removeFromLayout,
+  resizeLayoutAt,
+  swapInSplit,
+} from '../utils/connectionLayout';
+import type { SplitEdge, SplitMode, SplitView } from '../utils/connectionLayout';
 
 export interface ConnectionLayoutState {
   selectedConnectionIds: Set<string>;
@@ -9,12 +18,13 @@ export interface ConnectionLayoutState {
   isSplitVisible: boolean;
   explorerConnectionId: string | null;
   toggleSelection: (id: string, isCtrlHeld: boolean) => void;
-  activateSplit: (mode: 'vertical' | 'horizontal') => void;
+  activateSplit: (mode: SplitMode) => void;
   deactivateSplit: () => void;
   removeConnectionFromSplit: (id: string) => void;
   addConnectionToSplit: (id: string) => void;
-  reorderSplitConnections: (draggedId: string, targetId: string) => void;
+  swapSplitConnections: (aId: string, bId: string) => void;
   moveSplitConnection: (draggedId: string, targetId: string, edge: SplitEdge) => void;
+  resizeSplitNode: (path: number[], sizes: number[]) => void;
   showSplitView: () => void;
   hideSplitView: () => void;
   clearSelection: () => void;
@@ -44,12 +54,13 @@ export function useConnectionLayout(): ConnectionLayoutState {
     });
   }, []);
 
-  const activateSplit = useCallback((mode: 'vertical' | 'horizontal') => {
+  const activateSplit = useCallback((mode: SplitMode) => {
     if (!canActivateSplit(selectedConnectionIds)) return;
-    const connectionIds = Array.from(selectedConnectionIds);
-    setSplitView({ connectionIds, mode });
+    const view = makeSplitView(layoutFromIds(Array.from(selectedConnectionIds), mode));
+    if (!view) return;
+    setSplitView(view);
     setIsSplitVisible(true);
-    setExplorerConnectionId(connectionIds[0]);
+    setExplorerConnectionId(view.connectionIds[0]);
     setSelectedConnectionIds(new Set());
     navigate('/editor');
   }, [selectedConnectionIds, navigate]);
@@ -63,29 +74,33 @@ export function useConnectionLayout(): ConnectionLayoutState {
   const removeConnectionFromSplit = useCallback((connectionId: string) => {
     setSplitView(prev => {
       if (!prev) return null;
-      const remaining = prev.connectionIds.filter(id => id !== connectionId);
-      if (remaining.length < 2) {
+      const next = makeSplitView(removeFromLayout(prev.layout, connectionId));
+      // A split needs at least two panels to stay alive
+      if (!next || next.connectionIds.length < 2) {
         setIsSplitVisible(false);
         return null;
       }
-      return { ...prev, connectionIds: remaining };
+      return next;
     });
-    setExplorerConnectionId(prev => {
-      if (prev === connectionId) return null;
-      return prev;
-    });
+    setExplorerConnectionId(prev => (prev === connectionId ? null : prev));
   }, []);
 
   const addConnectionToSplit = useCallback((connectionId: string) => {
     setSplitView(prev => (prev ? addToSplit(prev, connectionId) : prev));
   }, []);
 
-  const reorderSplitConnections = useCallback((draggedId: string, targetId: string) => {
-    setSplitView(prev => (prev ? reorderSplit(prev, draggedId, targetId) : prev));
+  const swapSplitConnections = useCallback((aId: string, bId: string) => {
+    setSplitView(prev => (prev ? swapInSplit(prev, aId, bId) : prev));
   }, []);
 
   const moveSplitConnection = useCallback((draggedId: string, targetId: string, edge: SplitEdge) => {
     setSplitView(prev => (prev ? moveInSplit(prev, draggedId, targetId, edge) : prev));
+  }, []);
+
+  const resizeSplitNode = useCallback((path: number[], sizes: number[]) => {
+    setSplitView(prev =>
+      prev ? (makeSplitView(resizeLayoutAt(prev.layout, path, sizes)) ?? prev) : prev,
+    );
   }, []);
 
   const showSplitView = useCallback(() => {
@@ -110,8 +125,9 @@ export function useConnectionLayout(): ConnectionLayoutState {
     deactivateSplit,
     removeConnectionFromSplit,
     addConnectionToSplit,
-    reorderSplitConnections,
+    swapSplitConnections,
     moveSplitConnection,
+    resizeSplitNode,
     showSplitView,
     hideSplitView,
     clearSelection,

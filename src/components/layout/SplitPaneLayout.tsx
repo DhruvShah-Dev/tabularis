@@ -1,17 +1,21 @@
-import { useRef, useState, Fragment } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { GripHorizontal, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
 import { PanelDatabaseProvider } from './PanelDatabaseProvider';
 import { EditorProvider } from '../../contexts/EditorProvider';
 import { Editor } from '../../pages/Editor';
-import { useSplitPaneResize } from '../../hooks/useSplitPaneResize';
 import { useConnectionLayoutContext } from '../../hooks/useConnectionLayoutContext';
 import { useDatabase } from '../../hooks/useDatabase';
 import { useDrivers } from '../../hooks/useDrivers';
 import { getConnectionAccent } from '../../utils/driverUI';
-import { getPanelDropEdge } from '../../utils/connectionLayout';
-import type { SplitEdge, SplitView } from '../../utils/connectionLayout';
+import {
+  computeLayoutGeometry,
+  getPanelDropEdge,
+  getSplitNodeAt,
+  resizeSplitSizes,
+} from '../../utils/connectionLayout';
+import type { DividerGeometry, SplitEdge, SplitView } from '../../utils/connectionLayout';
 import { rectContains, startPointerDrag } from '../../utils/pointerDrag';
 
 const EDGE_OVERLAY_CLASS: Record<SplitEdge, string> = {
@@ -21,18 +25,61 @@ const EDGE_OVERLAY_CLASS: Record<SplitEdge, string> = {
   bottom: 'bottom-0 left-0 right-0 h-1/2',
 };
 
-export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
+/**
+ * Renders the split view as a tiling layout: pane and divider rectangles are
+ * computed from the layout tree and applied as absolute percent positions.
+ * Panels are rendered in a stable order and never nested in per-split
+ * containers, so their DOM nodes survive any rearrangement (Monaco crashes
+ * when its container is reparented mid-render).
+ */
+export const SplitPaneLayout = ({ layout, connectionIds }: SplitView) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { sizes, startResize } = useSplitPaneResize(mode, containerRef, connectionIds.length);
-  const isVertical = mode === 'vertical';
-  const { deactivateSplit, removeConnectionFromSplit, moveSplitConnection, explorerConnectionId, setExplorerConnectionId } = useConnectionLayoutContext();
+  const {
+    deactivateSplit,
+    removeConnectionFromSplit,
+    moveSplitConnection,
+    resizeSplitNode,
+    explorerConnectionId,
+    setExplorerConnectionId,
+  } = useConnectionLayoutContext();
+  const { switchConnection, connectionDataMap, connections } = useDatabase();
+  const { allDrivers } = useDrivers();
+  const { t } = useTranslation();
+
   const [draggedPanelId, setDraggedPanelId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ connId: string; edge: SplitEdge } | null>(null);
   const panelRefs = useRef(new Map<string, HTMLDivElement>());
   const dropTargetRef = useRef<{ connId: string; edge: SplitEdge } | null>(null);
 
-  // Pointer-based panel move (mousedown + tracking): HTML5 drag-and-drop can
-  // freeze the WebKitGTK compositor, and live tracking feels Hyprland-like
+  const geometry = useMemo(() => computeLayoutGeometry(layout), [layout]);
+  const paneRects = useMemo(
+    () => new Map(geometry.panes.map(p => [p.connectionId, p.rect])),
+    [geometry],
+  );
+  // Stable render order: rearrangements only change style attributes
+  const stableIds = useMemo(() => [...connectionIds].sort(), [connectionIds]);
+
+  const accentFor = (connId: string) => {
+    const conn = connections.find((c) => c.id === connId);
+    const driverId = conn?.params.driver ?? connectionDataMap[connId]?.driver;
+    return getConnectionAccent(conn, allDrivers.find((d) => d.id === driverId));
+  };
+
+  const handleClosePanel = (connId: string) => {
+    const remaining = connectionIds.filter(id => id !== connId);
+    if (remaining.length < 2) {
+      deactivateSplit();
+      if (remaining.length === 1) switchConnection(remaining[0]);
+    } else {
+      removeConnectionFromSplit(connId);
+      if (explorerConnectionId === connId) {
+        setExplorerConnectionId(remaining[0]);
+      }
+    }
+  };
+
+  // Pointer-based panel move: drag the grip onto another panel's edge to
+  // re-tile it there (HTML5 DnD can freeze the WebKitGTK compositor)
   const startPanelMove = (connId: string, connName: string, e: React.MouseEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -70,64 +117,58 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
       },
     });
   };
-  const { switchConnection, connectionDataMap, connections } = useDatabase();
-  const { allDrivers } = useDrivers();
-  const { t } = useTranslation();
 
-  // Each panel header carries its own connection's accent color (matching the
-  // tinted editor tab bar inside the panel), with the active panel rendered
-  // more strongly so it still stands out from the others.
-  const accentFor = (connId: string) => {
-    const conn = connections.find((c) => c.id === connId);
-    const driverId = conn?.params.driver ?? connectionDataMap[connId]?.driver;
-    return getConnectionAccent(conn, allDrivers.find((d) => d.id === driverId));
+  // Divider drag: adjusts the shares of the split node the divider belongs
+  // to, measured against that node's own extent
+  const startDividerResize = (divider: DividerGeometry, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const container = containerRef.current;
+    const node = getSplitNodeAt(layout, divider.path);
+    if (!container || !node || node.type !== 'split') return;
+
+    const containerRect = container.getBoundingClientRect();
+    const isVertical = divider.mode === 'vertical';
+    const nodePx =
+      ((isVertical ? containerRect.width : containerRect.height) * divider.nodeMainSize) / 100;
+    if (nodePx <= 0) return;
+    const startPos = isVertical ? e.clientX : e.clientY;
+    const startSizes = node.sizes;
+
+    startPointerDrag(e.clientX, e.clientY, {
+      threshold: 0,
+      cursor: isVertical ? 'col-resize' : 'row-resize',
+      onDragMove: (x, y) => {
+        const deltaPercent = (((isVertical ? x : y) - startPos) / nodePx) * 100;
+        resizeSplitNode(divider.path, resizeSplitSizes(startSizes, divider.index, deltaPercent));
+      },
+    });
   };
-
-  const handleClosePanel = (connId: string) => {
-    const remaining = connectionIds.filter(id => id !== connId);
-    if (remaining.length < 2) {
-      deactivateSplit();
-      if (remaining.length === 1) switchConnection(remaining[0]);
-    } else {
-      removeConnectionFromSplit(connId);
-      if (explorerConnectionId === connId) {
-        setExplorerConnectionId(remaining[0]);
-      }
-    }
-  };
-
-  // Panels are rendered in a stable order and arranged visually with the
-  // flexbox `order` property: reordering keyed children would move their DOM
-  // nodes, and Monaco crashes when its container gets reparented mid-render.
-  // Panels take even order slots, dividers the odd ones in between.
-  const stableIds = [...connectionIds].sort();
 
   return (
-    <div
-      ref={containerRef}
-      className={clsx('flex h-full w-full', isVertical ? 'flex-row' : 'flex-col')}
-    >
+    <div ref={containerRef} className="relative h-full w-full overflow-hidden">
       {stableIds.map((connId) => {
-        const visualIndex = connectionIds.indexOf(connId);
+        const rect = paneRects.get(connId);
+        if (!rect) return null;
         const accent = accentFor(connId);
         const isActivePanel = explorerConnectionId === connId;
         const isDropCandidate = !!draggedPanelId && draggedPanelId !== connId;
         return (
-        <Fragment key={connId}>
           <div
+            key={connId}
             ref={(el) => {
               if (el) panelRefs.current.set(connId, el);
               else panelRefs.current.delete(connId);
             }}
-            className="relative flex flex-col min-w-0 min-h-0"
+            className="absolute flex flex-col min-w-0 min-h-0"
             onClickCapture={() => {
               if (explorerConnectionId !== connId) setExplorerConnectionId(connId);
             }}
             style={{
-              order: visualIndex * 2,
-              flexGrow: sizes[visualIndex] ?? 1,
-              flexBasis: 0,
-              flexShrink: 0,
+              left: `${rect.left}%`,
+              top: `${rect.top}%`,
+              width: `${rect.width}%`,
+              height: `${rect.height}%`,
             }}
           >
             {/* Drop-zone highlight while dragging a panel over this one */}
@@ -139,6 +180,7 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
                 )}
               />
             )}
+
             {/* Panel header — same accent wash as the editor tab bar below,
                 with the connection's accent color for the title text. */}
             <div
@@ -183,19 +225,33 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
               </PanelDatabaseProvider>
             </div>
           </div>
-        </Fragment>
         );
       })}
 
-      {Array.from({ length: connectionIds.length - 1 }, (_, k) => (
+      {/* Dividers overlay the pane boundaries */}
+      {geometry.dividers.map((divider) => (
         <div
-          key={`divider-${k}`}
-          onMouseDown={(e) => startResize(k, e)}
-          style={{ order: k * 2 + 1 }}
+          key={`${divider.path.join('.')}:${divider.index}`}
+          onMouseDown={(e) => startDividerResize(divider, e)}
           className={clsx(
-            'bg-default hover:bg-blue-500/50 transition-colors shrink-0 z-10',
-            isVertical ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize',
+            'absolute bg-default hover:bg-blue-500/50 transition-colors z-10',
+            divider.mode === 'vertical' ? 'cursor-col-resize' : 'cursor-row-resize',
           )}
+          style={
+            divider.mode === 'vertical'
+              ? {
+                  left: `calc(${divider.pos}% - 2px)`,
+                  top: `${divider.crossStart}%`,
+                  width: '4px',
+                  height: `${divider.crossSize}%`,
+                }
+              : {
+                  top: `calc(${divider.pos}% - 2px)`,
+                  left: `${divider.crossStart}%`,
+                  height: '4px',
+                  width: `${divider.crossSize}%`,
+                }
+          }
         />
       ))}
     </div>

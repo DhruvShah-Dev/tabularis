@@ -28,7 +28,7 @@ export const ConnectionGroupItem = ({ connections, mode, isDropTarget = false }:
     showSplitView,
     isSplitVisible,
     removeConnectionFromSplit,
-    reorderSplitConnections,
+    swapSplitConnections,
   } = useConnectionLayoutContext();
   const { connections: savedConnections } = useDatabase();
   const { allDrivers } = useDrivers();
@@ -81,7 +81,7 @@ export const ConnectionGroupItem = ({ connections, mode, isDropTarget = false }:
       },
       onDrop: () => {
         if (reorderTargetRef.current) {
-          reorderSplitConnections(conn.id, reorderTargetRef.current);
+          swapSplitConnections(conn.id, reorderTargetRef.current);
         }
       },
       onEnd: () => {
