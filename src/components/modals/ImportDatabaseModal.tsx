@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -19,7 +19,10 @@ interface ImportDatabaseModalProps {
   isOpen: boolean;
   onClose: () => void;
   connectionId: string;
+  /** Display label only — may fall back to a generic string. */
   databaseName: string;
+  /** Actual database to scope the import to. Undefined when unknown. */
+  targetDatabase?: string;
   filePath: string;
   onSuccess?: () => void;
 }
@@ -29,6 +32,7 @@ export const ImportDatabaseModal = ({
   onClose,
   connectionId,
   databaseName,
+  targetDatabase,
   filePath,
   onSuccess,
 }: ImportDatabaseModalProps) => {
@@ -41,6 +45,10 @@ export const ImportDatabaseModal = ({
   const [success, setSuccess] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0); // in seconds
   const [startTime, setStartTime] = useState<number | null>(null);
+  // Guards against the effect firing the import twice: React strict-mode double
+  // mounts, and startImport being recreated when its deps change, both re-run the
+  // effect. Without this the whole dump is executed twice against the database.
+  const hasStartedRef = useRef(false);
 
   const startImport = useCallback(async () => {
     setIsImporting(true);
@@ -54,6 +62,7 @@ export const ImportDatabaseModal = ({
         connectionId,
         filePath,
         ...(activeSchema ? { schema: activeSchema } : {}),
+        ...(targetDatabase ? { database: targetDatabase } : {}),
       });
 
       setSuccess(true);
@@ -78,7 +87,7 @@ export const ImportDatabaseModal = ({
         });
       }
     }
-  }, [connectionId, filePath, activeSchema, onSuccess, onClose, t, showAlert]);
+  }, [connectionId, filePath, activeSchema, targetDatabase, onSuccess, onClose, t, showAlert]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -90,10 +99,15 @@ export const ImportDatabaseModal = ({
       setSuccess(false);
       setElapsedTime(0);
       setStartTime(null);
+      hasStartedRef.current = false;
       return;
     }
 
-    // Start import automatically when modal opens
+    // Start import automatically when the modal opens — but only once per opening.
+    if (hasStartedRef.current) {
+      return;
+    }
+    hasStartedRef.current = true;
     startImport();
 
     // Listen to progress events
