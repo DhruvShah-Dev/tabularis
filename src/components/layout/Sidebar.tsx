@@ -26,7 +26,8 @@ import { useSidebarResize } from "../../hooks/useSidebarResize";
 import { useConnectionManager } from "../../hooks/useConnectionManager";
 import { useOpenConnectionInNewWindow } from "../../hooks/useOpenConnectionInNewWindow";
 import { useConnectionLayoutContext } from "../../hooks/useConnectionLayoutContext";
-import { isConnectionGrouped } from "../../utils/connectionLayout";
+import { canAddToSplit, isConnectionGrouped } from "../../utils/connectionLayout";
+import { rectContains, startPointerDrag } from "../../utils/pointerDrag";
 import { useDrivers } from "../../hooks/useDrivers";
 import { useKeybindings } from "../../hooks/useKeybindings";
 
@@ -96,6 +97,7 @@ export const Sidebar = () => {
     toggleSelection,
     activateSplit,
     hideSplitView,
+    addConnectionToSplit,
     explorerConnectionId
   } = useConnectionLayoutContext();
 
@@ -120,51 +122,75 @@ export const Sidebar = () => {
     });
   }, [openConnections, splitView, sidebarOrder]);
 
-  // Drag-and-drop reorder state
-  const [draggedId, setDraggedId] = useState<string | null>(null);
+  // Pointer-based rail drag: reorder connections or drop one onto the split
+  // group badge (HTML5 DnD can freeze the WebKitGTK compositor)
   const [dropTarget, setDropTarget] = useState<{ id: string; position: 'above' | 'below' } | null>(null);
+  const [isGroupDropTarget, setIsGroupDropTarget] = useState(false);
+  const itemRefs = useRef(new Map<string, HTMLDivElement>());
+  const groupRef = useRef<HTMLDivElement | null>(null);
+  const railDropRef = useRef<{ id: string; position: 'above' | 'below' } | 'group' | null>(null);
 
-  const handleReorderDragStart = useCallback((connectionId: string, e: React.DragEvent) => {
-    setDraggedId(connectionId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', connectionId);
-  }, []);
-
-  const handleReorderDragOver = useCallback((targetId: string, e: React.DragEvent) => {
-    e.preventDefault();
-    if (!draggedId || draggedId === targetId) {
-      setDropTarget(null);
-      return;
-    }
-    const rect = e.currentTarget.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const position = e.clientY < midY ? 'above' : 'below';
-    setDropTarget({ id: targetId, position });
-  }, [draggedId]);
-
-  const handleReorderDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (!draggedId || !dropTarget || draggedId === dropTarget.id) {
-      setDraggedId(null);
-      setDropTarget(null);
-      return;
-    }
-
+  const applySidebarReorder = useCallback((draggedId: string, target: { id: string; position: 'above' | 'below' }) => {
     const currentOrder = sortedSidebarConnections.map(c => c.id);
     const reordered = currentOrder.filter(id => id !== draggedId);
-    let toIdx = reordered.indexOf(dropTarget.id);
-    if (dropTarget.position === 'below') toIdx += 1;
+    let toIdx = reordered.indexOf(target.id);
+    if (target.position === 'below') toIdx += 1;
     reordered.splice(toIdx, 0, draggedId);
-
     setSidebarOrder(reordered);
-    setDraggedId(null);
-    setDropTarget(null);
-  }, [draggedId, dropTarget, sortedSidebarConnections]);
+  }, [sortedSidebarConnections]);
 
-  const handleReorderDragEnd = useCallback(() => {
-    setDraggedId(null);
-    setDropTarget(null);
-  }, []);
+  const handleConnectionMoveStart = useCallback((connId: string, connName: string, e: React.MouseEvent) => {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
+    startPointerDrag(e.clientX, e.clientY, {
+      threshold: 5,
+      createGhost: () => {
+        const ghost = document.createElement('div');
+        ghost.className = 'px-2 py-1 rounded text-xs bg-surface-secondary text-primary border border-default shadow-lg';
+        ghost.textContent = connName;
+        return ghost;
+      },
+      onDragMove: (x, y) => {
+        const groupEl = groupRef.current;
+        if (
+          groupEl &&
+          canAddToSplit(splitView, connId) &&
+          rectContains(groupEl.getBoundingClientRect(), x, y)
+        ) {
+          railDropRef.current = 'group';
+          setIsGroupDropTarget(true);
+          setDropTarget(null);
+          return;
+        }
+        let found: { id: string; position: 'above' | 'below' } | null = null;
+        for (const [id, el] of itemRefs.current) {
+          if (id === connId) continue;
+          const rect = el.getBoundingClientRect();
+          if (rectContains(rect, x, y)) {
+            found = { id, position: y < rect.top + rect.height / 2 ? 'above' : 'below' };
+            break;
+          }
+        }
+        railDropRef.current = found;
+        setIsGroupDropTarget(false);
+        setDropTarget(prev =>
+          prev?.id === found?.id && prev?.position === found?.position ? prev : found,
+        );
+      },
+      onDrop: () => {
+        const target = railDropRef.current;
+        if (target === 'group') {
+          addConnectionToSplit(connId);
+        } else if (target) {
+          applySidebarReorder(connId, target);
+        }
+      },
+      onEnd: () => {
+        railDropRef.current = null;
+        setDropTarget(null);
+        setIsGroupDropTarget(false);
+      },
+    });
+  }, [splitView, addConnectionToSplit, applySidebarReorder]);
 
   const handleSwitchToConnection = (connectionId: string) => {
     handleSwitch(connectionId);
@@ -245,38 +271,44 @@ export const Sidebar = () => {
             <div className="w-full flex flex-col items-center mt-2 pt-2 border-t border-default">
               {/* Show group item once if there is a split view */}
               {splitView && (
-                <ConnectionGroupItem
-                  connections={openConnections.filter(c =>
-                    isConnectionGrouped(c.id, splitView),
-                  )}
-                  mode={splitView.mode}
-                />
+                <div ref={groupRef} className="w-full">
+                  <ConnectionGroupItem
+                    connections={openConnections.filter(c =>
+                      isConnectionGrouped(c.id, splitView),
+                    )}
+                    mode={splitView.mode}
+                    isDropTarget={isGroupDropTarget}
+                  />
+                </div>
               )}
 
               {/* Sortable connection list */}
               {sortedSidebarConnections.map((conn, idx) => (
-                <OpenConnectionItem
+                <div
                   key={conn.id}
-                  connection={conn}
-                  driverManifest={allDrivers.find(d => d.id === conn.driver)}
-                  isSelected={selectedConnectionIds.has(conn.id)}
-                  onSwitch={() => handleSwitchOrSetExplorer(conn.id)}
-                  onOpenInEditor={() => handleOpenInEditor(conn.id)}
-                  onOpenInNewWindow={() => handleOpenInNewWindow(conn.id)}
-                  onDisconnect={() => handleDisconnectConnection(conn.id)}
-                  onToggleSelect={(isCtrlHeld) => toggleSelection(conn.id, isCtrlHeld)}
-                  selectedConnectionIds={selectedConnectionIds}
-                  onActivateSplit={activateSplit}
-                  shortcutIndex={idx + 1}
-                  showShortcutHint={showShortcutHints && idx < 9}
-                  draggable
-                  onReorderDragStart={(e) => handleReorderDragStart(conn.id, e)}
-                  onReorderDragOver={(e) => handleReorderDragOver(conn.id, e)}
-                  onReorderDragLeave={() => setDropTarget(null)}
-                  onReorderDrop={handleReorderDrop}
-                  onReorderDragEnd={handleReorderDragEnd}
-                  dropIndicator={dropTarget?.id === conn.id ? dropTarget.position : null}
-                />
+                  ref={(el) => {
+                    if (el) itemRefs.current.set(conn.id, el);
+                    else itemRefs.current.delete(conn.id);
+                  }}
+                  className="w-full flex flex-col items-center"
+                >
+                  <OpenConnectionItem
+                    connection={conn}
+                    driverManifest={allDrivers.find(d => d.id === conn.driver)}
+                    isSelected={selectedConnectionIds.has(conn.id)}
+                    onSwitch={() => handleSwitchOrSetExplorer(conn.id)}
+                    onOpenInEditor={() => handleOpenInEditor(conn.id)}
+                    onOpenInNewWindow={() => handleOpenInNewWindow(conn.id)}
+                    onDisconnect={() => handleDisconnectConnection(conn.id)}
+                    onToggleSelect={(isCtrlHeld) => toggleSelection(conn.id, isCtrlHeld)}
+                    selectedConnectionIds={selectedConnectionIds}
+                    onActivateSplit={activateSplit}
+                    shortcutIndex={idx + 1}
+                    showShortcutHint={showShortcutHints && idx < 9}
+                    onMoveMouseDown={(e) => handleConnectionMoveStart(conn.id, conn.name, e)}
+                    dropIndicator={dropTarget?.id === conn.id ? dropTarget.position : null}
+                  />
+                </div>
               ))}
             </div>
           )}

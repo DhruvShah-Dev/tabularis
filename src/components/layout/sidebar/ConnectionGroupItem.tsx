@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Unlink, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +6,7 @@ import { useConnectionLayoutContext } from '../../../hooks/useConnectionLayoutCo
 import { useDatabase } from '../../../hooks/useDatabase';
 import { useDrivers } from '../../../hooks/useDrivers';
 import { getConnectionAccent, getConnectionIcon } from '../../../utils/driverUI';
+import { rectContains, startPointerDrag } from '../../../utils/pointerDrag';
 import { ContextMenu } from '../../ui/ContextMenu';
 import { RailIndicator } from './RailIndicator';
 import type { ConnectionStatus } from '../../../hooks/useConnectionManager';
@@ -13,9 +14,11 @@ import type { ConnectionStatus } from '../../../hooks/useConnectionManager';
 interface Props {
   connections: ConnectionStatus[];
   mode: 'vertical' | 'horizontal';
+  /** True while a rail connection is being dragged over the badge */
+  isDropTarget?: boolean;
 }
 
-export const ConnectionGroupItem = ({ connections, mode }: Props) => {
+export const ConnectionGroupItem = ({ connections, mode, isDropTarget = false }: Props) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,13 +29,14 @@ export const ConnectionGroupItem = ({ connections, mode }: Props) => {
     isSplitVisible,
     removeConnectionFromSplit,
     reorderSplitConnections,
-    addConnectionToSplit,
   } = useConnectionLayoutContext();
   const { connections: savedConnections } = useDatabase();
   const { allDrivers } = useDrivers();
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; connectionId?: string } | null>(null);
-  const [isDropTarget, setIsDropTarget] = useState(false);
+  const [reorderTarget, setReorderTarget] = useState<string | null>(null);
+  const iconRefs = useRef(new Map<string, HTMLDivElement>());
+  const reorderTargetRef = useRef<string | null>(null);
 
   // Render panes in split order, not sidebar order
   const orderedConnections = splitView
@@ -50,6 +54,41 @@ export const ConnectionGroupItem = ({ connections, mode }: Props) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY, connectionId });
+  };
+
+  // Pointer-based reorder of the mini icons (same session util as the panels)
+  const startIconMove = (conn: ConnectionStatus, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    startPointerDrag(e.clientX, e.clientY, {
+      createGhost: () => {
+        const ghost = document.createElement('div');
+        ghost.className = 'px-2 py-1 rounded text-xs bg-surface-secondary text-primary border border-default shadow-lg';
+        ghost.textContent = conn.name;
+        return ghost;
+      },
+      onDragMove: (x, y) => {
+        let found: string | null = null;
+        for (const [id, el] of iconRefs.current) {
+          if (id === conn.id) continue;
+          if (rectContains(el.getBoundingClientRect(), x, y)) {
+            found = id;
+            break;
+          }
+        }
+        reorderTargetRef.current = found;
+        setReorderTarget(prev => (prev === found ? prev : found));
+      },
+      onDrop: () => {
+        if (reorderTargetRef.current) {
+          reorderSplitConnections(conn.id, reorderTargetRef.current);
+        }
+      },
+      onEnd: () => {
+        reorderTargetRef.current = null;
+        setReorderTarget(null);
+      },
+    });
   };
 
   const menuItems = contextMenu?.connectionId
@@ -73,31 +112,10 @@ export const ConnectionGroupItem = ({ connections, mode }: Props) => {
         },
       ];
 
-  const handleDragOver = (e: React.DragEvent) => {
-    // Accept both in-group reorders and connections dragged from the rail
-    e.preventDefault();
-    setIsDropTarget(true);
-  };
-
-  const handleDrop = (targetId: string | null, e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDropTarget(false);
-    const draggedId = e.dataTransfer.getData('text/plain');
-    if (!draggedId || !splitView) return;
-    if (splitView.connectionIds.includes(draggedId)) {
-      if (targetId) reorderSplitConnections(draggedId, targetId);
-    } else {
-      addConnectionToSplit(draggedId);
-    }
-  };
-
   return (
     <>
       <div className="relative group w-full flex justify-center mb-1">
         <RailIndicator isActive={isSplitVisible && location.pathname === "/editor"} />
-        {/* A div instead of a button: draggable children inside a <button>
-            don't emit drag events reliably (notably on WebKitGTK) */}
         <div
           role="button"
           tabIndex={0}
@@ -106,9 +124,6 @@ export const ConnectionGroupItem = ({ connections, mode }: Props) => {
             if (e.key === 'Enter' || e.key === ' ') { showSplitView(); navigate('/editor'); }
           }}
           onContextMenu={handleGroupContextMenu}
-          onDragOver={handleDragOver}
-          onDragLeave={() => setIsDropTarget(false)}
-          onDrop={(e) => handleDrop(null, e)}
           className={`grid grid-cols-2 gap-0.5 p-1 rounded-xl transition-all relative cursor-pointer bg-surface-secondary ${
             isDropTarget ? 'ring-2 ring-blue-400' : 'ring-1 ring-default'
           }`}
@@ -120,15 +135,15 @@ export const ConnectionGroupItem = ({ connections, mode }: Props) => {
             return (
               <div
                 key={conn.id}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', conn.id);
+                ref={(el) => {
+                  if (el) iconRefs.current.set(conn.id, el);
+                  else iconRefs.current.delete(conn.id);
                 }}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(conn.id, e)}
+                onMouseDown={(e) => startIconMove(conn, e)}
                 onContextMenu={(e) => handleIconContextMenu(conn.id, e)}
-                className="w-5 h-5 rounded flex items-center justify-center text-white cursor-grab active:cursor-grabbing"
+                className={`w-5 h-5 rounded flex items-center justify-center text-white cursor-grab active:cursor-grabbing ${
+                  reorderTarget === conn.id ? 'ring-2 ring-blue-400' : ''
+                }`}
                 style={{ backgroundColor: getConnectionAccent(saved, manifest) }}
                 title={conn.name}
               >

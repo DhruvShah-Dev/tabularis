@@ -12,6 +12,7 @@ import { useDrivers } from '../../hooks/useDrivers';
 import { getConnectionAccent } from '../../utils/driverUI';
 import { getPanelDropEdge } from '../../utils/connectionLayout';
 import type { SplitEdge, SplitView } from '../../utils/connectionLayout';
+import { rectContains, startPointerDrag } from '../../utils/pointerDrag';
 
 const EDGE_OVERLAY_CLASS: Record<SplitEdge, string> = {
   left: 'left-0 top-0 bottom-0 w-1/2',
@@ -27,6 +28,48 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
   const { deactivateSplit, removeConnectionFromSplit, moveSplitConnection, explorerConnectionId, setExplorerConnectionId } = useConnectionLayoutContext();
   const [draggedPanelId, setDraggedPanelId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ connId: string; edge: SplitEdge } | null>(null);
+  const panelRefs = useRef(new Map<string, HTMLDivElement>());
+  const dropTargetRef = useRef<{ connId: string; edge: SplitEdge } | null>(null);
+
+  // Pointer-based panel move (mousedown + tracking): HTML5 drag-and-drop can
+  // freeze the WebKitGTK compositor, and live tracking feels Hyprland-like
+  const startPanelMove = (connId: string, connName: string, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    startPointerDrag(e.clientX, e.clientY, {
+      createGhost: () => {
+        const ghost = document.createElement('div');
+        ghost.className = 'px-2 py-1 rounded text-xs bg-surface-secondary text-primary border border-default shadow-lg';
+        ghost.textContent = connName;
+        return ghost;
+      },
+      onDragStart: () => setDraggedPanelId(connId),
+      onDragMove: (x, y) => {
+        let found: { connId: string; edge: SplitEdge } | null = null;
+        for (const [id, el] of panelRefs.current) {
+          if (id === connId) continue;
+          const rect = el.getBoundingClientRect();
+          if (rectContains(rect, x, y)) {
+            found = { connId: id, edge: getPanelDropEdge(rect, x, y) };
+            break;
+          }
+        }
+        dropTargetRef.current = found;
+        setDropTarget(prev =>
+          prev?.connId === found?.connId && prev?.edge === found?.edge ? prev : found,
+        );
+      },
+      onDrop: () => {
+        const target = dropTargetRef.current;
+        if (target) moveSplitConnection(connId, target.connId, target.edge);
+      },
+      onEnd: () => {
+        dropTargetRef.current = null;
+        setDraggedPanelId(null);
+        setDropTarget(null);
+      },
+    });
+  };
   const { switchConnection, connectionDataMap, connections } = useDatabase();
   const { allDrivers } = useDrivers();
   const { t } = useTranslation();
@@ -65,26 +108,13 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
         return (
         <Fragment key={connId}>
           <div
+            ref={(el) => {
+              if (el) panelRefs.current.set(connId, el);
+              else panelRefs.current.delete(connId);
+            }}
             className="relative flex flex-col min-w-0 min-h-0"
             onClickCapture={() => {
               if (explorerConnectionId !== connId) setExplorerConnectionId(connId);
-            }}
-            onDragOver={(e) => {
-              if (!isDropCandidate) return;
-              e.preventDefault();
-              const rect = e.currentTarget.getBoundingClientRect();
-              setDropTarget({ connId, edge: getPanelDropEdge(rect, e.clientX, e.clientY) });
-            }}
-            onDragLeave={() => {
-              setDropTarget(prev => (prev?.connId === connId ? null : prev));
-            }}
-            onDrop={(e) => {
-              if (!isDropCandidate) return;
-              e.preventDefault();
-              const rect = e.currentTarget.getBoundingClientRect();
-              moveSplitConnection(draggedPanelId, connId, getPanelDropEdge(rect, e.clientX, e.clientY));
-              setDraggedPanelId(null);
-              setDropTarget(null);
             }}
             style={{ flexGrow: sizes[i] ?? 1, flexBasis: 0, flexShrink: 0 }}
           >
@@ -110,16 +140,7 @@ export const SplitPaneLayout = ({ connectionIds, mode }: SplitView) => {
             >
               <div className="flex items-center gap-1.5 min-w-0">
                 <div
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', connId);
-                    setDraggedPanelId(connId);
-                  }}
-                  onDragEnd={() => {
-                    setDraggedPanelId(null);
-                    setDropTarget(null);
-                  }}
+                  onMouseDown={(e) => startPanelMove(connId, connectionDataMap[connId]?.connectionName ?? connId, e)}
                   className="shrink-0 cursor-grab active:cursor-grabbing text-muted hover:text-primary"
                   title={t('sidebar.movePanel')}
                 >

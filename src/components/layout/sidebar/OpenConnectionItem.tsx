@@ -25,12 +25,8 @@ interface Props {
   onActivateSplit: (mode: 'vertical' | 'horizontal') => void;
   shortcutIndex?: number;
   showShortcutHint?: boolean;
-  draggable?: boolean;
-  onReorderDragStart?: (e: React.DragEvent) => void;
-  onReorderDragOver?: (e: React.DragEvent) => void;
-  onReorderDragLeave?: () => void;
-  onReorderDrop?: (e: React.DragEvent) => void;
-  onReorderDragEnd?: () => void;
+  /** Starts a pointer-based drag session (reorder / drop into split group) */
+  onMoveMouseDown?: (e: React.MouseEvent) => void;
   dropIndicator?: 'above' | 'below' | null;
 }
 
@@ -47,12 +43,7 @@ export const OpenConnectionItem = ({
   onActivateSplit,
   shortcutIndex,
   showShortcutHint = false,
-  draggable: isDraggable = false,
-  onReorderDragStart,
-  onReorderDragOver,
-  onReorderDragLeave,
-  onReorderDrop,
-  onReorderDragEnd,
+  onMoveMouseDown,
   dropIndicator = null,
 }: Props) => {
   const { t } = useTranslation();
@@ -147,15 +138,7 @@ export const OpenConnectionItem = ({
 
   return (
     <>
-      <div
-        className="relative group w-full flex flex-col items-center mb-1"
-        draggable={isDraggable}
-        onDragStart={onReorderDragStart}
-        onDragOver={onReorderDragOver}
-        onDragLeave={onReorderDragLeave}
-        onDrop={onReorderDrop}
-        onDragEnd={onReorderDragEnd}
-      >
+      <div className="relative group w-full flex flex-col items-center mb-1">
         {/* Drop indicator - above */}
         {dropIndicator === 'above' && (
           <div className="absolute -top-0.5 left-2 right-2 h-0.5 bg-blue-400 rounded-full z-30" />
@@ -165,6 +148,7 @@ export const OpenConnectionItem = ({
 
         <button
           onClick={handleClick}
+          onMouseDown={onMoveMouseDown}
           onContextMenu={handleContextMenu}
           className={`flex items-center justify-center w-12 h-12 rounded-lg transition-all relative ${
             isSelected
