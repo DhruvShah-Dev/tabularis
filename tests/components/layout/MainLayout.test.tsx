@@ -13,6 +13,10 @@ vi.mock("../../../src/components/layout/SplitPaneLayout", () => ({
   SplitPaneLayout: () => <div>Split pane</div>,
 }));
 
+vi.mock("../../../src/components/layout/CommandPaletteScopeBridge", () => ({
+  CommandPaletteScopeBridge: () => null,
+}));
+
 vi.mock("../../../src/contexts/CommandPaletteProvider", () => ({
   CommandPaletteProvider: ({ children }: { children: ReactNode }) => (
     <>{children}</>

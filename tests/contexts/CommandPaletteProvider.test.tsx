@@ -3,6 +3,8 @@ import { memo } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CommandPaletteProvider } from "../../src/contexts/CommandPaletteProvider";
+import { CommandPaletteActionsProvider } from "../../src/contexts/CommandPaletteActionsProvider";
+import { CommandPaletteScopeBridge } from "../../src/components/layout/CommandPaletteScopeBridge";
 import {
   useCommandPaletteActions,
   useCommandPaletteDispatch,
@@ -13,6 +15,7 @@ import type {
   CommandPaletteDispatchContextType,
   CommandPaletteStateContextType,
 } from "../../src/contexts/CommandPaletteContext";
+import { ROOT_COMMAND_SCOPE_ID } from "../../src/utils/commandScopeStore";
 
 const navigateMock = vi.fn();
 const addTabMock = vi.fn(() => "console-tab");
@@ -57,6 +60,14 @@ vi.mock("../../src/hooks/useEditor", () => ({
   useEditor: () => editorState,
 }));
 
+vi.mock("../../src/hooks/useConnectionLayoutContext", () => ({
+  useConnectionLayoutContext: () => ({
+    explorerConnectionId: "connection-1",
+    isSplitVisible: false,
+    splitView: null,
+  }),
+}));
+
 interface PaletteContexts {
   actions: CommandPaletteActionsContextType;
   dispatch: CommandPaletteDispatchContextType;
@@ -72,6 +83,45 @@ function ContextConsumer({
   const dispatch = useCommandPaletteDispatch();
   const state = useCommandPaletteState();
   onContexts({ actions, dispatch, state });
+  return null;
+}
+
+function PaletteTestHarness({
+  onContexts,
+}: {
+  onContexts: (contexts: PaletteContexts) => void;
+}) {
+  const { activePalette } = useCommandPaletteState();
+
+  return (
+    <>
+      <CommandPaletteScopeBridge scopeId={ROOT_COMMAND_SCOPE_ID} />
+      {activePalette === "actions" ? (
+        <CommandPaletteActionsProvider>
+          <ContextConsumer onContexts={onContexts} />
+        </CommandPaletteActionsProvider>
+      ) : (
+        <DispatchAndStateConsumer onContexts={onContexts} />
+      )}
+    </>
+  );
+}
+
+function DispatchAndStateConsumer({
+  onContexts,
+}: {
+  onContexts: (contexts: PaletteContexts) => void;
+}) {
+  const dispatch = useCommandPaletteDispatch();
+  const state = useCommandPaletteState();
+  onContexts({
+    actions: {
+      executeCommand: async () => {},
+      getResults: () => [],
+    },
+    dispatch,
+    state,
+  });
   return null;
 }
 
@@ -97,7 +147,11 @@ describe("CommandPaletteProvider", () => {
 
     render(
       <CommandPaletteProvider>
-        <ContextConsumer onContexts={(contexts) => { palette = contexts; }} />
+        <PaletteTestHarness
+          onContexts={(contexts) => {
+            palette = contexts;
+          }}
+        />
       </CommandPaletteProvider>,
     );
 
@@ -114,7 +168,11 @@ describe("CommandPaletteProvider", () => {
 
     render(
       <CommandPaletteProvider>
-        <ContextConsumer onContexts={(contexts) => { palette = contexts; }} />
+        <PaletteTestHarness
+          onContexts={(contexts) => {
+            palette = contexts;
+          }}
+        />
       </CommandPaletteProvider>,
     );
 
@@ -131,7 +189,11 @@ describe("CommandPaletteProvider", () => {
 
     render(
       <CommandPaletteProvider>
-        <ContextConsumer onContexts={(contexts) => { palette = contexts; }} />
+        <PaletteTestHarness
+          onContexts={(contexts) => {
+            palette = contexts;
+          }}
+        />
       </CommandPaletteProvider>,
     );
 
@@ -145,7 +207,11 @@ describe("CommandPaletteProvider", () => {
 
     render(
       <CommandPaletteProvider>
-        <ContextConsumer onContexts={(contexts) => { palette = contexts; }} />
+        <PaletteTestHarness
+          onContexts={(contexts) => {
+            palette = contexts;
+          }}
+        />
       </CommandPaletteProvider>,
     );
 

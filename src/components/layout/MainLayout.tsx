@@ -5,7 +5,9 @@ import { useAutoConnectFromUrl } from "../../hooks/useAutoConnectFromUrl";
 import { useConnectionLayoutContext } from "../../hooks/useConnectionLayoutContext";
 import { useConnectionWindowLifecycle } from "../../hooks/useConnectionWindowLifecycle";
 import { useGlobalShortcuts } from "../../hooks/useGlobalShortcuts";
+import { ROOT_COMMAND_SCOPE_ID } from "../../utils/commandScopeStore";
 import { CommandPaletteModal } from "../modals/CommandPaletteModal";
+import { CommandPaletteScopeBridge } from "./CommandPaletteScopeBridge";
 import { ProductionBanner } from "./ProductionBanner";
 import { RightSidebar } from "./RightSidebar";
 import { Sidebar } from "./Sidebar";
@@ -27,6 +29,7 @@ const MainLayoutContent = () => {
 
   return (
     <div className="flex h-screen bg-base text-primary overflow-hidden">
+      <CommandPaletteScopeBridge scopeId={ROOT_COMMAND_SCOPE_ID} />
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <ProductionBanner />

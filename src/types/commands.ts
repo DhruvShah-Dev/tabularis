@@ -23,6 +23,12 @@ export interface CommandRuntime {
   openTableConsole: (resource: TableCommandResource) => void;
 }
 
+export interface CommandScope {
+  connectionId: string | null;
+  context: CommandContext;
+  runtime: CommandRuntime;
+}
+
 export interface CommandDefinition {
   id: string;
   title: string;

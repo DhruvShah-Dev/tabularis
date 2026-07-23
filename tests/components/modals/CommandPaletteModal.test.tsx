@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -13,6 +14,17 @@ import type {
 } from "../../../src/contexts/CommandPaletteContext";
 import { CommandPaletteModal } from "../../../src/components/modals/CommandPaletteModal";
 import type { CommandDefinition } from "../../../src/types/commands";
+
+vi.mock(
+  "../../../src/contexts/CommandPaletteActionsProvider",
+  () => ({
+    CommandPaletteActionsProvider: ({
+      children,
+    }: {
+      children: ReactNode;
+    }) => <>{children}</>,
+  }),
+);
 
 vi.mock("../../../src/components/modals/QuickNavigatorModal", () => ({
   QuickNavigatorModal: ({

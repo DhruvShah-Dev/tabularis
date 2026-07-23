@@ -4,6 +4,7 @@ import {
   useCommandPaletteDispatch,
   useCommandPaletteState,
 } from "../../hooks/useCommandPalette";
+import { CommandPaletteActionsProvider } from "../../contexts/CommandPaletteActionsProvider";
 import { GenerateSQLModal } from "./GenerateSQLModal";
 import { QuickNavigatorModal } from "./QuickNavigatorModal";
 import { SchemaModal } from "./SchemaModal";
@@ -20,7 +21,11 @@ export const CommandPaletteModal = () => {
 
   return (
     <>
-      {activePalette === "actions" && <CommandActionsPalette />}
+      {activePalette === "actions" && (
+        <CommandPaletteActionsProvider>
+          <CommandActionsPalette />
+        </CommandPaletteActionsProvider>
+      )}
       {activePalette === "objects" && (
         <QuickNavigatorModal
           isOpen
