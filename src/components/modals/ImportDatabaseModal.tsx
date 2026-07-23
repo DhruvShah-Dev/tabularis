@@ -71,23 +71,12 @@ export const ImportDatabaseModal = ({
       if (onSuccess) {
         onSuccess();
       }
-
-      // Auto-close after 2 seconds on success
-      setTimeout(() => {
-        onClose();
-      }, 2000);
     } catch (e) {
-      const errorMsg = String(e);
-      setError(errorMsg);
+      // The error is rendered inside this modal — no extra alert dialog.
+      setError(String(e));
       setIsImporting(false);
-
-      if (!errorMsg.includes("cancelled")) {
-        showAlert(t("dump.importFailure") + ": " + errorMsg, {
-          kind: "error",
-        });
-      }
     }
-  }, [connectionId, filePath, activeSchema, targetDatabase, onSuccess, onClose, t, showAlert]);
+  }, [connectionId, filePath, activeSchema, targetDatabase, onSuccess]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -165,7 +154,6 @@ export const ImportDatabaseModal = ({
           <button
             onClick={handleCancel}
             className="text-muted hover:text-primary text-xl leading-none"
-            disabled={success}
           >
             &times;
           </button>
@@ -260,10 +248,17 @@ export const ImportDatabaseModal = ({
 
           {/* Error Message */}
           {error && !isImporting && (
-            <div className="text-center text-red-500 text-sm">
-              {error.includes("cancelled")
-                ? t("dump.importCancelled")
-                : t("dump.importFailed")}
+            <div className="space-y-2">
+              <div className="text-center text-red-500 text-sm font-medium">
+                {error.includes("cancelled")
+                  ? t("dump.importCancelled")
+                  : t("dump.importFailed")}
+              </div>
+              {!error.includes("cancelled") && (
+                <div className="max-h-40 overflow-y-auto bg-red-900/10 border border-red-900/40 rounded-lg p-3 text-xs text-red-400 font-mono whitespace-pre-wrap break-words text-left">
+                  {error}
+                </div>
+              )}
             </div>
           )}
 
@@ -287,7 +282,7 @@ export const ImportDatabaseModal = ({
               onClick={onClose}
               className="px-4 py-2 rounded hover:bg-surface-secondary transition-colors"
             >
-              {success ? t("common.close") : t("common.cancel")}
+              {success || error ? t("common.close") : t("common.cancel")}
             </button>
           )}
         </div>
