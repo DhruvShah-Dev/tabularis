@@ -93,6 +93,27 @@ const SqlEditorInternal = ({
     }
   }, [editorTheme]);
 
+  // Monaco measures glyph widths once and does not re-measure when a webfont
+  // finishes loading, so a freshly selected bundled font renders with stale
+  // fallback metrics until forced. Remeasure once the font is ready.
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    if (!monaco) return;
+    monaco.editor.remeasureFonts();
+    const fonts = typeof document !== "undefined" ? document.fonts : undefined;
+    if (!fonts) return;
+    let cancelled = false;
+    fonts
+      .load(`16px "${settings.editorFontFamily ?? "JetBrains Mono"}"`)
+      .then(() => {
+        if (!cancelled) monaco.editor.remeasureFonts();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.editorFontFamily]);
+
     const handleChange = useCallback(
       (val: string | undefined) => {
         const newValue = val || "";
@@ -135,6 +156,10 @@ const SqlEditorInternal = ({
     const handleEditorMount: OnMount = (editor, monaco) => {
       editorRef.current = editor;
       monacoRef.current = monaco;
+
+      if (typeof document !== "undefined" && document.fonts) {
+        document.fonts.ready.then(() => monaco.editor.remeasureFonts());
+      }
 
       // Register custom Paste action using Tauri clipboard API
       editor.addAction({
