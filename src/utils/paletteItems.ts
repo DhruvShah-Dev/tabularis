@@ -21,11 +21,16 @@ export function resolvePaletteItems(
         includeScore: true,
       })
         .search(trimmedQuery)
-        .map(({ item, score }) => ({
+        .map(({ item, score }, index) => ({
           item,
+          index,
           matchScore: Math.round((1 - (score ?? 1)) * 100),
         }))
-    : items.map((item) => ({ item, matchScore: 0 }));
+    : items.map((item, index) => ({
+        item,
+        index,
+        matchScore: 0,
+      }));
 
   return matches
     .sort(
@@ -33,8 +38,7 @@ export function resolvePaletteItems(
         (right.item.relevance ?? 0) +
           right.matchScore -
           ((left.item.relevance ?? 0) + left.matchScore) ||
-        left.item.title.localeCompare(right.item.title) ||
-        left.item.id.localeCompare(right.item.id),
+        left.index - right.index,
     )
     .map(({ item }) => item);
 }

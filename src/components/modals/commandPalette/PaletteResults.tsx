@@ -1,4 +1,9 @@
-import { Fragment, type ComponentType } from "react";
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  type ComponentType,
+} from "react";
 import {
   Code2,
   Command,
@@ -73,10 +78,18 @@ export const PaletteResults = ({
   onSelect,
   onExecute,
 }: PaletteResultsProps) => {
+  const listRef = useRef<HTMLDivElement>(null);
   let previousGroup: string | undefined;
+
+  useEffect(() => {
+    listRef.current
+      ?.querySelector('[data-active="true"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex]);
 
   return (
     <div
+      ref={listRef}
       id="command-palette-results"
       role="listbox"
       className="min-h-24 flex-1 overflow-y-auto py-1"

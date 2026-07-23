@@ -58,4 +58,15 @@ describe("resolvePaletteItems", () => {
       resolvePaletteItems(items, "open").map((item) => item.id),
     ).toEqual(["contextual", "global"]);
   });
+
+  it("should preserve source grouping order for equally relevant items", () => {
+    const items = [
+      createItem({ id: "schema-b", title: "zebra", group: "b" }),
+      createItem({ id: "schema-a", title: "alpha", group: "a" }),
+    ];
+
+    expect(
+      resolvePaletteItems(items, "").map((item) => item.id),
+    ).toEqual(["schema-b", "schema-a"]);
+  });
 });
