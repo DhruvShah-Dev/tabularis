@@ -97,10 +97,7 @@ export const SpotlightPalette = ({
     }
 
     if (event.key === "Enter") {
-      if (
-        event.target instanceof HTMLButtonElement &&
-        event.target !== event.currentTarget
-      ) {
+      if (event.target instanceof HTMLButtonElement) {
         return;
       }
       event.preventDefault();

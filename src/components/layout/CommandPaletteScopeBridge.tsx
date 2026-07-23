@@ -26,7 +26,7 @@ export const CommandPaletteScopeBridge = ({
     activeSchema,
   } = useDatabase();
   const { activeTab, addTab } = useEditor();
-  const activeTable = activeTab?.activeTable;
+  const activeTable = activeTab?.activeTable ?? null;
   const activeTabSchema = activeTab?.schema;
   const activeTabType = activeTab?.type;
 
