@@ -1,8 +1,8 @@
 import { useContext } from "react";
 
 import {
-  CommandPaletteActionsContext,
   CommandPaletteDispatchContext,
+  CommandPaletteItemsContext,
   CommandPaletteStateContext,
 } from "../contexts/CommandPaletteContext";
 
@@ -26,11 +26,11 @@ export function useCommandPaletteDispatch() {
   return context;
 }
 
-export function useCommandPaletteActions() {
-  const context = useContext(CommandPaletteActionsContext);
+export function useCommandPaletteItems() {
+  const context = useContext(CommandPaletteItemsContext);
   if (!context) {
     throw new Error(
-      "useCommandPaletteActions must be used inside CommandPaletteProvider",
+      "useCommandPaletteItems must be used inside a palette source provider",
     );
   }
   return context;

@@ -1,16 +1,12 @@
 import {
-  useCallback,
   useMemo,
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CommandPaletteActionsContext } from "./CommandPaletteContext";
-import { useCommandPaletteDispatch } from "../hooks/useCommandPalette";
+import { CommandPaletteItemsContext } from "./CommandPaletteContext";
 import { useActiveCommandPaletteScope } from "../hooks/useCommandPaletteScope";
 import { createBuiltInCommands } from "../utils/builtInCommands";
-import { resolveCommands } from "../utils/commands";
-import type { CommandDefinition } from "../types/commands";
 
 interface CommandPaletteActionsProviderProps {
   children: ReactNode;
@@ -20,53 +16,58 @@ export const CommandPaletteActionsProvider = ({
   children,
 }: CommandPaletteActionsProviderProps) => {
   const { t } = useTranslation();
-  const { closePalette } = useCommandPaletteDispatch();
   const scope = useActiveCommandPaletteScope();
 
-  const commands = useMemo(
-    () =>
-      createBuiltInCommands(scope?.context ?? {
-        resource: { type: "none" },
-      }, {
+  const items = useMemo(() => {
+    const context = scope?.context ?? {
+      resource: { type: "none" as const },
+    };
+    const commands = createBuiltInCommands(
+      context,
+      {
         openSettings: t("commandPalette.commands.openSettings"),
         openTableInConsole: t(
           "commandPalette.commands.openTableInConsole",
         ),
         navigationCategory: t("commandPalette.categories.navigation"),
         tableCategory: t("commandPalette.categories.table"),
-      }),
-    [scope?.context, t],
-  );
+      },
+    );
 
-  const getResults = useCallback(
-    (query: string) =>
-      resolveCommands(commands, {
-        query,
-        context: scope?.context ?? { resource: { type: "none" } },
-      }),
-    [commands, scope?.context],
-  );
-
-  const executeCommand = useCallback(
-    async (command: CommandDefinition) => {
-      if (!scope) return;
-      await command.execute(scope.runtime, scope.context);
-      closePalette();
-    },
-    [closePalette, scope],
-  );
+    return commands
+      .filter(
+        (command) =>
+          !command.isAvailable || command.isAvailable(context),
+      )
+      .map((command) => ({
+        id: command.id,
+        title: command.title,
+        description: command.description,
+        group: command.category,
+        keywords: command.keywords,
+        icon: "command" as const,
+        relevance: command.getRelevance?.(context) ?? 0,
+        primaryAction: {
+          id: command.id,
+          label: command.title,
+          execute: async () => {
+            if (!scope) return;
+            await command.execute(scope.runtime, scope.context);
+          },
+        },
+      }));
+  }, [scope, t]);
 
   const value = useMemo(
     () => ({
-      executeCommand,
-      getResults,
+      items,
     }),
-    [executeCommand, getResults],
+    [items],
   );
 
   return (
-    <CommandPaletteActionsContext.Provider value={value}>
+    <CommandPaletteItemsContext.Provider value={value}>
       {children}
-    </CommandPaletteActionsContext.Provider>
+    </CommandPaletteItemsContext.Provider>
   );
 };

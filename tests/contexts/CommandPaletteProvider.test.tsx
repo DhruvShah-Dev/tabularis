@@ -6,16 +6,17 @@ import { CommandPaletteProvider } from "../../src/contexts/CommandPaletteProvide
 import { CommandPaletteActionsProvider } from "../../src/contexts/CommandPaletteActionsProvider";
 import { CommandPaletteScopeBridge } from "../../src/components/layout/CommandPaletteScopeBridge";
 import {
-  useCommandPaletteActions,
   useCommandPaletteDispatch,
+  useCommandPaletteItems,
   useCommandPaletteState,
 } from "../../src/hooks/useCommandPalette";
 import type {
-  CommandPaletteActionsContextType,
   CommandPaletteDispatchContextType,
+  CommandPaletteItemsContextType,
   CommandPaletteStateContextType,
 } from "../../src/contexts/CommandPaletteContext";
 import { ROOT_COMMAND_SCOPE_ID } from "../../src/utils/commandScopeStore";
+import { resolvePaletteItems } from "../../src/utils/paletteItems";
 
 const navigateMock = vi.fn();
 const addTabMock = vi.fn(() => "console-tab");
@@ -69,7 +70,7 @@ vi.mock("../../src/hooks/useConnectionLayoutContext", () => ({
 }));
 
 interface PaletteContexts {
-  actions: CommandPaletteActionsContextType;
+  items: CommandPaletteItemsContextType;
   dispatch: CommandPaletteDispatchContextType;
   state: CommandPaletteStateContextType;
 }
@@ -79,10 +80,10 @@ function ContextConsumer({
 }: {
   onContexts: (contexts: PaletteContexts) => void;
 }) {
-  const actions = useCommandPaletteActions();
+  const items = useCommandPaletteItems();
   const dispatch = useCommandPaletteDispatch();
   const state = useCommandPaletteState();
-  onContexts({ actions, dispatch, state });
+  onContexts({ items, dispatch, state });
   return null;
 }
 
@@ -115,10 +116,7 @@ function DispatchAndStateConsumer({
   const dispatch = useCommandPaletteDispatch();
   const state = useCommandPaletteState();
   onContexts({
-    actions: {
-      executeCommand: async () => {},
-      getResults: () => [],
-    },
+    items: { items: [] },
     dispatch,
     state,
   });
@@ -157,7 +155,11 @@ describe("CommandPaletteProvider", () => {
 
     act(() => palette!.dispatch.openPalette("actions"));
 
-    expect(palette!.actions.getResults("").map((result) => result.command.id)).toEqual([
+    expect(
+      resolvePaletteItems(palette!.items.items, "").map(
+        (item) => item.id,
+      ),
+    ).toEqual([
       "table.open-in-console",
       "app.open-settings",
     ]);
@@ -217,13 +219,12 @@ describe("CommandPaletteProvider", () => {
 
     act(() => palette!.dispatch.openPalette("actions"));
 
-    const command = palette!
-      .actions.getResults("")
-      .find((result) => result.command.id === "table.open-in-console")
-      ?.command;
+    const command = palette!.items.items.find(
+      (item) => item.id === "table.open-in-console",
+    );
 
     await act(async () => {
-      await palette!.actions.executeCommand(command!);
+      await command!.primaryAction.execute();
     });
 
     expect(addTabMock).toHaveBeenCalledWith({

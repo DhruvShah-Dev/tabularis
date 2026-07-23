@@ -1,51 +1,63 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  CommandPaletteActionsContext,
   CommandPaletteDispatchContext,
   CommandPaletteStateContext,
 } from "../../../src/contexts/CommandPaletteContext";
 import type {
-  CommandPaletteActionsContextType,
   CommandPaletteDispatchContextType,
   CommandPaletteStateContextType,
 } from "../../../src/contexts/CommandPaletteContext";
 import { CommandPaletteModal } from "../../../src/components/modals/CommandPaletteModal";
-import type { CommandDefinition } from "../../../src/types/commands";
 
-vi.mock(
-  "../../../src/contexts/CommandPaletteActionsProvider",
-  () => ({
-    CommandPaletteActionsProvider: ({
-      children,
-    }: {
-      children: ReactNode;
-    }) => <>{children}</>,
+const navigateMock = vi.fn();
+const openTableConsoleMock = vi.fn();
+
+vi.mock("../../../src/hooks/useCommandPaletteScope", () => ({
+  useActiveCommandPaletteScope: () => ({
+    connectionId: "connection-1",
+    context: {
+      connectionId: "connection-1",
+      resource: {
+        type: "table",
+        tableName: "users",
+        schema: "public",
+      },
+    },
+    runtime: {
+      navigate: navigateMock,
+      openTableConsole: openTableConsoleMock,
+    },
   }),
-);
+}));
 
-vi.mock("../../../src/components/modals/QuickNavigatorModal", () => ({
-  QuickNavigatorModal: ({
-    onClose,
-    onGenerateSql,
-  }: {
-    onClose: () => void;
-    onGenerateSql?: (tableName: string) => void;
-  }) => (
-    <div role="dialog" aria-label="Object search">
-      <button
-        type="button"
-        onClick={() => {
-          onClose();
-          onGenerateSql?.("users");
-        }}
-      >
-        Generate SQL
-      </button>
-    </div>
-  ),
+vi.mock("../../../src/hooks/useDatabase", () => ({
+  useDatabase: () => ({
+    connectionDataMap: {
+      "connection-1": {
+        driver: "postgres",
+        capabilities: {},
+        tables: [{ name: "users" }],
+        views: [],
+        routines: [],
+        triggers: [],
+        schemas: [],
+        schemaDataMap: {},
+        databaseDataMap: {},
+        activeSchema: "public",
+      },
+    },
+    connections: [
+      {
+        id: "connection-1",
+        params: { database: "app", driver: "postgres" },
+      },
+    ],
+    loadDatabaseData: vi.fn(),
+    loadSchemaData: vi.fn(),
+  }),
 }));
 
 vi.mock("../../../src/components/modals/GenerateSQLModal", () => ({
@@ -58,30 +70,13 @@ vi.mock("../../../src/components/modals/SchemaModal", () => ({
   SchemaModal: () => <div>Inspect table</div>,
 }));
 
-const settingsCommand: CommandDefinition = {
-  id: "settings",
-  title: "Open settings",
-  category: "Navigation",
-  execute: vi.fn(),
-};
-
-const consoleCommand: CommandDefinition = {
-  id: "console",
-  title: "Open table in console",
-  category: "Table",
-  execute: vi.fn(),
-};
-
 function renderPalette(
   overrides: {
-    actions?: Partial<CommandPaletteActionsContextType>;
     dispatch?: Partial<CommandPaletteDispatchContextType>;
     state?: Partial<CommandPaletteStateContextType>;
   } = {},
 ) {
   const closePalette = vi.fn();
-  const executeCommand = vi.fn().mockResolvedValue(undefined);
-  const commands = [settingsCommand, consoleCommand];
   const stateValue: CommandPaletteStateContextType = {
     activePalette: "actions",
     ...overrides.state,
@@ -91,76 +86,83 @@ function renderPalette(
     closePalette,
     ...overrides.dispatch,
   };
-  const actionsValue: CommandPaletteActionsContextType = {
-    getResults: (query) =>
-      commands
-        .filter((command) =>
-          command.title.toLowerCase().includes(query.toLowerCase()),
-        )
-        .map((command) => ({ command, score: 0 })),
-    executeCommand,
-    ...overrides.actions,
-  };
 
   render(
-    <CommandPaletteDispatchContext.Provider value={dispatchValue}>
-      <CommandPaletteStateContext.Provider value={stateValue}>
-        <CommandPaletteActionsContext.Provider value={actionsValue}>
+    <MemoryRouter>
+      <CommandPaletteDispatchContext.Provider value={dispatchValue}>
+        <CommandPaletteStateContext.Provider value={stateValue}>
           <CommandPaletteModal />
-        </CommandPaletteActionsContext.Provider>
-      </CommandPaletteStateContext.Provider>
-    </CommandPaletteDispatchContext.Provider>,
+        </CommandPaletteStateContext.Provider>
+      </CommandPaletteDispatchContext.Provider>
+    </MemoryRouter>,
   );
 
-  return { closePalette, executeCommand };
+  return { closePalette };
 }
 
 describe("CommandPaletteModal", () => {
-  it("should autofocus the search input and filter commands", () => {
+  beforeEach(() => {
+    navigateMock.mockReset();
+    openTableConsoleMock.mockReset();
+  });
+
+  it("should use the shared palette to filter action items", () => {
     renderPalette();
 
     const input = screen.getByRole("combobox", {
       name: "commandPalette.searchLabel",
     });
     expect(input).toHaveFocus();
-    expect(screen.getByText("Open settings")).toBeInTheDocument();
-    expect(screen.getByText("Open table in console")).toBeInTheDocument();
+    expect(
+      screen.getByText("commandPalette.commands.openSettings"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("commandPalette.commands.openTableInConsole"),
+    ).toBeInTheDocument();
 
     fireEvent.change(input, { target: { value: "settings" } });
 
-    expect(screen.getByText("Open settings")).toBeInTheDocument();
-    expect(screen.queryByText("Open table in console")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("commandPalette.commands.openSettings"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "commandPalette.commands.openTableInConsole",
+      ),
+    ).not.toBeInTheDocument();
   });
 
-  it("should navigate with arrow keys and execute with Enter", async () => {
-    const { executeCommand } = renderPalette();
+  it("should execute action items through the shared pipeline", async () => {
+    renderPalette();
     const input = screen.getByRole("combobox");
 
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() =>
-      expect(executeCommand).toHaveBeenCalledWith(consoleCommand),
+      expect(navigateMock).toHaveBeenCalledWith("/settings"),
     );
   });
 
   it("should close with Escape", () => {
     const { closePalette } = renderPalette();
 
-    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+    fireEvent.keyDown(screen.getByRole("combobox"), {
+      key: "Escape",
+    });
 
     expect(closePalette).toHaveBeenCalledTimes(1);
   });
 
   it("should keep the palette open and show execution errors", async () => {
-    renderPalette({
-      actions: {
-        executeCommand: vi.fn().mockRejectedValue(
-          new Error("Connection failed"),
-        ),
-      },
-    });
+    navigateMock.mockRejectedValueOnce(
+      new Error("Connection failed"),
+    );
+    renderPalette();
 
+    fireEvent.keyDown(screen.getByRole("combobox"), {
+      key: "ArrowDown",
+    });
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
 
     expect(
@@ -170,34 +172,40 @@ describe("CommandPaletteModal", () => {
   });
 
   it("should clear its busy state after successful execution", async () => {
-    const { executeCommand } = renderPalette();
+    const { closePalette } = renderPalette();
 
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
 
-    await waitFor(() => expect(executeCommand).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(closePalette).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("dialog")).toHaveAttribute(
       "aria-busy",
       "false",
     );
   });
 
-  it("should render the existing object navigator in objects mode", () => {
+  it("should render database objects through the same palette", () => {
     renderPalette({ state: { activePalette: "objects" } });
 
+    expect(screen.getByText("users")).toBeInTheDocument();
     expect(
-      screen.getByRole("dialog", { name: "Object search" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Open settings")).not.toBeInTheDocument();
+      screen.queryByText("commandPalette.commands.openSettings"),
+    ).not.toBeInTheDocument();
   });
 
-  it("should preserve object quick actions in the shared host", () => {
+  it("should execute object quick actions through the shared pipeline", async () => {
     const { closePalette } = renderPalette({
       state: { activePalette: "objects" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate SQL" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "editor.quickNavigator.actions.generateSql",
+      }),
+    );
 
+    expect(
+      await screen.findByText("Generate SQL for users"),
+    ).toBeInTheDocument();
     expect(closePalette).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Generate SQL for users")).toBeInTheDocument();
   });
 });

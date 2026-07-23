@@ -10,8 +10,8 @@ import { DatabaseContext } from "../../src/contexts/DatabaseContext";
 import type { DatabaseContextType } from "../../src/contexts/DatabaseContext";
 import { EditorProvider } from "../../src/contexts/EditorProvider";
 import {
-  useCommandPaletteActions,
   useCommandPaletteDispatch,
+  useCommandPaletteItems,
   useCommandPaletteState,
 } from "../../src/hooks/useCommandPalette";
 import { useEditor } from "../../src/hooks/useEditor";
@@ -124,17 +124,20 @@ function PaletteHarness() {
 }
 
 function ActiveTableCommand() {
-  const { executeCommand, getResults } = useCommandPaletteActions();
-  const command = getResults("").find(
-    (result) => result.command.id === "table.open-in-console",
-  )?.command;
+  const { items } = useCommandPaletteItems();
+  const command = items.find(
+    (item) => item.id === "table.open-in-console",
+  );
 
   if (!command) return <div>No table command</div>;
 
   return (
     <>
       <output data-testid="active-table">{command.description}</output>
-      <button type="button" onClick={() => void executeCommand(command)}>
+      <button
+        type="button"
+        onClick={() => void command.primaryAction.execute()}
+      >
         Execute table command
       </button>
     </>

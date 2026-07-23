@@ -1,10 +1,9 @@
 import { createContext } from "react";
 
 import type {
-  CommandDefinition,
   CommandPaletteMode,
-  CommandResult,
 } from "../types/commands";
+import type { PaletteItem } from "../types/palette";
 
 export interface CommandPaletteStateContextType {
   activePalette: CommandPaletteMode | null;
@@ -15,9 +14,8 @@ export interface CommandPaletteDispatchContextType {
   closePalette: () => void;
 }
 
-export interface CommandPaletteActionsContextType {
-  getResults: (query: string) => CommandResult[];
-  executeCommand: (command: CommandDefinition) => Promise<void>;
+export interface CommandPaletteItemsContextType {
+  items: PaletteItem[];
 }
 
 export const CommandPaletteStateContext = createContext<
@@ -28,6 +26,6 @@ export const CommandPaletteDispatchContext = createContext<
   CommandPaletteDispatchContextType | undefined
 >(undefined);
 
-export const CommandPaletteActionsContext = createContext<
-  CommandPaletteActionsContextType | undefined
+export const CommandPaletteItemsContext = createContext<
+  CommandPaletteItemsContextType | undefined
 >(undefined);

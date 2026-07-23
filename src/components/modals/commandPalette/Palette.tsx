@@ -2,16 +2,32 @@ import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
-  useCommandPaletteActions,
   useCommandPaletteDispatch,
+  useCommandPaletteItems,
 } from "../../../hooks/useCommandPalette";
-import type { CommandDefinition } from "../../../types/commands";
+import type { PaletteAction } from "../../../types/palette";
+import { resolvePaletteItems } from "../../../utils/paletteItems";
 import { SpotlightPalette } from "../../ui/SpotlightPalette";
-import { CommandPaletteResults } from "./CommandPaletteResults";
+import { PaletteResults } from "./PaletteResults";
 
-export const CommandActionsPalette = () => {
+interface PaletteLabels {
+  ariaLabel: string;
+  searchLabel: string;
+  placeholder: string;
+  noResults: string;
+  navigationHint: string;
+  executeHint?: string;
+  escapeHint: string;
+  getCountLabel?: (count: number) => string;
+}
+
+interface PaletteProps {
+  labels: PaletteLabels;
+}
+
+export const Palette = ({ labels }: PaletteProps) => {
   const { t } = useTranslation();
-  const { executeCommand, getResults } = useCommandPaletteActions();
+  const { items } = useCommandPaletteItems();
   const { closePalette } = useCommandPaletteDispatch();
   const previousFocusRef = useRef<HTMLElement | null>(
     document.activeElement instanceof HTMLElement
@@ -21,11 +37,13 @@ export const CommandActionsPalette = () => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [executionError, setExecutionError] = useState<string | null>(null);
+  const [executionError, setExecutionError] = useState<string | null>(
+    null,
+  );
 
   const results = useMemo(
-    () => getResults(query),
-    [getResults, query],
+    () => resolvePaletteItems(items, query),
+    [items, query],
   );
   const activeIndex = Math.min(
     selectedIndex,
@@ -41,12 +59,13 @@ export const CommandActionsPalette = () => {
     restoreFocus();
   };
 
-  const handleExecute = async (command: CommandDefinition) => {
+  const handleExecute = async (action: PaletteAction) => {
     if (isExecuting) return;
     setExecutionError(null);
     setIsExecuting(true);
     try {
-      await executeCommand(command);
+      await action.execute();
+      closePalette();
       restoreFocus();
     } catch {
       setExecutionError(t("commandPalette.executionError"));
@@ -57,10 +76,10 @@ export const CommandActionsPalette = () => {
 
   return (
     <SpotlightPalette
-      ariaLabel={t("commandPalette.title")}
-      searchLabel={t("commandPalette.searchLabel")}
+      ariaLabel={labels.ariaLabel}
+      searchLabel={labels.searchLabel}
       closeLabel={t("common.close")}
-      placeholder={t("commandPalette.placeholder")}
+      placeholder={labels.placeholder}
       query={query}
       itemCount={results.length}
       selectedIndex={activeIndex}
@@ -71,8 +90,8 @@ export const CommandActionsPalette = () => {
       }}
       onSelectedIndexChange={setSelectedIndex}
       onSubmit={(index) => {
-        const result = results[index];
-        if (result) void handleExecute(result.command);
+        const item = results[index];
+        if (item) void handleExecute(item.primaryAction);
       }}
       isBusy={isExecuting}
       resultsId="command-palette-results"
@@ -83,21 +102,22 @@ export const CommandActionsPalette = () => {
       }
       footer={
         <>
-          <span />
+          <span>{labels.getCountLabel?.(results.length)}</span>
           <div className="flex gap-4">
-            <span>{t("commandPalette.navigationHint")}</span>
-            <span>{t("commandPalette.executeHint")}</span>
-            <span>{t("commandPalette.escapeHint")}</span>
+            <span>{labels.navigationHint}</span>
+            {labels.executeHint && <span>{labels.executeHint}</span>}
+            <span>{labels.escapeHint}</span>
           </div>
         </>
       }
     >
-      <CommandPaletteResults
-        results={results}
+      <PaletteResults
+        items={results}
         activeIndex={activeIndex}
         executionError={executionError}
+        noResults={labels.noResults}
         onSelect={setSelectedIndex}
-        onExecute={(command) => void handleExecute(command)}
+        onExecute={(action) => void handleExecute(action)}
       />
     </SpotlightPalette>
   );

@@ -1,0 +1,61 @@
+import { describe, expect, it, vi } from "vitest";
+
+import type { PaletteItem } from "../../src/types/palette";
+import { resolvePaletteItems } from "../../src/utils/paletteItems";
+
+function createItem(
+  overrides: Partial<PaletteItem> = {},
+): PaletteItem {
+  return {
+    id: "item",
+    title: "Item",
+    primaryAction: {
+      id: "open",
+      label: "Open",
+      execute: vi.fn(),
+    },
+    ...overrides,
+  };
+}
+
+describe("resolvePaletteItems", () => {
+  it("should search command and object items through the same fields", () => {
+    const items = [
+      createItem({
+        id: "settings",
+        title: "Open settings",
+        keywords: ["preferences"],
+      }),
+      createItem({
+        id: "users",
+        title: "users",
+        group: "public",
+        badge: "table",
+      }),
+    ];
+
+    expect(
+      resolvePaletteItems(items, "preferenses").map(
+        (item) => item.id,
+      ),
+    ).toEqual(["settings"]);
+    expect(
+      resolvePaletteItems(items, "public").map((item) => item.id),
+    ).toEqual(["users"]);
+  });
+
+  it("should apply contextual relevance to every source", () => {
+    const items = [
+      createItem({ id: "global", title: "Open console" }),
+      createItem({
+        id: "contextual",
+        title: "Open table in console",
+        relevance: 100,
+      }),
+    ];
+
+    expect(
+      resolvePaletteItems(items, "open").map((item) => item.id),
+    ).toEqual(["contextual", "global"]);
+  });
+});
