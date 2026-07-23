@@ -109,8 +109,15 @@ export const ImportDatabaseModal = ({
     }
     hasStartedRef.current = true;
     startImport();
+  }, [isOpen, startImport]);
 
-    // Listen to progress events
+  // The progress listener lives in its own effect: if it shared the starter
+  // effect above, any re-run (strict-mode double mount, startImport changing
+  // identity mid-import) would clean up the subscription and then hit the
+  // run-once guard, leaving the rest of the import without progress updates.
+  useEffect(() => {
+    if (!isOpen) return;
+
     const unlisten = listen<ImportProgress>("import_progress", (event) => {
       setProgress(event.payload);
     });
@@ -118,7 +125,7 @@ export const ImportDatabaseModal = ({
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [isOpen, startImport]);
+  }, [isOpen]);
 
   // Timer for elapsed time
   useEffect(() => {
