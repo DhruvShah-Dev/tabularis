@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useCommandPalette } from "./useCommandPalette";
+import { useCommandPaletteDispatch } from "./useCommandPalette";
 import { useConnectionManager } from "./useConnectionManager";
 import { useKeybindings } from "./useKeybindings";
 
@@ -12,7 +12,7 @@ export function useGlobalShortcuts() {
   const navigate = useNavigate();
   const { matchesShortcut, isMac } = useKeybindings();
   const { openConnections, handleSwitch } = useConnectionManager();
-  const { openPalette } = useCommandPalette();
+  const { openPalette } = useCommandPaletteDispatch();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

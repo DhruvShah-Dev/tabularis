@@ -7,7 +7,11 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-import { CommandPaletteContext } from "./CommandPaletteContext";
+import {
+  CommandPaletteActionsContext,
+  CommandPaletteDispatchContext,
+  CommandPaletteStateContext,
+} from "./CommandPaletteContext";
 import { useDatabase } from "../hooks/useDatabase";
 import { useEditor } from "../hooks/useEditor";
 import { newConsoleForTable } from "../utils/newConsole";
@@ -38,18 +42,32 @@ export const CommandPaletteProvider = ({
   } = useDatabase();
   const { activeTab, addTab } = useEditor();
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [mode, setMode] = useState<CommandPaletteMode>("actions");
+  const [activePalette, setActivePalette] =
+    useState<CommandPaletteMode | null>(null);
 
-  const context = useMemo<CommandContext>(() => createCommandContext({
-    pathname: location.pathname,
+  const context = useMemo<CommandContext>(() => {
+    if (activePalette !== "actions") {
+      return { resource: { type: "none" } };
+    }
+    return createCommandContext({
+      pathname: location.pathname,
+      activeConnectionId,
+      activeSchema,
+      activeTab: activeTab
+        ? {
+            type: activeTab.type,
+            activeTable: activeTab.activeTable,
+            schema: activeTab.schema,
+          }
+        : null,
+    });
+  }, [
+    activePalette,
     activeConnectionId,
     activeSchema,
-    activeTab,
-  }), [
-    activeConnectionId,
-    activeSchema,
-    activeTab,
+    activeTab?.activeTable,
+    activeTab?.schema,
+    activeTab?.type,
     location.pathname,
   ]);
 
@@ -89,11 +107,10 @@ export const CommandPaletteProvider = ({
 
   const openPalette = useCallback((nextMode: CommandPaletteMode) => {
     if (nextMode === "objects" && activeConnectionId === null) return;
-    setMode(nextMode);
-    setIsOpen(true);
+    setActivePalette(nextMode);
   }, [activeConnectionId]);
 
-  const closePalette = useCallback(() => setIsOpen(false), []);
+  const closePalette = useCallback(() => setActivePalette(null), []);
 
   const getResults = useCallback(
     (query: string) =>
@@ -107,33 +124,44 @@ export const CommandPaletteProvider = ({
   const executeCommand = useCallback(
     async (command: CommandDefinition) => {
       await command.execute(runtime, context);
-      setIsOpen(false);
+      setActivePalette(null);
     },
     [context, runtime],
   );
 
-  const value = useMemo(
+  const stateValue = useMemo(
     () => ({
-      isOpen,
-      mode,
+      activePalette,
+    }),
+    [activePalette],
+  );
+
+  const dispatchValue = useMemo(
+    () => ({
       openPalette,
       closePalette,
+    }),
+    [closePalette, openPalette],
+  );
+
+  const actionsValue = useMemo(
+    () => ({
       getResults,
       executeCommand,
     }),
     [
-      closePalette,
       executeCommand,
       getResults,
-      isOpen,
-      mode,
-      openPalette,
     ],
   );
 
   return (
-    <CommandPaletteContext.Provider value={value}>
-      {children}
-    </CommandPaletteContext.Provider>
+    <CommandPaletteDispatchContext.Provider value={dispatchValue}>
+      <CommandPaletteStateContext.Provider value={stateValue}>
+        <CommandPaletteActionsContext.Provider value={actionsValue}>
+          {children}
+        </CommandPaletteActionsContext.Provider>
+      </CommandPaletteStateContext.Provider>
+    </CommandPaletteDispatchContext.Provider>
   );
 };

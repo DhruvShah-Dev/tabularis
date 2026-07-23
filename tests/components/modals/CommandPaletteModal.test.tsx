@@ -1,8 +1,16 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { CommandPaletteContext } from "../../../src/contexts/CommandPaletteContext";
-import type { CommandPaletteContextType } from "../../../src/contexts/CommandPaletteContext";
+import {
+  CommandPaletteActionsContext,
+  CommandPaletteDispatchContext,
+  CommandPaletteStateContext,
+} from "../../../src/contexts/CommandPaletteContext";
+import type {
+  CommandPaletteActionsContextType,
+  CommandPaletteDispatchContextType,
+  CommandPaletteStateContextType,
+} from "../../../src/contexts/CommandPaletteContext";
 import { CommandPaletteModal } from "../../../src/components/modals/CommandPaletteModal";
 import type { CommandDefinition } from "../../../src/types/commands";
 
@@ -53,16 +61,25 @@ const consoleCommand: CommandDefinition = {
 };
 
 function renderPalette(
-  overrides: Partial<CommandPaletteContextType> = {},
+  overrides: {
+    actions?: Partial<CommandPaletteActionsContextType>;
+    dispatch?: Partial<CommandPaletteDispatchContextType>;
+    state?: Partial<CommandPaletteStateContextType>;
+  } = {},
 ) {
   const closePalette = vi.fn();
   const executeCommand = vi.fn().mockResolvedValue(undefined);
   const commands = [settingsCommand, consoleCommand];
-  const value: CommandPaletteContextType = {
-    isOpen: true,
-    mode: "actions",
+  const stateValue: CommandPaletteStateContextType = {
+    activePalette: "actions",
+    ...overrides.state,
+  };
+  const dispatchValue: CommandPaletteDispatchContextType = {
     openPalette: vi.fn(),
     closePalette,
+    ...overrides.dispatch,
+  };
+  const actionsValue: CommandPaletteActionsContextType = {
     getResults: (query) =>
       commands
         .filter((command) =>
@@ -70,13 +87,17 @@ function renderPalette(
         )
         .map((command) => ({ command, score: 0 })),
     executeCommand,
-    ...overrides,
+    ...overrides.actions,
   };
 
   render(
-    <CommandPaletteContext.Provider value={value}>
-      <CommandPaletteModal />
-    </CommandPaletteContext.Provider>,
+    <CommandPaletteDispatchContext.Provider value={dispatchValue}>
+      <CommandPaletteStateContext.Provider value={stateValue}>
+        <CommandPaletteActionsContext.Provider value={actionsValue}>
+          <CommandPaletteModal />
+        </CommandPaletteActionsContext.Provider>
+      </CommandPaletteStateContext.Provider>
+    </CommandPaletteDispatchContext.Provider>,
   );
 
   return { closePalette, executeCommand };
@@ -121,7 +142,11 @@ describe("CommandPaletteModal", () => {
 
   it("should keep the palette open and show execution errors", async () => {
     renderPalette({
-      executeCommand: vi.fn().mockRejectedValue(new Error("Connection failed")),
+      actions: {
+        executeCommand: vi.fn().mockRejectedValue(
+          new Error("Connection failed"),
+        ),
+      },
     });
 
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
@@ -145,7 +170,7 @@ describe("CommandPaletteModal", () => {
   });
 
   it("should render the existing object navigator in objects mode", () => {
-    renderPalette({ mode: "objects" });
+    renderPalette({ state: { activePalette: "objects" } });
 
     expect(
       screen.getByRole("dialog", { name: "Object search" }),
@@ -154,7 +179,9 @@ describe("CommandPaletteModal", () => {
   });
 
   it("should preserve object quick actions in the shared host", () => {
-    const { closePalette } = renderPalette({ mode: "objects" });
+    const { closePalette } = renderPalette({
+      state: { activePalette: "objects" },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Generate SQL" }));
 

@@ -29,7 +29,7 @@ vi.mock("../../src/hooks/useConnectionManager", () => ({
 }));
 
 vi.mock("../../src/hooks/useCommandPalette", () => ({
-  useCommandPalette: () => ({ openPalette: openPaletteMock }),
+  useCommandPaletteDispatch: () => ({ openPalette: openPaletteMock }),
 }));
 
 describe("useGlobalShortcuts", () => {

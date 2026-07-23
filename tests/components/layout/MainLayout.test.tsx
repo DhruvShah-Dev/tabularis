@@ -42,10 +42,6 @@ vi.mock("../../../src/hooks/useConnectionWindowLifecycle", () => ({
   useConnectionWindowLifecycle: vi.fn(),
 }));
 
-vi.mock("../../../src/hooks/useCommandPalette", () => ({
-  useCommandPalette: () => ({ isOpen: false }),
-}));
-
 describe("MainLayout", () => {
   it("should keep the shared palette host mounted while its input is closed", () => {
     render(

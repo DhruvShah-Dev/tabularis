@@ -1,13 +1,17 @@
 import { useState } from "react";
 
-import { useCommandPalette } from "../../hooks/useCommandPalette";
+import {
+  useCommandPaletteDispatch,
+  useCommandPaletteState,
+} from "../../hooks/useCommandPalette";
 import { GenerateSQLModal } from "./GenerateSQLModal";
 import { QuickNavigatorModal } from "./QuickNavigatorModal";
 import { SchemaModal } from "./SchemaModal";
 import { CommandActionsPalette } from "./commandPalette/CommandActionsPalette";
 
 export const CommandPaletteModal = () => {
-  const { closePalette, isOpen, mode } = useCommandPalette();
+  const { closePalette } = useCommandPaletteDispatch();
+  const { activePalette } = useCommandPaletteState();
   const [generateSQLTable, setGenerateSQLTable] = useState<string | null>(null);
   const [inspectTable, setInspectTable] = useState<{
     tableName: string;
@@ -16,8 +20,8 @@ export const CommandPaletteModal = () => {
 
   return (
     <>
-      {isOpen && mode === "actions" && <CommandActionsPalette />}
-      {isOpen && mode === "objects" && (
+      {activePalette === "actions" && <CommandActionsPalette />}
+      {activePalette === "objects" && (
         <QuickNavigatorModal
           isOpen
           onClose={closePalette}

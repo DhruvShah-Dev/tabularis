@@ -1,10 +1,18 @@
 import { act, render } from "@testing-library/react";
-import { useContext } from "react";
+import { memo } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CommandPaletteContext } from "../../src/contexts/CommandPaletteContext";
-import type { CommandPaletteContextType } from "../../src/contexts/CommandPaletteContext";
 import { CommandPaletteProvider } from "../../src/contexts/CommandPaletteProvider";
+import {
+  useCommandPaletteActions,
+  useCommandPaletteDispatch,
+  useCommandPaletteState,
+} from "../../src/hooks/useCommandPalette";
+import type {
+  CommandPaletteActionsContextType,
+  CommandPaletteDispatchContextType,
+  CommandPaletteStateContextType,
+} from "../../src/contexts/CommandPaletteContext";
 
 const navigateMock = vi.fn();
 const addTabMock = vi.fn(() => "console-tab");
@@ -49,15 +57,33 @@ vi.mock("../../src/hooks/useEditor", () => ({
   useEditor: () => editorState,
 }));
 
+interface PaletteContexts {
+  actions: CommandPaletteActionsContextType;
+  dispatch: CommandPaletteDispatchContextType;
+  state: CommandPaletteStateContextType;
+}
+
 function ContextConsumer({
-  onContext,
+  onContexts,
 }: {
-  onContext: (context: CommandPaletteContextType) => void;
+  onContexts: (contexts: PaletteContexts) => void;
 }) {
-  const context = useContext(CommandPaletteContext);
-  if (context) onContext(context);
+  const actions = useCommandPaletteActions();
+  const dispatch = useCommandPaletteDispatch();
+  const state = useCommandPaletteState();
+  onContexts({ actions, dispatch, state });
   return null;
 }
+
+const DispatchConsumer = memo(function DispatchConsumer({
+  onRender,
+}: {
+  onRender: () => void;
+}) {
+  useCommandPaletteDispatch();
+  onRender();
+  return null;
+});
 
 describe("CommandPaletteProvider", () => {
   beforeEach(() => {
@@ -67,68 +93,71 @@ describe("CommandPaletteProvider", () => {
   });
 
   it("should expose global and contextual built-in commands", () => {
-    let palette: CommandPaletteContextType | undefined;
+    let palette: PaletteContexts | undefined;
 
     render(
       <CommandPaletteProvider>
-        <ContextConsumer onContext={(context) => { palette = context; }} />
+        <ContextConsumer onContexts={(contexts) => { palette = contexts; }} />
       </CommandPaletteProvider>,
     );
 
-    expect(palette!.getResults("").map((result) => result.command.id)).toEqual([
+    act(() => palette!.dispatch.openPalette("actions"));
+
+    expect(palette!.actions.getResults("").map((result) => result.command.id)).toEqual([
       "table.open-in-console",
       "app.open-settings",
     ]);
   });
 
-  it("should open the shared palette in the requested live mode", () => {
-    let palette: CommandPaletteContextType | undefined;
+  it("should expose one explicit active palette state", () => {
+    let palette: PaletteContexts | undefined;
 
     render(
       <CommandPaletteProvider>
-        <ContextConsumer onContext={(context) => { palette = context; }} />
+        <ContextConsumer onContexts={(contexts) => { palette = contexts; }} />
       </CommandPaletteProvider>,
     );
 
-    expect(palette!.mode).toBe("actions");
+    expect(palette!.state.activePalette).toBeNull();
 
-    act(() => palette!.openPalette("objects"));
+    act(() => palette!.dispatch.openPalette("objects"));
 
-    expect(palette!.isOpen).toBe(true);
-    expect(palette!.mode).toBe("objects");
+    expect(palette!.state.activePalette).toBe("objects");
   });
 
   it("should keep object search closed without an active connection", () => {
     databaseState.activeConnectionId = null;
-    let palette: CommandPaletteContextType | undefined;
+    let palette: PaletteContexts | undefined;
 
     render(
       <CommandPaletteProvider>
-        <ContextConsumer onContext={(context) => { palette = context; }} />
+        <ContextConsumer onContexts={(contexts) => { palette = contexts; }} />
       </CommandPaletteProvider>,
     );
 
-    act(() => palette!.openPalette("objects"));
+    act(() => palette!.dispatch.openPalette("objects"));
 
-    expect(palette!.isOpen).toBe(false);
+    expect(palette!.state.activePalette).toBeNull();
   });
 
   it("should open the current table in a new SQL console", async () => {
-    let palette: CommandPaletteContextType | undefined;
+    let palette: PaletteContexts | undefined;
 
     render(
       <CommandPaletteProvider>
-        <ContextConsumer onContext={(context) => { palette = context; }} />
+        <ContextConsumer onContexts={(contexts) => { palette = contexts; }} />
       </CommandPaletteProvider>,
     );
 
+    act(() => palette!.dispatch.openPalette("actions"));
+
     const command = palette!
-      .getResults("")
+      .actions.getResults("")
       .find((result) => result.command.id === "table.open-in-console")
       ?.command;
 
     await act(async () => {
-      await palette!.executeCommand(command!);
+      await palette!.actions.executeCommand(command!);
     });
 
     expect(addTabMock).toHaveBeenCalledWith({
@@ -140,4 +169,24 @@ describe("CommandPaletteProvider", () => {
     expect(navigateMock).toHaveBeenCalledWith("/editor");
   });
 
+  it("should not notify dispatch consumers when the active tab changes", () => {
+    const onRender = vi.fn();
+    const { rerender } = render(
+      <CommandPaletteProvider>
+        <DispatchConsumer onRender={onRender} />
+      </CommandPaletteProvider>,
+    );
+
+    editorState.activeTab = {
+      ...editorState.activeTab,
+    };
+
+    rerender(
+      <CommandPaletteProvider>
+        <DispatchConsumer onRender={onRender} />
+      </CommandPaletteProvider>,
+    );
+
+    expect(onRender).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,14 +1,18 @@
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useCommandPalette } from "../../../hooks/useCommandPalette";
+import {
+  useCommandPaletteActions,
+  useCommandPaletteDispatch,
+} from "../../../hooks/useCommandPalette";
 import type { CommandDefinition } from "../../../types/commands";
 import { SpotlightPalette } from "../../ui/SpotlightPalette";
 import { CommandPaletteResults } from "./CommandPaletteResults";
 
 export const CommandActionsPalette = () => {
   const { t } = useTranslation();
-  const { closePalette, executeCommand, getResults } = useCommandPalette();
+  const { executeCommand, getResults } = useCommandPaletteActions();
+  const { closePalette } = useCommandPaletteDispatch();
   const previousFocusRef = useRef<HTMLElement | null>(
     document.activeElement instanceof HTMLElement
       ? document.activeElement
