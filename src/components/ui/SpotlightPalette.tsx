@@ -1,4 +1,8 @@
-import type { KeyboardEvent, ReactNode } from "react";
+import {
+  useRef,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { Loader2, Search, X } from "lucide-react";
 
 interface SpotlightPaletteProps {
@@ -38,7 +42,9 @@ export const SpotlightPalette = ({
   resultsId = "spotlight-results",
   activeDescendant,
 }: SpotlightPaletteProps) => {
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
       onClose();
@@ -63,7 +69,40 @@ export const SpotlightPalette = ({
       return;
     }
 
+    if (event.key === "Tab") {
+      const focusableElements = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements.at(-1);
+
+      if (
+        event.shiftKey &&
+        firstElement &&
+        document.activeElement === firstElement
+      ) {
+        event.preventDefault();
+        lastElement?.focus();
+      } else if (
+        !event.shiftKey &&
+        lastElement &&
+        document.activeElement === lastElement
+      ) {
+        event.preventDefault();
+        firstElement?.focus();
+      }
+      return;
+    }
+
     if (event.key === "Enter") {
+      if (
+        event.target instanceof HTMLButtonElement &&
+        event.target !== event.currentTarget
+      ) {
+        return;
+      }
       event.preventDefault();
       if (itemCount > 0) onSubmit(selectedIndex);
     }
@@ -77,10 +116,12 @@ export const SpotlightPalette = ({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
         aria-busy={isBusy}
+        onKeyDown={handleKeyDown}
         className="flex max-h-[60vh] w-[min(640px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-strong bg-elevated shadow-2xl"
       >
         <div className="flex items-center gap-3 border-b border-default bg-base px-4 py-3">
@@ -105,7 +146,6 @@ export const SpotlightPalette = ({
               onQueryChange(event.target.value);
               onSelectedIndexChange(0);
             }}
-            onKeyDown={handleKeyDown}
             placeholder={placeholder}
             className="min-w-0 flex-1 bg-transparent text-sm text-primary outline-none placeholder:text-muted"
           />

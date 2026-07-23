@@ -154,6 +154,46 @@ describe("CommandPaletteModal", () => {
     expect(closePalette).toHaveBeenCalledTimes(1);
   });
 
+  it("should keep Escape working after focus leaves the input", () => {
+    const { closePalette } = renderPalette();
+    const closeButton = screen.getByRole("button", {
+      name: "common.close",
+    });
+    closeButton.focus();
+
+    fireEvent.keyDown(closeButton, { key: "Escape" });
+
+    expect(closePalette).toHaveBeenCalledTimes(1);
+  });
+
+  it("should keep arrow navigation working after focus leaves the input", () => {
+    renderPalette();
+    const closeButton = screen.getByRole("button", {
+      name: "common.close",
+    });
+    closeButton.focus();
+
+    fireEvent.keyDown(closeButton, { key: "ArrowDown" });
+
+    expect(screen.getAllByRole("option")[1]).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("should keep keyboard focus inside the dialog", () => {
+    renderPalette();
+    const input = screen.getByRole("combobox");
+    const lastAction = screen.getByRole("button", {
+      name: "commandPalette.commands.openSettings",
+    });
+    lastAction.focus();
+
+    fireEvent.keyDown(lastAction, { key: "Tab" });
+
+    expect(input).toHaveFocus();
+  });
+
   it("should keep the palette open and show execution errors", async () => {
     navigateMock.mockRejectedValueOnce(
       new Error("Connection failed"),
