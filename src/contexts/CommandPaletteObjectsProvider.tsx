@@ -8,6 +8,7 @@ import type {
   RoutineInfo,
   TriggerInfo,
 } from "./DatabaseContext";
+import { useAlert } from "../hooks/useAlert";
 import { useDatabase } from "../hooks/useDatabase";
 import { useActiveCommandPaletteScope } from "../hooks/useCommandPaletteScope";
 import { getDatabaseList, isMultiDatabaseCapable } from "../utils/database";
@@ -29,6 +30,7 @@ export const CommandPaletteObjectsProvider = ({
 }: CommandPaletteObjectsProviderProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { showAlert } = useAlert();
   const scope = useActiveCommandPaletteScope();
   const {
     connectionDataMap,
@@ -128,36 +130,50 @@ export const CommandPaletteObjectsProvider = ({
         }
 
         if (item.type === "routine") {
+          try {
+            const definition = await invoke<string>(
+              "get_routine_definition",
+              {
+                connectionId,
+                routineName: item.name,
+                routineType: (item.item as RoutineInfo).routine_type,
+                ...(item.schema ? { schema: item.schema } : {}),
+              },
+            );
+            navigateToQuery(definition, {
+              queryName: `${item.name} Definition`,
+              preventAutoRun: true,
+            });
+          } catch (error) {
+            showAlert(
+              t("sidebar.failGetRoutineDefinition") + String(error),
+              { kind: "error" },
+            );
+          }
+          return;
+        }
+
+        try {
           const definition = await invoke<string>(
-            "get_routine_definition",
+            "get_trigger_definition",
             {
               connectionId,
-              routineName: item.name,
-              routineType: (item.item as RoutineInfo).routine_type,
+              triggerName: item.name,
+              tableName: (item.item as TriggerInfo).table_name,
               ...(item.schema ? { schema: item.schema } : {}),
             },
           );
           navigateToQuery(definition, {
             queryName: `${item.name} Definition`,
             preventAutoRun: true,
+            readOnly: true,
           });
-          return;
+        } catch (error) {
+          showAlert(
+            t("sidebar.failGetTriggerDefinition") + String(error),
+            { kind: "error" },
+          );
         }
-
-        const definition = await invoke<string>(
-          "get_trigger_definition",
-          {
-            connectionId,
-            triggerName: item.name,
-            tableName: (item.item as TriggerInfo).table_name,
-            ...(item.schema ? { schema: item.schema } : {}),
-          },
-        );
-        navigateToQuery(definition, {
-          queryName: `${item.name} Definition`,
-          preventAutoRun: true,
-          readOnly: true,
-        });
       };
 
       const actions: PaletteAction[] = [];
@@ -248,6 +264,7 @@ export const CommandPaletteObjectsProvider = ({
     navigate,
     onGenerateSql,
     onInspect,
+    showAlert,
     t,
   ]);
 

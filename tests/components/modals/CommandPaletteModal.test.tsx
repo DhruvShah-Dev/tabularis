@@ -14,6 +14,33 @@ import { CommandPaletteModal } from "../../../src/components/modals/CommandPalet
 
 const navigateMock = vi.fn();
 const openTableConsoleMock = vi.fn();
+const invokeMock = vi.fn();
+const showAlertMock = vi.fn();
+const connectionData = {
+  driver: "postgres",
+  capabilities: {},
+  tables: [{ name: "users" }],
+  views: [] as Array<{ name: string }>,
+  routines: [] as Array<{ name: string; routine_type: string }>,
+  triggers: [] as Array<{
+    name: string;
+    table_name: string;
+    event: string;
+    timing: string;
+  }>,
+  schemas: [] as string[],
+  schemaDataMap: {},
+  databaseDataMap: {},
+  activeSchema: "public",
+};
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
+}));
+
+vi.mock("../../../src/hooks/useAlert", () => ({
+  useAlert: () => ({ showAlert: showAlertMock }),
+}));
 
 vi.mock("../../../src/hooks/useCommandPaletteScope", () => ({
   useActiveCommandPaletteScope: () => ({
@@ -36,18 +63,7 @@ vi.mock("../../../src/hooks/useCommandPaletteScope", () => ({
 vi.mock("../../../src/hooks/useDatabase", () => ({
   useDatabase: () => ({
     connectionDataMap: {
-      "connection-1": {
-        driver: "postgres",
-        capabilities: {},
-        tables: [{ name: "users" }],
-        views: [],
-        routines: [],
-        triggers: [],
-        schemas: [],
-        schemaDataMap: {},
-        databaseDataMap: {},
-        activeSchema: "public",
-      },
+      "connection-1": connectionData,
     },
     connections: [
       {
@@ -104,6 +120,12 @@ describe("CommandPaletteModal", () => {
   beforeEach(() => {
     navigateMock.mockReset();
     openTableConsoleMock.mockReset();
+    invokeMock.mockReset();
+    showAlertMock.mockReset();
+    connectionData.tables = [{ name: "users" }];
+    connectionData.views = [];
+    connectionData.routines = [];
+    connectionData.triggers = [];
   });
 
   it("should use the shared palette to filter action items", () => {
@@ -247,5 +269,62 @@ describe("CommandPaletteModal", () => {
       await screen.findByText("Generate SQL for users"),
     ).toBeInTheDocument();
     expect(closePalette).toHaveBeenCalledTimes(1);
+  });
+
+  it("should preserve the routine-specific error with its original reason", async () => {
+    connectionData.tables = [];
+    connectionData.routines = [
+      { name: "refresh_users", routine_type: "FUNCTION" },
+    ];
+    invokeMock.mockRejectedValueOnce(new Error("permission denied"));
+    const { closePalette } = renderPalette({
+      state: { activePalette: "objects" },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /refresh_users/i }),
+    );
+
+    await waitFor(() =>
+      expect(showAlertMock).toHaveBeenCalledWith(
+        "sidebar.failGetRoutineDefinitionError: permission denied",
+        { kind: "error" },
+      ),
+    );
+    expect(closePalette).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByText("commandPalette.executionError"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("should preserve the trigger-specific error with its original reason", async () => {
+    connectionData.tables = [];
+    connectionData.triggers = [
+      {
+        name: "audit_users",
+        table_name: "users",
+        event: "UPDATE",
+        timing: "AFTER",
+      },
+    ];
+    invokeMock.mockRejectedValueOnce(new Error("unsupported trigger"));
+    const { closePalette } = renderPalette({
+      state: { activePalette: "objects" },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /audit_users/i }),
+    );
+
+    await waitFor(() =>
+      expect(showAlertMock).toHaveBeenCalledWith(
+        "sidebar.failGetTriggerDefinitionError: unsupported trigger",
+        { kind: "error" },
+      ),
+    );
+    expect(closePalette).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByText("commandPalette.executionError"),
+    ).not.toBeInTheDocument();
   });
 });
