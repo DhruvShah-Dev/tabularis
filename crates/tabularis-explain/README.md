@@ -42,9 +42,16 @@ and anything touching the filesystem do not belong here.
 | Postgres | plain text `EXPLAIN` | `parse_postgres_text` |
 | MySQL / MariaDB | `EXPLAIN FORMAT=JSON`, `ANALYZE FORMAT=JSON` | `mysql::parse_mysql_query_block` |
 | MySQL / MariaDB | `ANALYZE FORMAT=TEXT` / tree-format `EXPLAIN ANALYZE` | `mysql::parse_mysql_analyze_text` |
+| SQLite | `EXPLAIN QUERY PLAN` `(id, parent, detail)` triples | `sqlite::build_sqlite_tree` |
 
 MySQL's tabular `EXPLAIN` is **not** here: it is only reachable as decoded
 database rows, never as a serialisable payload, so it stays in the driver.
+
+`detect_format` currently sniffs only the two Postgres shapes, so `parse_explain`
+dispatches to those. The MySQL and SQLite entry points are called directly by a
+caller that already knows the engine. Teaching `detect_format` to recognise a
+MySQL `query_block` document is the natural next step for a host that accepts
+arbitrary pasted plans.
 
 ## Layout
 

@@ -23,6 +23,7 @@ mod source;
 
 pub mod mysql;
 pub mod postgres;
+pub mod sqlite;
 
 pub use model::{ExplainNode, ExplainPlan};
 pub use postgres::{parse_postgres_json, parse_postgres_text};
