@@ -42,13 +42,3 @@ export interface CommandDefinition {
     context: CommandContext,
   ) => void | Promise<void>;
 }
-
-export interface CommandResult {
-  command: CommandDefinition;
-  score: number;
-}
-
-export interface ResolveCommandsOptions {
-  query: string;
-  context: CommandContext;
-}

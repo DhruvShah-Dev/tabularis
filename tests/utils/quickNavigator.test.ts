@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getNavigatorItems, filterNavigatorItems, type NavigatorItemParams } from "../../src/utils/quickNavigator";
+import { getNavigatorItems, type NavigatorItemParams } from "../../src/utils/quickNavigator";
 import type { SchemaData } from "../../src/contexts/DatabaseContext";
 
 describe("quickNavigator utility", () => {
@@ -109,37 +109,6 @@ describe("quickNavigator utility", () => {
       const result = getNavigatorItems(params);
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ name: "products", type: "table", schema: "sales_db", item: mockDbData.tables[0] });
-    });
-  });
-
-  describe("filterNavigatorItems", () => {
-    const mockItems = [
-      { name: "users", type: "table" as const, schema: "public", item: {} },
-      { name: "user_sessions", type: "table" as const, schema: "auth", item: {} },
-      { name: "active_sessions", type: "view" as const, schema: "public", item: {} },
-    ];
-
-    it("should return all items if search query is empty", () => {
-      expect(filterNavigatorItems(mockItems, "")).toEqual(mockItems);
-    });
-
-    it("should filter items by name case-insensitively", () => {
-      const result = filterNavigatorItems(mockItems, "SESSION");
-      expect(result).toHaveLength(2);
-      expect(result[0].name).toBe("user_sessions");
-      expect(result[1].name).toBe("active_sessions");
-    });
-
-    it("should filter items by schema name case-insensitively", () => {
-      const result = filterNavigatorItems(mockItems, "auth");
-      expect(result).toHaveLength(1);
-      expect(result[0].name).toBe("user_sessions");
-    });
-
-    it("should tolerate typos", () => {
-      const result = filterNavigatorItems(mockItems, "sesion").map((i) => i.name);
-      expect(result).toContain("user_sessions");
-      expect(result).toContain("active_sessions");
     });
   });
 });

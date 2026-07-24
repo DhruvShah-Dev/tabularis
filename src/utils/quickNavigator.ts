@@ -1,5 +1,4 @@
 import type { TableInfo, ViewInfo, RoutineInfo, TriggerInfo, SchemaData } from '../contexts/DatabaseContext';
-import { fuzzyFilter } from './fuzzy';
 
 export interface NavigatorItem {
   name: string;
@@ -156,10 +155,4 @@ export function getNavigatorItems(params: NavigatorItemParams): NavigatorItem[] 
   }
 
   return result;
-}
-
-export function filterNavigatorItems(items: NavigatorItem[], search: string): NavigatorItem[] {
-  return fuzzyFilter(items, search, (item) =>
-    item.schema ? `${item.name} ${item.schema}` : item.name,
-  );
 }
