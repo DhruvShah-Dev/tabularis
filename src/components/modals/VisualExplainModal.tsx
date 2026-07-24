@@ -10,13 +10,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../../hooks/useSettings";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useDrivers } from "../../hooks/useDrivers";
-import type { ExplainPlan } from "../../types/explain";
-import { isDataModifyingQuery } from "../../utils/explainPlan";
-import { isExplainableQuery } from "../../utils/sql";
+import type { ExplainPlan } from "@tabularis/explain";
+import { isDataModifyingQuery, isExplainableQuery } from "../../utils/sql";
 import { getConnectionIcon } from "../../utils/driverUI";
 import { Modal } from "../ui/Modal";
 import { VisualExplainView } from "../explain/VisualExplainView";
-import type { ExplainViewMode } from "./visual-explain/ExplainSummaryBar";
+import type { ExplainViewMode } from "@tabularis/explain/react";
 
 interface VisualExplainModalProps {
   isOpen: boolean;

@@ -4,9 +4,9 @@ import { useTranslation } from "react-i18next";
 import { FileJson, FolderOpen, Loader2, RefreshCw } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import type { ExplainPlan } from "../types/explain";
+import type { ExplainPlan } from "@tabularis/explain";
 import { VisualExplainView } from "../components/explain/VisualExplainView";
-import type { ExplainViewMode } from "../components/modals/visual-explain/ExplainSummaryBar";
+import type { ExplainViewMode } from "@tabularis/explain/react";
 import {
   getExplainFileName,
   parseExplainFileParam,
