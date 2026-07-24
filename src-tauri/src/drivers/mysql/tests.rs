@@ -475,3 +475,137 @@ mod routine_management {
         );
     }
 }
+
+/// Live coverage for `explain_query`'s fallback chain.
+///
+/// The parsers themselves are unit-tested in the `tabularis-explain` crate; what
+/// needs a real server is the chain — which EXPLAIN variant a given version
+/// accepts, and that each stage falls through to the next when its variant is
+/// unavailable. MySQL 8.0.18+ takes the `EXPLAIN ANALYZE` text branch, MariaDB
+/// 10.1+ the `ANALYZE FORMAT=JSON` branch, and both the `FORMAT=JSON` branch
+/// when not analysing.
+///
+/// ```text
+/// TABULARIS_TEST_MYSQL=1 cargo test live_mysql -- --ignored
+/// TABULARIS_TEST_MYSQL=1 TABULARIS_TEST_MYSQL_PORT=3307 cargo test live_mysql -- --ignored
+/// ```
+#[cfg(test)]
+mod live_explain_tests {
+    use crate::drivers::mysql::explain::explain_query;
+    use crate::models::{ConnectionParams, DatabaseSelection};
+
+    fn test_params() -> Option<ConnectionParams> {
+        if std::env::var("TABULARIS_TEST_MYSQL").is_err() {
+            return None;
+        }
+
+        Some(ConnectionParams {
+            driver: "mysql".to_string(),
+            host: Some(
+                std::env::var("TABULARIS_TEST_MYSQL_HOST")
+                    .unwrap_or_else(|_| "127.0.0.1".to_string()),
+            ),
+            port: Some(
+                std::env::var("TABULARIS_TEST_MYSQL_PORT")
+                    .ok()
+                    .and_then(|p| p.parse().ok())
+                    .unwrap_or(3306),
+            ),
+            username: Some(
+                std::env::var("TABULARIS_TEST_MYSQL_USER").unwrap_or_else(|_| "root".to_string()),
+            ),
+            password: Some(
+                std::env::var("TABULARIS_TEST_MYSQL_PASSWORD")
+                    .unwrap_or_else(|_| "Tabularis_Demo_2026!".to_string()),
+            ),
+            database: DatabaseSelection::Single(
+                std::env::var("TABULARIS_TEST_MYSQL_DB")
+                    .unwrap_or_else(|_| "information_schema".to_string()),
+            ),
+            ssl_mode: Some("disabled".to_string()),
+            ..Default::default()
+        })
+    }
+
+    /// A query every MySQL and MariaDB build can explain without a schema.
+    const QUERY: &str = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'information_schema' ORDER BY table_name";
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_mysql_explain_without_analyze_returns_a_plan() {
+        let Some(params) = test_params() else {
+            eprintln!("skipping: set TABULARIS_TEST_MYSQL=1 to run this test");
+            return;
+        };
+
+        let plan = explain_query(&params, QUERY, false, None)
+            .await
+            .expect("explain without analyze");
+
+        assert_eq!(plan.driver, "mysql");
+        assert_eq!(
+            plan.original_query, QUERY,
+            "every branch must stamp the statement it explained"
+        );
+        assert!(
+            plan.raw_output.is_some(),
+            "the raw server output is kept for the raw tab"
+        );
+        assert!(
+            !plan.root.node_type.is_empty(),
+            "a plan must have a typed root node"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_mysql_explain_with_analyze_returns_actual_data() {
+        let Some(params) = test_params() else {
+            eprintln!("skipping: set TABULARIS_TEST_MYSQL=1 to run this test");
+            return;
+        };
+
+        let plan = explain_query(&params, QUERY, true, None)
+            .await
+            .expect("explain with analyze");
+
+        assert_eq!(plan.driver, "mysql");
+        assert_eq!(plan.original_query, QUERY);
+        assert!(
+            plan.has_analyze_data,
+            "an analysing branch must report measured data — got node_type {:?}, raw_output {:?}",
+            plan.root.node_type,
+            plan.raw_output.as_deref().map(|s| &s[..s.len().min(200)])
+        );
+        assert!(
+            plan.root.actual_rows.is_some() || plan.root.actual_time_ms.is_some(),
+            "the root of an analysed plan carries actual rows or time"
+        );
+
+        // MariaDB's `ANALYZE FORMAT=JSON` reports optimizer time under
+        // `query_optimization.r_total_time_ms`; that is the one field this
+        // branch contributes over the others, so pin it wherever it is offered.
+        let raw = plan.raw_output.as_deref().unwrap_or_default();
+        if raw.contains("query_optimization") {
+            assert!(
+                plan.planning_time_ms.is_some(),
+                "optimizer time was reported but not carried onto the plan"
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_mysql_explain_falls_through_on_an_unexplainable_statement() {
+        let Some(params) = test_params() else {
+            eprintln!("skipping: set TABULARIS_TEST_MYSQL=1 to run this test");
+            return;
+        };
+
+        // No branch can explain this; the chain must surface an error rather
+        // than an empty plan.
+        let result = explain_query(&params, "SELECT * FROM does_not_exist_xyz", false, None).await;
+
+        assert!(result.is_err(), "unexplainable statement must error");
+    }
+}
