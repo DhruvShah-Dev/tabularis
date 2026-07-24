@@ -1,0 +1,22 @@
+[package]
+name = "tabularis-explain"
+version = "0.1.0"
+description = "Database-agnostic EXPLAIN plan model and parsers, with no query execution."
+authors = ["Debba"]
+license = "Apache-2.0"
+edition = "2021"
+rust-version = "1.77.2"
+repository = "https://github.com/TabularisDB/tabularis"
+keywords = ["explain", "query-plan", "postgres", "mysql", "database"]
+categories = ["database", "parser-implementations"]
+
+[lib]
+name = "tabularis_explain"
+
+# Intentionally minimal: this crate must stay free of `tauri`, `sqlx` and any
+# transport or async runtime so it can also be compiled to WASM for a
+# browser-only plan visualiser. Adding a dependency here is a design decision,
+# not a convenience — see README.md.
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

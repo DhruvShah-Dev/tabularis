@@ -1,7 +1,7 @@
 use super::client::{format_pg_error, query_all};
 use super::helpers::escape_identifier;
-use crate::explain_import::parse_postgres_json;
 use crate::models::{ConnectionParams, ExplainPlan};
+use tabularis_explain::parse_postgres_json;
 use crate::pool_manager::get_postgres_pool;
 
 pub async fn explain_query(
