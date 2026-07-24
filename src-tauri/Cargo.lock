@@ -6497,7 +6497,6 @@ dependencies = [
  "sha2",
  "sqlx",
  "sysinfo",
- "tabularis-explain",
  "tabularium-sdk",
  "tauri",
  "tauri-build",
@@ -6520,14 +6519,6 @@ dependencies = [
  "uuid",
  "which",
  "zip",
-]
-
-[[package]]
-name = "tabularis-explain"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]

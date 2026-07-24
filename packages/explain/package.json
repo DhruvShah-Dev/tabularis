@@ -1,7 +1,7 @@
 {
   "name": "@tabularis/explain",
   "version": "0.1.0",
-  "description": "Analyse and visualise a database EXPLAIN plan. Takes a parsed plan; never runs a query.",
+  "description": "Parse, analyse and visualise a database EXPLAIN plan. Takes raw EXPLAIN output; never runs a query.",
   "license": "Apache-2.0",
   "homepage": "https://github.com/TabularisDB/tabularis/tree/main/packages/explain",
   "repository": {

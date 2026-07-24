@@ -1,6 +1,6 @@
 //! Host-side tests for the explain import glue.
 //!
-//! Parser coverage lives in `crates/tabularis-explain/tests/`.
+//! Parser coverage lives in `packages/explain/tests/parsers/`.
 
 #[cfg(test)]
 mod tests {

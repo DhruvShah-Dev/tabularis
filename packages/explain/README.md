@@ -43,12 +43,29 @@ import { ExplainGraph, ExplainTableView } from "@tabularis/explain/react";
 
 ## Where a plan comes from
 
-This package does not produce plans — it consumes them. An `ExplainPlan` is the
-JSON emitted by the `tabularis-explain` Rust crate (`crates/tabularis-explain`),
-which parses Postgres and MySQL/MariaDB EXPLAIN output and carries no
-query-execution concern either. The two halves share one wire format, so a host
-can obtain a plan however it likes — a driver, a pasted textarea, an uploaded
-file, WASM in the browser — and the analysis and views are unchanged.
+This package never runs a query — it turns *already-produced* EXPLAIN output
+into an `ExplainPlan` and analyses it. The parsers cover Postgres
+`EXPLAIN (FORMAT JSON)` and text output, MySQL/MariaDB `FORMAT=JSON`,
+`EXPLAIN ANALYZE` / `ANALYZE FORMAT=TEXT` trees and decoded tabular rows, and
+SQLite `EXPLAIN QUERY PLAN` rows:
+
+```ts
+import { parseExplain, parseExplainFor, parseRawExplain } from "@tabularis/explain";
+
+// Sniff the format of a pasted blob or an uploaded file:
+const plan = parseExplain(raw);
+
+// Or name the engine when the caller knows it:
+const hinted = parseExplainFor(raw, "mysql");
+
+// Or parse the raw payload a host driver handed over:
+const fromDriver = parseRawExplain({ engine, format, payload, original_query });
+```
+
+A host obtains the bytes however it likes — a driver, a pasted textarea, an
+uploaded file — and hands them over untouched. Drivers for engines these
+parsers do not know (plugin drivers) supply a fully-parsed `ExplainPlan`
+instead; both shapes flow through `resolveExplainOutput`.
 
 ## Host requirements for the React entry point
 

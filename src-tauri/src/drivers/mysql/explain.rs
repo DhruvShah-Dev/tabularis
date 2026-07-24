@@ -1,15 +1,20 @@
 //! Runs `EXPLAIN` against MySQL / MariaDB and hands the raw output to the
-//! parsers in `tabularis_explain::mysql`.
+//! frontend, where the parsers in `@tabularis/explain` build the plan tree.
 //!
-//! Only the tabular `EXPLAIN` form is parsed here: it arrives as decoded `sqlx`
-//! rows rather than a serialisable payload, so it cannot live in a crate that
-//! knows nothing about drivers.
+//! The fallback chain stays here because it needs the connection: which
+//! variant a server accepts is discovered by running it. Each stage only
+//! checks that its output is structurally sound (non-empty text, JSON with a
+//! `query_block` key) — the same conditions that used to make the parsers
+//! bail — before handing the payload over untouched.
+//!
+//! The tabular `EXPLAIN` form is decoded here too: it arrives as `sqlx` rows
+//! rather than a serialisable payload, so the driver re-serialises the row
+//! values as a JSON array for the `mysql-tabular-rows` format.
 
 use super::helpers::{mysql_row_str, mysql_row_str_opt};
-use crate::models::{ConnectionParams, ExplainNode, ExplainPlan};
+use crate::models::{ConnectionParams, ExplainQueryOutput, RawExplainOutput};
 use crate::pool_manager::get_mysql_pool;
 use sqlx::{Column, Row};
-use tabularis_explain::mysql::{parse_mysql_json, parse_mysql_text};
 
 /// Server capabilities detected via `SELECT VERSION()`.
 struct MysqlCapabilities {
@@ -51,12 +56,32 @@ fn parse_mysql_version(version_str: &str) -> MysqlCapabilities {
     }
 }
 
+/// The structural check that used to live in the JSON parser: a plan document
+/// must be valid JSON hanging its tree off a `query_block` key. Anything else
+/// makes the chain fall through to the next EXPLAIN variant.
+fn is_mysql_plan_json(raw: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(raw)
+        .map(|v| v.get("query_block").is_some())
+        .unwrap_or(false)
+}
+
+fn raw_output(format: &str, payload: String, query: &str) -> ExplainQueryOutput {
+    ExplainQueryOutput::Raw {
+        raw: RawExplainOutput {
+            engine: "mysql".to_string(),
+            format: format.to_string(),
+            payload,
+            original_query: query.to_string(),
+        },
+    }
+}
+
 pub async fn explain_query(
     params: &ConnectionParams,
     query: &str,
     analyze: bool,
     schema: Option<&str>,
-) -> Result<ExplainPlan, String> {
+) -> Result<ExplainQueryOutput, String> {
     let effective_params;
     let pool = if let Some(db) = schema {
         effective_params = {
@@ -107,9 +132,9 @@ pub async fn explain_query(
                     lines.push(line);
                 }
             }
-            if let Ok(mut plan) = parse_mysql_text(&lines.join("\n")) {
-                plan.original_query = query.to_string();
-                return Ok(plan);
+            let payload = lines.join("\n");
+            if !payload.trim().is_empty() {
+                return Ok(raw_output("mysql-analyze-text", payload, query));
             }
         }
     }
@@ -127,11 +152,9 @@ pub async fn explain_query(
         };
         if let Ok(row) = maria_res {
             if let Ok(raw_json) = row.try_get::<String, _>(0) {
-                // Carries `query_optimization.r_total_time_ms` as the planning
-                // time; falls through to plain FORMAT=JSON if unparseable.
-                if let Ok(mut plan) = parse_mysql_json(&raw_json) {
-                    plan.original_query = query.to_string();
-                    return Ok(plan);
+                // Falls through to plain FORMAT=JSON when malformed.
+                if is_mysql_plan_json(&raw_json) {
+                    return Ok(raw_output("mysql-json", raw_json, query));
                 }
             }
         }
@@ -154,9 +177,8 @@ pub async fn explain_query(
         .await;
 
         if let Ok(raw_json) = json_result {
-            if let Ok(mut plan) = parse_mysql_json(&raw_json) {
-                plan.original_query = query.to_string();
-                return Ok(plan);
+            if is_mysql_plan_json(&raw_json) {
+                return Ok(raw_output("mysql-json", raw_json, query));
             }
         }
     }
@@ -172,29 +194,19 @@ pub async fn explain_query(
     }
     .map_err(|e| e.to_string())?;
 
-    let (root, raw) = parse_mysql_tabular_explain(&rows);
-    Ok(ExplainPlan {
-        root,
-        planning_time_ms: None,
-        execution_time_ms: None,
-        original_query: query.to_string(),
-        driver: "mysql".to_string(),
-        has_analyze_data: false,
-        raw_output: Some(raw),
-    })
+    let payload = serialize_mysql_tabular_rows(&rows)?;
+    Ok(raw_output("mysql-tabular-rows", payload, query))
 }
 
-/// Parse the tabular output from plain `EXPLAIN` (for MySQL/MariaDB without FORMAT=JSON).
+/// Serialise the decoded rows of plain `EXPLAIN` into the `mysql-tabular-rows`
+/// JSON array consumed by `@tabularis/explain`.
 ///
 /// MySQL 5.5: id, select_type, table, type, possible_keys, key, key_len, ref, rows, Extra
 /// MySQL 5.7+: id, select_type, table, partitions, type, possible_keys, key, key_len, ref, rows, filtered, Extra
 ///
 /// Uses column-name lookup + `mysql_row_str` / `mysql_row_str_opt` to handle
 /// MySQL versions that return VARBINARY instead of VARCHAR.
-fn parse_mysql_tabular_explain(rows: &[sqlx::mysql::MySqlRow]) -> (ExplainNode, String) {
-    let mut raw_lines = Vec::new();
-    let mut children = Vec::new();
-
+fn serialize_mysql_tabular_rows(rows: &[sqlx::mysql::MySqlRow]) -> Result<String, String> {
     /// Find a column index by name (case-insensitive).
     fn col_idx(row: &sqlx::mysql::MySqlRow, name: &str) -> Option<usize> {
         row.columns()
@@ -202,16 +214,13 @@ fn parse_mysql_tabular_explain(rows: &[sqlx::mysql::MySqlRow]) -> (ExplainNode, 
             .position(|c| c.name().eq_ignore_ascii_case(name))
     }
 
-    for (i, row) in rows.iter().enumerate() {
+    let mut entries = Vec::new();
+    for row in rows {
         let select_type = col_idx(row, "select_type")
             .map(|idx| mysql_row_str(row, idx))
             .unwrap_or_default();
-        let table = col_idx(row, "table")
-            .and_then(|idx| mysql_row_str_opt(row, idx))
-            .unwrap_or_default();
-        let access_type = col_idx(row, "type")
-            .and_then(|idx| mysql_row_str_opt(row, idx))
-            .unwrap_or_default();
+        let table = col_idx(row, "table").and_then(|idx| mysql_row_str_opt(row, idx));
+        let access_type = col_idx(row, "type").and_then(|idx| mysql_row_str_opt(row, idx));
         let possible_keys =
             col_idx(row, "possible_keys").and_then(|idx| mysql_row_str_opt(row, idx));
         let key = col_idx(row, "key").and_then(|idx| mysql_row_str_opt(row, idx));
@@ -230,92 +239,17 @@ fn parse_mysql_tabular_explain(rows: &[sqlx::mysql::MySqlRow]) -> (ExplainNode, 
         });
         let extra = col_idx(row, "Extra").and_then(|idx| mysql_row_str_opt(row, idx));
 
-        let node_type = match access_type.as_str() {
-            "ALL" => "Full Table Scan",
-            "index" => "Index Scan",
-            "range" => "Range Scan",
-            "ref" => "Index Lookup",
-            "eq_ref" => "Unique Index Lookup",
-            "const" | "system" => "Const Lookup",
-            "fulltext" => "Fulltext Search",
-            "" => "Unknown",
-            other => other,
-        }
-        .to_string();
-
-        raw_lines.push(format!(
-            "{}\t{}\t{}\t{}\t{}\t{}",
-            select_type,
-            table,
-            access_type,
-            key.as_deref().unwrap_or("-"),
-            plan_rows.unwrap_or(0),
-            extra.as_deref().unwrap_or("")
-        ));
-
-        let mut node_extra = std::collections::HashMap::new();
-        if let Some(pk) = &possible_keys {
-            node_extra.insert(
-                "possible_keys".to_string(),
-                serde_json::Value::String(pk.clone()),
-            );
-        }
-        if let Some(f) = filtered {
-            node_extra.insert(
-                "filtered".to_string(),
-                serde_json::Value::Number(
-                    serde_json::Number::from_f64(f).unwrap_or(serde_json::Number::from(0)),
-                ),
-            );
-        }
-        if let Some(e) = &extra {
-            node_extra.insert("extra".to_string(), serde_json::Value::String(e.clone()));
-        }
-        node_extra.insert(
-            "select_type".to_string(),
-            serde_json::Value::String(select_type),
-        );
-
-        children.push(ExplainNode {
-            id: format!("node_{}", i + 1),
-            node_type,
-            relation: if table.is_empty() { None } else { Some(table) },
-            startup_cost: None,
-            total_cost: None,
-            plan_rows: plan_rows.map(|r| r as f64),
-            actual_rows: None,
-            actual_time_ms: None,
-            actual_loops: None,
-            buffers_hit: None,
-            buffers_read: None,
-            filter: extra.clone(),
-            index_condition: key,
-            join_type: None,
-            hash_condition: None,
-            extra: node_extra,
-            children: vec![],
-        });
+        entries.push(serde_json::json!({
+            "select_type": select_type,
+            "table": table,
+            "access_type": access_type,
+            "possible_keys": possible_keys,
+            "key": key,
+            "rows": plan_rows,
+            "filtered": filtered,
+            "extra": extra,
+        }));
     }
 
-    let root = ExplainNode {
-        id: "node_0".to_string(),
-        node_type: "Query".to_string(),
-        relation: None,
-        startup_cost: None,
-        total_cost: None,
-        plan_rows: None,
-        actual_rows: None,
-        actual_time_ms: None,
-        actual_loops: None,
-        buffers_hit: None,
-        buffers_read: None,
-        filter: None,
-        index_condition: None,
-        join_type: None,
-        hash_condition: None,
-        extra: std::collections::HashMap::new(),
-        children,
-    };
-
-    (root, raw_lines.join("\n"))
+    serde_json::to_string(&entries).map_err(|e| format!("Failed to serialise EXPLAIN rows: {e}"))
 }

@@ -2,16 +2,23 @@
 //!
 //! Everything in this module is a *host* concern: Tauri commands, the standalone
 //! window, the CLI hand-off slot and the file read. The parsing itself lives in
-//! the `tabularis_explain` crate and is reachable from here only through
-//! [`parse_explain`].
+//! the `@tabularis/explain` package — the frontend receives the file content
+//! untouched and sniffs the format there.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use serde::{Deserialize, Serialize};
 use tauri::{Manager, Runtime, State};
 
-use crate::models::ExplainPlan;
-use tabularis_explain::{parse_explain_for, with_source_label, ExplainEngine};
+/// A plan file read from disk, parsed on the frontend by `@tabularis/explain`.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ExplainFileContent {
+    /// The raw file content, untouched.
+    pub content: String,
+    /// The basename the UI shows as the plan's source label.
+    pub display_name: String,
+}
 
 /// Holds the path passed via `--explain <FILE>` on the CLI, so the frontend
 /// can claim it once the visual-explain window has mounted.
@@ -33,17 +40,13 @@ impl PendingExplainFile {
     }
 }
 
-/// Tauri command: parse an EXPLAIN file from disk.
+/// Tauri command: read an EXPLAIN file from disk.
 ///
-/// `engine` is the driver name the plan came from (`"postgres"`, `"mysql"`,
-/// `"mariadb"`, …) when the caller knows it. Omit it and the format is sniffed,
-/// which recognises the Postgres shapes.
+/// The content comes back untouched; the frontend sniffs the format and
+/// parses it with `@tabularis/explain`.
 #[tauri::command]
-pub async fn load_explain_from_file(
-    path: String,
-    engine: Option<String>,
-) -> Result<ExplainPlan, String> {
-    load_from_file(&path, engine.as_deref()).await
+pub async fn load_explain_from_file(path: String) -> Result<ExplainFileContent, String> {
+    load_from_file(&path).await
 }
 
 /// Tauri command: pop the CLI-provided file path (if any).
@@ -102,23 +105,22 @@ pub async fn open_visual_explain_window<R: Runtime>(
     spawn_visual_explain_window(&app, file)
 }
 
-/// Read a file from disk and parse it into an [`ExplainPlan`].
-///
-/// An unrecognised `engine` name is treated as no hint rather than an error: the
-/// name reaches us from a driver id, and sniffing is a better outcome than
-/// refusing to open the file.
+/// Read a file from disk, returning its content plus the display name the UI
+/// shows as the plan's source label.
 ///
 /// The heavy file read happens on a blocking thread via `tokio::task::spawn_blocking`
 /// so this async wrapper never stalls the runtime.
-pub async fn load_from_file(path: &str, engine: Option<&str>) -> Result<ExplainPlan, String> {
+pub async fn load_from_file(path: &str) -> Result<ExplainFileContent, String> {
     let buf = PathBuf::from(path);
     let content = tokio::task::spawn_blocking(move || std::fs::read_to_string(&buf))
         .await
         .map_err(|e| format!("Failed to read explain file: {e}"))?
         .map_err(|e| format!("Failed to read explain file: {e}"))?;
 
-    let plan = parse_explain_for(&content, engine.and_then(ExplainEngine::from_driver_name))?;
-    Ok(with_source_label(plan, &display_name(path)))
+    Ok(ExplainFileContent {
+        content,
+        display_name: display_name(path),
+    })
 }
 
 /// Reduce a path to the basename the UI shows, falling back to the full path.

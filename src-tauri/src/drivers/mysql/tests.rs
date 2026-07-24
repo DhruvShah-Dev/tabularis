@@ -478,7 +478,7 @@ mod routine_management {
 
 /// Live coverage for `explain_query`'s fallback chain.
 ///
-/// The parsers themselves are unit-tested in the `tabularis-explain` crate; what
+/// The parsers are unit-tested in `packages/explain/tests/parsers/`; what
 /// needs a real server is the chain — which EXPLAIN variant a given version
 /// accepts, and that each stage falls through to the next when its variant is
 /// unavailable. MySQL 8.0.18+ takes the `EXPLAIN ANALYZE` text branch, MariaDB
@@ -492,7 +492,16 @@ mod routine_management {
 #[cfg(test)]
 mod live_explain_tests {
     use crate::drivers::mysql::explain::explain_query;
-    use crate::models::{ConnectionParams, DatabaseSelection};
+    use crate::models::{ConnectionParams, DatabaseSelection, ExplainQueryOutput, RawExplainOutput};
+
+    fn unwrap_raw(output: ExplainQueryOutput) -> RawExplainOutput {
+        match output {
+            ExplainQueryOutput::Raw { raw } => raw,
+            ExplainQueryOutput::Plan { .. } => {
+                panic!("a built-in driver must hand over a raw payload")
+            }
+        }
+    }
 
     fn test_params() -> Option<ConnectionParams> {
         if std::env::var("TABULARIS_TEST_MYSQL").is_err() {
@@ -538,22 +547,25 @@ mod live_explain_tests {
             return;
         };
 
-        let plan = explain_query(&params, QUERY, false, None)
-            .await
-            .expect("explain without analyze");
+        let raw = unwrap_raw(
+            explain_query(&params, QUERY, false, None)
+                .await
+                .expect("explain without analyze"),
+        );
 
-        assert_eq!(plan.driver, "mysql");
+        assert_eq!(raw.engine, "mysql");
         assert_eq!(
-            plan.original_query, QUERY,
+            raw.original_query, QUERY,
             "every branch must stamp the statement it explained"
         );
         assert!(
-            plan.raw_output.is_some(),
-            "the raw server output is kept for the raw tab"
+            !raw.payload.trim().is_empty(),
+            "the raw server output is what the frontend parses"
         );
         assert!(
-            !plan.root.node_type.is_empty(),
-            "a plan must have a typed root node"
+            matches!(raw.format.as_str(), "mysql-json" | "mysql-tabular-rows"),
+            "a non-analysing run takes a JSON or tabular branch, got {}",
+            raw.format
         );
     }
 
@@ -565,32 +577,30 @@ mod live_explain_tests {
             return;
         };
 
-        let plan = explain_query(&params, QUERY, true, None)
-            .await
-            .expect("explain with analyze");
-
-        assert_eq!(plan.driver, "mysql");
-        assert_eq!(plan.original_query, QUERY);
-        assert!(
-            plan.has_analyze_data,
-            "an analysing branch must report measured data — got node_type {:?}, raw_output {:?}",
-            plan.root.node_type,
-            plan.raw_output.as_deref().map(|s| &s[..s.len().min(200)])
-        );
-        assert!(
-            plan.root.actual_rows.is_some() || plan.root.actual_time_ms.is_some(),
-            "the root of an analysed plan carries actual rows or time"
+        let raw = unwrap_raw(
+            explain_query(&params, QUERY, true, None)
+                .await
+                .expect("explain with analyze"),
         );
 
-        // MariaDB's `ANALYZE FORMAT=JSON` reports optimizer time under
-        // `query_optimization.r_total_time_ms`; that is the one field this
-        // branch contributes over the others, so pin it wherever it is offered.
-        let raw = plan.raw_output.as_deref().unwrap_or_default();
-        if raw.contains("query_optimization") {
-            assert!(
-                plan.planning_time_ms.is_some(),
-                "optimizer time was reported but not carried onto the plan"
-            );
+        assert_eq!(raw.engine, "mysql");
+        assert_eq!(raw.original_query, QUERY);
+
+        // An analysing branch hands over either MySQL's `EXPLAIN ANALYZE`
+        // text tree or MariaDB's `ANALYZE FORMAT=JSON` document; both carry
+        // measured data the frontend parser surfaces as actual rows/time.
+        match raw.format.as_str() {
+            "mysql-analyze-text" => assert!(
+                raw.payload.contains("actual time="),
+                "the text tree must carry measured data — got {:?}",
+                &raw.payload[..raw.payload.len().min(200)]
+            ),
+            "mysql-json" => assert!(
+                raw.payload.contains("r_total_time_ms") || raw.payload.contains("r_rows"),
+                "the MariaDB document must carry r_* actual fields — got {:?}",
+                &raw.payload[..raw.payload.len().min(200)]
+            ),
+            other => panic!("an analysing run must take an analysing branch, got {other}"),
         }
     }
 

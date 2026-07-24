@@ -452,11 +452,35 @@ impl BatchStatementResult {
     }
 }
 
-/// The EXPLAIN plan model lives in the `tabularis-explain` crate, which holds
-/// the plan tree and its parsers with no dependency on connections or query
-/// execution. Re-exported here so existing `crate::models::ExplainPlan`
-/// imports keep working.
-pub use tabularis_explain::{ExplainNode, ExplainPlan};
+/// Raw EXPLAIN output produced by a built-in driver.
+///
+/// Parsing lives in the `@tabularis/explain` TypeScript package
+/// (`parseRawExplain`): a driver's job ends at handing over the payload it
+/// obtained — text, a JSON document, or decoded rows re-serialised as a JSON
+/// array — plus the format tag naming what it is.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RawExplainOutput {
+    /// Driver id of the engine that produced the payload ("postgres", …).
+    pub engine: String,
+    /// Wire format tag understood by `@tabularis/explain`:
+    /// `postgres-json`, `mysql-json`, `mysql-analyze-text`,
+    /// `mysql-tabular-rows` or `sqlite-eqp-rows`.
+    pub format: String,
+    /// The untouched payload: text, a JSON document, or rows as a JSON array.
+    pub payload: String,
+    pub original_query: String,
+}
+
+/// What `explain_query` hands to the frontend: a raw payload from a built-in
+/// driver, or a plan a plugin driver already parsed. Plugins know engines the
+/// core parsers do not, so their JSON-RPC `explain_query` result passes
+/// through untouched.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ExplainQueryOutput {
+    Raw { raw: RawExplainOutput },
+    Plan { plan: serde_json::Value },
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TableSchema {

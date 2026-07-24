@@ -1,12 +1,15 @@
 //! Runs `EXPLAIN QUERY PLAN` against SQLite and hands the decoded
-//! `(id, parent, detail)` triples to `tabularis_explain::sqlite`.
+//! `(id, parent, detail)` triples to the frontend as a JSON array, where
+//! `@tabularis/explain` builds the plan tree.
 
-use crate::models::{ConnectionParams, ExplainPlan};
+use crate::models::{ConnectionParams, ExplainQueryOutput, RawExplainOutput};
 use crate::pool_manager::get_sqlite_pool;
 use sqlx::Row;
-use tabularis_explain::sqlite::build_sqlite_tree;
 
-pub async fn explain_query(params: &ConnectionParams, query: &str) -> Result<ExplainPlan, String> {
+pub async fn explain_query(
+    params: &ConnectionParams,
+    query: &str,
+) -> Result<ExplainQueryOutput, String> {
     let pool = get_sqlite_pool(params).await?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
 
@@ -21,32 +24,25 @@ pub async fn explain_query(params: &ConnectionParams, query: &str) -> Result<Exp
         return Err("EXPLAIN QUERY PLAN returned no output".into());
     }
 
-    // Build raw output text
-    let mut raw_lines = Vec::new();
-    // Collect flat entries: (id, parent, detail)
-    let mut entries: Vec<(i64, i64, String)> = Vec::new();
+    let entries: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|row| {
+            let id: i32 = row.try_get("id").unwrap_or(0);
+            let parent: i32 = row.try_get("parent").unwrap_or(0);
+            let detail: String = row.try_get("detail").unwrap_or_default();
+            serde_json::json!({ "id": id, "parent": parent, "detail": detail })
+        })
+        .collect();
 
-    for row in &rows {
-        let id: i32 = row.try_get("id").unwrap_or(0);
-        let parent: i32 = row.try_get("parent").unwrap_or(0);
-        let detail: String = row.try_get("detail").unwrap_or_default();
-        raw_lines.push(format!("{}|{}|{}", id, parent, &detail));
-        entries.push((id as i64, parent as i64, detail));
-    }
+    let payload = serde_json::to_string(&entries)
+        .map_err(|e| format!("Failed to serialise EXPLAIN QUERY PLAN rows: {e}"))?;
 
-    let raw_output = raw_lines.join("\n");
-
-    // Build tree from flat entries
-    let mut counter: u32 = 0;
-    let root = build_sqlite_tree(&entries, 0, &mut counter);
-
-    Ok(ExplainPlan {
-        root,
-        planning_time_ms: None,
-        execution_time_ms: None,
-        original_query: query.to_string(),
-        driver: "sqlite".to_string(),
-        has_analyze_data: false,
-        raw_output: Some(raw_output),
+    Ok(ExplainQueryOutput::Raw {
+        raw: RawExplainOutput {
+            engine: "sqlite".to_string(),
+            format: "sqlite-eqp-rows".to_string(),
+            payload,
+            original_query: query.to_string(),
+        },
     })
 }
