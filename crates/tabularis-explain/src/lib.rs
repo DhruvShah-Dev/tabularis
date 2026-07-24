@@ -27,4 +27,7 @@ pub mod sqlite;
 
 pub use model::{ExplainNode, ExplainPlan};
 pub use postgres::{parse_postgres_json, parse_postgres_text};
-pub use source::{detect_format, parse_explain, with_source_label, ExplainSourceFormat};
+pub use source::{
+    detect_format, detect_format_for, parse_explain, parse_explain_for, with_source_label,
+    ExplainEngine, ExplainSourceFormat,
+};

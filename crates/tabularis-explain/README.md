@@ -47,11 +47,28 @@ and anything touching the filesystem do not belong here.
 MySQL's tabular `EXPLAIN` is **not** here: it is only reachable as decoded
 database rows, never as a serialisable payload, so it stays in the driver.
 
-`detect_format` currently sniffs only the two Postgres shapes, so `parse_explain`
-dispatches to those. The MySQL and SQLite entry points are called directly by a
-caller that already knows the engine. Teaching `detect_format` to recognise a
-MySQL `query_block` document is the natural next step for a host that accepts
-arbitrary pasted plans.
+### Telling it which engine produced the output
+
+A caller that knows the engine says so and the right parser is used directly:
+
+```rust
+use tabularis_explain::{parse_explain_for, ExplainEngine};
+
+let plan = parse_explain_for(raw, Some(ExplainEngine::MySql))?;
+
+// Or straight from a driver id — "postgres", "mysql", "mariadb", "sqlite":
+let plan = parse_explain_for(raw, ExplainEngine::from_driver_name(driver))?;
+```
+
+Omit the hint — `parse_explain(raw)`, or `None` — and the format is sniffed,
+which recognises the two Postgres shapes. `from_driver_name` returns `None` for
+an unknown name, so an unrecognised driver degrades to sniffing rather than
+failing.
+
+`ExplainEngine::Sqlite` is accepted so a host can pass through whatever it is
+connected to, but returns an explicit error: SQLite's `EXPLAIN QUERY PLAN` has no
+serialised text form here, only `(id, parent, detail)` rows for
+`sqlite::build_sqlite_tree`.
 
 ## Layout
 

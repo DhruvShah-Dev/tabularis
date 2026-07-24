@@ -9,9 +9,7 @@ use super::helpers::{mysql_row_str, mysql_row_str_opt};
 use crate::models::{ConnectionParams, ExplainNode, ExplainPlan};
 use crate::pool_manager::get_mysql_pool;
 use sqlx::{Column, Row};
-use tabularis_explain::mysql::{
-    has_analyze_data_recursive, parse_mysql_analyze_text, parse_mysql_query_block,
-};
+use tabularis_explain::mysql::{parse_mysql_json, parse_mysql_text};
 
 /// Server capabilities detected via `SELECT VERSION()`.
 struct MysqlCapabilities {
@@ -109,21 +107,9 @@ pub async fn explain_query(
                     lines.push(line);
                 }
             }
-            if !lines.is_empty() {
-                let raw_output = lines.join("\n");
-                let mut counter: u32 = 0;
-                let root = parse_mysql_analyze_text(&raw_output, &mut counter);
-                let has_analyze = has_analyze_data_recursive(&root);
-
-                return Ok(ExplainPlan {
-                    root,
-                    planning_time_ms: None,
-                    execution_time_ms: None,
-                    original_query: query.to_string(),
-                    driver: "mysql".to_string(),
-                    has_analyze_data: has_analyze,
-                    raw_output: Some(raw_output),
-                });
+            if let Ok(mut plan) = parse_mysql_text(&lines.join("\n")) {
+                plan.original_query = query.to_string();
+                return Ok(plan);
             }
         }
     }
@@ -141,28 +127,11 @@ pub async fn explain_query(
         };
         if let Ok(row) = maria_res {
             if let Ok(raw_json) = row.try_get::<String, _>(0) {
-                if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&raw_json) {
-                    if let Some(query_block) = json_val.get("query_block") {
-                        let mut counter: u32 = 0;
-                        let root = parse_mysql_query_block(query_block, &mut counter);
-                        let has_analyze = has_analyze_data_recursive(&root);
-
-                        // MariaDB: query_optimization.r_total_time_ms
-                        let planning_time_ms = json_val
-                            .get("query_optimization")
-                            .and_then(|qo| qo.get("r_total_time_ms"))
-                            .and_then(|v| v.as_f64());
-
-                        return Ok(ExplainPlan {
-                            root,
-                            planning_time_ms,
-                            execution_time_ms: None,
-                            original_query: query.to_string(),
-                            driver: "mysql".to_string(),
-                            has_analyze_data: has_analyze,
-                            raw_output: Some(raw_json),
-                        });
-                    }
+                // Carries `query_optimization.r_total_time_ms` as the planning
+                // time; falls through to plain FORMAT=JSON if unparseable.
+                if let Ok(mut plan) = parse_mysql_json(&raw_json) {
+                    plan.original_query = query.to_string();
+                    return Ok(plan);
                 }
             }
         }
@@ -185,22 +154,9 @@ pub async fn explain_query(
         .await;
 
         if let Ok(raw_json) = json_result {
-            if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&raw_json) {
-                if let Some(query_block) = json_val.get("query_block") {
-                    let mut counter: u32 = 0;
-                    let root = parse_mysql_query_block(query_block, &mut counter);
-                    let has_analyze = has_analyze_data_recursive(&root);
-
-                    return Ok(ExplainPlan {
-                        root,
-                        planning_time_ms: None,
-                        execution_time_ms: None,
-                        original_query: query.to_string(),
-                        driver: "mysql".to_string(),
-                        has_analyze_data: has_analyze,
-                        raw_output: Some(raw_json),
-                    });
-                }
+            if let Ok(mut plan) = parse_mysql_json(&raw_json) {
+                plan.original_query = query.to_string();
+                return Ok(plan);
             }
         }
     }

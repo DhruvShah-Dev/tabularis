@@ -9,7 +9,67 @@
 //! `sqlx` row types. The tabular `EXPLAIN` form stays in the driver because it
 //! is only reachable as decoded database rows, not as a serialisable payload.
 
-use crate::model::ExplainNode;
+use crate::model::{ExplainNode, ExplainPlan};
+
+/// Parse a MySQL `EXPLAIN FORMAT=JSON` or MariaDB `ANALYZE FORMAT=JSON`
+/// document into a plan.
+///
+/// Both shapes hang the tree off a `query_block` key, and MariaDB's analysing
+/// variant adds `query_optimization.r_total_time_ms` — picked up as the planning
+/// time when present, absent for plain `EXPLAIN FORMAT=JSON`.
+///
+/// `original_query` is left empty: only the caller knows the statement.
+pub fn parse_mysql_json(raw: &str) -> Result<ExplainPlan, String> {
+    let value: serde_json::Value = serde_json::from_str(raw)
+        .map_err(|e| format!("Failed to parse EXPLAIN JSON: {e}"))?;
+
+    let query_block = value
+        .get("query_block")
+        .ok_or_else(|| "EXPLAIN JSON missing 'query_block' key".to_string())?;
+
+    let mut counter: u32 = 0;
+    let root = parse_mysql_query_block(query_block, &mut counter);
+    let has_analyze_data = has_analyze_data_recursive(&root);
+
+    let planning_time_ms = value
+        .get("query_optimization")
+        .and_then(|qo| qo.get("r_total_time_ms"))
+        .and_then(serde_json::Value::as_f64);
+
+    Ok(ExplainPlan {
+        root,
+        planning_time_ms,
+        execution_time_ms: None,
+        original_query: String::new(),
+        driver: "mysql".to_string(),
+        has_analyze_data,
+        raw_output: Some(raw.to_string()),
+    })
+}
+
+/// Parse a MySQL `EXPLAIN ANALYZE` / MariaDB `ANALYZE FORMAT=TEXT` indented
+/// tree into a plan.
+///
+/// `original_query` is left empty: only the caller knows the statement.
+pub fn parse_mysql_text(raw: &str) -> Result<ExplainPlan, String> {
+    if raw.trim().is_empty() {
+        return Err("EXPLAIN ANALYZE returned no output".to_string());
+    }
+
+    let mut counter: u32 = 0;
+    let root = parse_mysql_analyze_text(raw, &mut counter);
+    let has_analyze_data = has_analyze_data_recursive(&root);
+
+    Ok(ExplainPlan {
+        root,
+        planning_time_ms: None,
+        execution_time_ms: None,
+        original_query: String::new(),
+        driver: "mysql".to_string(),
+        has_analyze_data,
+        raw_output: Some(raw.to_string()),
+    })
+}
 
 /// Parse a JSON value that might be a string number or a numeric value.
 fn parse_json_number(v: &serde_json::Value) -> Option<f64> {
