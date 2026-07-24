@@ -91,7 +91,7 @@ export function ExplainDiagramView({
     });
   }, [plan, metrics]);
 
-  const max = getMetricMax(metrics, metricKind);
+  const max = metricKind != null ? getMetricMax(metrics, metricKind) : 0;
   const selectedNode = findExplainNode(plan.root, selectedId);
 
   const handleSelect = useCallback(
@@ -104,30 +104,32 @@ export function ExplainDiagramView({
   return (
     <div className="flex h-full">
       <div className="flex-1 min-w-0 flex flex-col border-r border-default">
-        <div className="flex items-center gap-2 border-b border-default bg-base/50 px-4 py-2">
-          <span className="text-[11px] uppercase tracking-wide text-muted font-semibold">
-            {t("editor.visualExplain.metric")}
-          </span>
-          <div className="flex items-center gap-1 rounded-lg bg-surface-secondary p-0.5">
-            {availableKinds.map((kind) => (
-              <button
-                key={kind}
-                onClick={() => setRequestedKind(kind)}
-                className={clsx(
-                  "rounded px-2 py-1 text-xs transition-colors",
-                  metricKind === kind
-                    ? "bg-blue-900/40 text-blue-300"
-                    : "text-muted hover:text-primary",
-                )}
-              >
-                {t(METRIC_LABEL_KEYS[kind])}
-              </button>
-            ))}
+        {availableKinds.length > 0 && (
+          <div className="flex items-center gap-2 border-b border-default bg-base/50 px-4 py-2">
+            <span className="text-[11px] uppercase tracking-wide text-muted font-semibold">
+              {t("editor.visualExplain.metric")}
+            </span>
+            <div className="flex items-center gap-1 rounded-lg bg-surface-secondary p-0.5">
+              {availableKinds.map((kind) => (
+                <button
+                  key={kind}
+                  onClick={() => setRequestedKind(kind)}
+                  className={clsx(
+                    "rounded px-2 py-1 text-xs transition-colors",
+                    metricKind === kind
+                      ? "bg-blue-900/40 text-blue-300"
+                      : "text-muted hover:text-primary",
+                  )}
+                >
+                  {t(METRIC_LABEL_KEYS[kind])}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex-1 overflow-auto">
-          {rows.length === 0 || availableKinds.length === 0 ? (
+          {rows.length === 0 || metricKind == null ? (
             <div className="p-4 text-xs text-muted">
               {t("editor.visualExplain.noMetricData")}
             </div>

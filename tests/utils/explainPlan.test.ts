@@ -16,6 +16,7 @@ import {
   getRowEstimateRatio,
   isDataModifyingQuery,
 } from "../../src/utils/explainPlan";
+import type { ExplainDiagnostic } from "../../src/utils/explainDiagnostics";
 import type { ExplainNode, ExplainPlan } from "../../src/types/explain";
 
 // ---------------------------------------------------------------------------
@@ -131,6 +132,32 @@ describe("explainPlan", () => {
 
       expect(selectedNode?.data.isSelected).toBe(true);
       expect(unselectedNode?.data.isSelected).toBe(false);
+    });
+
+    it("should take diagnostics from the supplied map", () => {
+      const child = makeNode({ id: "node_1" });
+      const root = makeNode({ id: "node_0", children: [child] });
+      const plan = makePlan({ root });
+      const diagnostic: ExplainDiagnostic = {
+        kind: "hotspot",
+        severity: "critical",
+        labelKey: "editor.visualExplain.diagnostics.hotspot.label",
+        descriptionKey: "editor.visualExplain.diagnostics.hotspot.description",
+      };
+
+      const { nodes } = explainPlanToFlow(
+        plan,
+        null,
+        undefined,
+        new Map([["node_1", [diagnostic]]]),
+      );
+
+      expect(nodes.find((node) => node.id === "node_1")?.data.diagnostics).toEqual([
+        diagnostic,
+      ]);
+      expect(nodes.find((node) => node.id === "node_0")?.data.diagnostics).toEqual(
+        [],
+      );
     });
   });
 

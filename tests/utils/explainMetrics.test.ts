@@ -317,5 +317,12 @@ describe("explainMetrics", () => {
 
       expect(getDefaultMetricKind(metrics)).toBe("rows");
     });
+
+    it("should return null when the plan carries no metric", () => {
+      const metrics = computeExplainMetrics(makePlan(makeNode()));
+
+      expect(getAvailableMetricKinds(metrics)).toEqual([]);
+      expect(getDefaultMetricKind(metrics)).toBeNull();
+    });
   });
 });

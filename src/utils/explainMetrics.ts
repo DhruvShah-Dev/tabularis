@@ -268,15 +268,16 @@ export function getAvailableMetricKinds(
 
 /**
  * Metric the heat map and diagram default to: measured time when the plan was
- * run with ANALYZE, planner cost otherwise.
+ * run with ANALYZE, planner cost otherwise. `null` when the plan carries no
+ * metric at all, so callers never select a metric that has no data.
  */
 export function getDefaultMetricKind(
   metrics: ExplainMetrics,
-): ExplainMetricKind {
+): ExplainMetricKind | null {
   if (metrics.maxExclusiveTimeMs > 0) {
     return "time";
   }
 
   const available = getAvailableMetricKinds(metrics);
-  return available.includes("cost") ? "cost" : (available[0] ?? "cost");
+  return available.includes("cost") ? "cost" : (available[0] ?? null);
 }

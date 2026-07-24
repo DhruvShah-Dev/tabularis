@@ -3,7 +3,7 @@ import type { ExplainNode, ExplainPlan } from "../types/explain";
 import type { ExplainPlanNodeData } from "../components/ui/ExplainPlanNode";
 import type { ExplainMetrics } from "./explainMetrics";
 import { computeExplainMetrics } from "./explainMetrics";
-import { getNodeDiagnostics } from "./explainDiagnostics";
+import type { ExplainDiagnostic } from "./explainDiagnostics";
 import dagre from "dagre";
 
 // ---------------------------------------------------------------------------
@@ -13,13 +13,16 @@ import dagre from "dagre";
 /**
  * Build the ReactFlow graph for a plan.
  *
- * `metrics` may be supplied by a caller that already computed them for other
- * views, so a plan is only walked once per render.
+ * `metrics` and `diagnostics` may be supplied by a caller that already computed
+ * them for other views, so a plan is only walked once per render. Diagnostics
+ * are passed in rather than derived here, which keeps this module independent of
+ * `explainDiagnostics` — that module needs the helpers below.
  */
 export function explainPlanToFlow(
   plan: ExplainPlan,
   selectedNodeId?: string | null,
   metrics?: ExplainMetrics,
+  diagnostics?: Map<string, ExplainDiagnostic[]>,
 ): {
   nodes: Node[];
   edges: Edge[];
@@ -35,7 +38,7 @@ export function explainPlanToFlow(
       metrics: nodeMetrics ?? null,
       maxExclusiveCost: planMetrics.maxExclusiveCost,
       maxExclusiveTimeMs: planMetrics.maxExclusiveTimeMs,
-      diagnostics: getNodeDiagnostics(node, nodeMetrics),
+      diagnostics: diagnostics?.get(node.id) ?? [],
       hasAnalyzeData: plan.has_analyze_data,
       isSelected: selectedNodeId === node.id,
     };

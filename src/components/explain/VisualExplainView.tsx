@@ -153,6 +153,7 @@ export const VisualExplainView = ({
                 <ExplainGraph
                   plan={plan}
                   metrics={metrics}
+                  diagnostics={diagnostics}
                   selectedNodeId={selectedNodeId}
                   onSelectNode={onSelectNode}
                 />
