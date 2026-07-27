@@ -1469,7 +1469,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [Felder]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "SQL kann nicht generiert werden: Der Datenbankdialekt dieser Verbindung ist unbekannt."
   },
   "modifyColumn": {
     "titleAdd": "Spalte hinzufügen",

@@ -1499,7 +1499,8 @@
     "tabSelectAll": "Select *",
     "tabSelectFields": "Select [fields]",
     "tabUpdate": "Update",
-    "tabDelete": "Delete"
+    "tabDelete": "Delete",
+    "unknownDialect": "Hindi makabuo ng SQL: hindi alam ang dialect ng database para sa koneksyong ito."
   },
   "modifyColumn": {
     "titleAdd": "Magdagdag ng Column",

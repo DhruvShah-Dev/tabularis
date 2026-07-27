@@ -1443,7 +1443,8 @@
     "tabSelectAll": "Select *",
     "tabSelectFields": "Select [필드]",
     "tabUpdate": "Update",
-    "tabDelete": "Delete"
+    "tabDelete": "Delete",
+    "unknownDialect": "SQL을 생성할 수 없습니다: 이 연결의 데이터베이스 방언을 알 수 없습니다."
   },
   "modifyColumn": {
     "titleAdd": "컬럼 추가",

@@ -1,12 +1,35 @@
-import type { TableInfo, ViewInfo, RoutineInfo, TriggerInfo, SchemaData } from '../contexts/DatabaseContext';
+import type {
+  RoutineInfo,
+  SchemaData,
+  TableInfo,
+  TriggerInfo,
+  ViewInfo,
+} from "../contexts/DatabaseContext";
+import type { DatabaseObject } from "./databaseObjectActions";
 
-export interface NavigatorItem {
+interface NavigatorItemBase {
   name: string;
-  type: "table" | "view" | "routine" | "trigger";
   schema?: string;
   detail?: string;
-  item: TableInfo | ViewInfo | RoutineInfo | TriggerInfo;
 }
+
+export type NavigatorItem =
+  | (NavigatorItemBase & {
+      type: "table";
+      item: TableInfo;
+    })
+  | (NavigatorItemBase & {
+      type: "view";
+      item: ViewInfo;
+    })
+  | (NavigatorItemBase & {
+      type: "routine";
+      item: RoutineInfo;
+    })
+  | (NavigatorItemBase & {
+      type: "trigger";
+      item: TriggerInfo;
+    });
 
 export interface NavigatorItemParams {
   activeConnectionId: string | null;
@@ -21,6 +44,58 @@ export interface NavigatorItemParams {
   routines: RoutineInfo[];
   triggers: TriggerInfo[];
   activeSchema: string | null;
+}
+
+type NavigatorData = Pick<
+  SchemaData,
+  "tables" | "views" | "routines" | "triggers"
+>;
+
+interface NavigatorGroup {
+  group?: string;
+  data: NavigatorData;
+}
+
+function createNavigatorItems({
+  group,
+  data,
+}: NavigatorGroup): NavigatorItem[] {
+  return [
+    ...(data.tables ?? []).map(
+      (item): NavigatorItem => ({
+        name: item.name,
+        type: "table",
+        schema: group,
+        item,
+      }),
+    ),
+    ...(data.views ?? []).map(
+      (item): NavigatorItem => ({
+        name: item.name,
+        type: "view",
+        schema: group,
+        item,
+      }),
+    ),
+    ...(data.routines ?? []).map(
+      (item): NavigatorItem => ({
+        name: item.name,
+        type: "routine",
+        schema: group,
+        detail: item.routine_type,
+        item,
+      }),
+    ),
+    ...(data.triggers ?? []).map(
+      (item): NavigatorItem => ({
+        name: item.name,
+        type: "trigger",
+        schema: group,
+        detail: `on ${item.table_name}`,
+        item,
+      }),
+    ),
+  ];
 }
 
 export function getNavigatorItems(params: NavigatorItemParams): NavigatorItem[] {
@@ -41,118 +116,67 @@ export function getNavigatorItems(params: NavigatorItemParams): NavigatorItem[] 
 
   if (!activeConnectionId) return [];
 
-  const result: NavigatorItem[] = [];
-
-  if (hasSchemas && schemas) {
-    schemas.forEach((schemaName) => {
-      const data = schemaDataMap[schemaName];
-      if (data) {
-        if (data.tables) {
-          data.tables.forEach((t) => {
-            result.push({ name: t.name, type: "table", schema: schemaName, item: t });
-          });
-        }
-        if (data.views) {
-          data.views.forEach((v) => {
-            result.push({ name: v.name, type: "view", schema: schemaName, item: v });
-          });
-        }
-        if (data.routines) {
-          data.routines.forEach((r) => {
-            result.push({
-              name: r.name,
-              type: "routine",
-              schema: schemaName,
-              detail: r.routine_type,
-              item: r,
-            });
-          });
-        }
-        if (data.triggers) {
-          data.triggers.forEach((trg) => {
-            result.push({
-              name: trg.name,
-              type: "trigger",
-              schema: schemaName,
-              detail: `on ${trg.table_name}`,
-              item: trg,
-            });
-          });
-        }
-      }
+  let groups: NavigatorGroup[];
+  if (hasSchemas) {
+    groups = schemas.flatMap((group) => {
+      const data = schemaDataMap[group];
+      return data ? [{ group, data }] : [];
     });
-  } else if (isMultiDb && configuredDatabases) {
-    configuredDatabases.forEach((dbName) => {
-      const data = databaseDataMap[dbName];
-      if (data) {
-        if (data.tables) {
-          data.tables.forEach((t) => {
-            result.push({ name: t.name, type: "table", schema: dbName, item: t });
-          });
-        }
-        if (data.views) {
-          data.views.forEach((v) => {
-            result.push({ name: v.name, type: "view", schema: dbName, item: v });
-          });
-        }
-        if (data.routines) {
-          data.routines.forEach((r) => {
-            result.push({
-              name: r.name,
-              type: "routine",
-              schema: dbName,
-              detail: r.routine_type,
-              item: r,
-            });
-          });
-        }
-        if (data.triggers) {
-          data.triggers.forEach((trg) => {
-            result.push({
-              name: trg.name,
-              type: "trigger",
-              schema: dbName,
-              detail: `on ${trg.table_name}`,
-              item: trg,
-            });
-          });
-        }
-      }
+  } else if (isMultiDb) {
+    groups = configuredDatabases.flatMap((group) => {
+      const data = databaseDataMap[group];
+      return data ? [{ group, data }] : [];
     });
   } else {
-    if (tables) {
-      tables.forEach((t) => {
-        result.push({ name: t.name, type: "table", schema: activeSchema || undefined, item: t });
-      });
-    }
-    if (views) {
-      views.forEach((v) => {
-        result.push({ name: v.name, type: "view", schema: activeSchema || undefined, item: v });
-      });
-    }
-    if (routines) {
-      routines.forEach((r) => {
-        result.push({
-          name: r.name,
-          type: "routine",
-          schema: activeSchema || undefined,
-          detail: r.routine_type,
-          item: r,
-        });
-      });
-    }
-    if (triggers) {
-      triggers.forEach((trg) => {
-        result.push({
-          name: trg.name,
-          type: "trigger",
-          schema: activeSchema || undefined,
-          detail: `on ${trg.table_name}`,
-          item: trg,
-        });
-      });
-    }
+    groups = [{
+      group: activeSchema ?? undefined,
+      data: { tables, views, routines, triggers },
+    }];
   }
 
-  return result;
+  return groups.flatMap(createNavigatorItems);
+}
+
+interface DatabaseObjectContext {
+  connectionId: string;
+  driver: string | null;
+  isMultiDatabase: boolean;
+}
+
+export function toDatabaseObject(
+  item: NavigatorItem,
+  context: DatabaseObjectContext,
+): DatabaseObject {
+  const base = {
+    connectionId: context.connectionId,
+    name: item.name,
+    schema: item.schema,
+  };
+
+  switch (item.type) {
+    case "table":
+    case "view":
+      return {
+        ...base,
+        type: item.type,
+        driver: context.driver,
+        qualifySchema: !context.isMultiDatabase,
+        title:
+          context.isMultiDatabase && item.schema
+            ? `${item.name} (${item.schema})`
+            : undefined,
+      };
+    case "routine":
+      return {
+        ...base,
+        type: "routine",
+        routineType: item.item.routine_type,
+      };
+    case "trigger":
+      return {
+        ...base,
+        type: "trigger",
+        tableName: item.item.table_name,
+      };
+  }
 }

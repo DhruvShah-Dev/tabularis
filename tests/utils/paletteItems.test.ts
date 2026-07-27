@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { PaletteItem } from "../../src/types/palette";
-import { resolvePaletteItems } from "../../src/utils/paletteItems";
+import { createPaletteSearch } from "../../src/utils/paletteItems";
 
 function createItem(
   overrides: Partial<PaletteItem> = {},
@@ -18,7 +18,7 @@ function createItem(
   };
 }
 
-describe("resolvePaletteItems", () => {
+describe("createPaletteSearch", () => {
   it("should search command and object items through the same fields", () => {
     const items = [
       createItem({
@@ -35,12 +35,12 @@ describe("resolvePaletteItems", () => {
     ];
 
     expect(
-      resolvePaletteItems(items, "preferenses").map(
+      createPaletteSearch(items)("preferenses").map(
         (item) => item.id,
       ),
     ).toEqual(["settings"]);
     expect(
-      resolvePaletteItems(items, "public").map((item) => item.id),
+      createPaletteSearch(items)("public").map((item) => item.id),
     ).toEqual(["users"]);
   });
 
@@ -55,7 +55,7 @@ describe("resolvePaletteItems", () => {
     ];
 
     expect(
-      resolvePaletteItems(items, "open").map((item) => item.id),
+      createPaletteSearch(items)("open").map((item) => item.id),
     ).toEqual(["contextual", "global"]);
   });
 
@@ -66,7 +66,7 @@ describe("resolvePaletteItems", () => {
     ];
 
     expect(
-      resolvePaletteItems(items, "").map((item) => item.id),
+      createPaletteSearch(items)("").map((item) => item.id),
     ).toEqual(["schema-b", "schema-a"]);
   });
 });

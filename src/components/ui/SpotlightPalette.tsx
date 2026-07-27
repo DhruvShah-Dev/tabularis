@@ -4,6 +4,7 @@ import {
   type ReactNode,
 } from "react";
 import { Loader2, Search, X } from "lucide-react";
+import { Modal } from "./Modal";
 
 interface SpotlightPaletteProps {
   ariaLabel: string;
@@ -20,7 +21,7 @@ interface SpotlightPaletteProps {
   children: ReactNode;
   footer: ReactNode;
   isBusy?: boolean;
-  resultsId?: string;
+  resultsId: string;
   activeDescendant?: string;
 }
 
@@ -39,18 +40,12 @@ export const SpotlightPalette = ({
   children,
   footer,
   isBusy = false,
-  resultsId = "spotlight-results",
+  resultsId,
   activeDescendant,
 }: SpotlightPaletteProps) => {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-
     if (event.key === "ArrowDown") {
       event.preventDefault();
       onSelectedIndexChange(
@@ -106,11 +101,11 @@ export const SpotlightPalette = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 pt-[15vh] backdrop-blur-sm"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <Modal
+      isOpen
+      onClose={onClose}
+      closeOnBackdrop
+      overlayClassName="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 pt-[15vh] backdrop-blur-sm"
     >
       <div
         ref={dialogRef}
@@ -162,6 +157,6 @@ export const SpotlightPalette = ({
           {footer}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

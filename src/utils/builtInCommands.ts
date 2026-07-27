@@ -1,7 +1,7 @@
-import type {
-  CommandContext,
-  CommandDefinition,
-} from "../types/commands";
+import type { CommandScope } from "../types/commands";
+import type { PaletteItem } from "../types/palette";
+import { createTableConsoleRequest } from "./databaseObjectActions";
+import { PINNED_PALETTE_RELEVANCE } from "./paletteItems";
 
 interface BuiltInCommandLabels {
   openSettings: string;
@@ -10,35 +10,52 @@ interface BuiltInCommandLabels {
   tableCategory: string;
 }
 
-export function createBuiltInCommands(
-  context: CommandContext,
+export function createBuiltInCommandItems(
+  scope: CommandScope,
   labels: BuiltInCommandLabels,
-): CommandDefinition[] {
-  return [
+): PaletteItem[] {
+  const items: PaletteItem[] = [
     {
       id: "app.open-settings",
       title: labels.openSettings,
-      category: labels.navigationCategory,
+      group: labels.navigationCategory,
       keywords: ["preferences", "configuration"],
-      execute: ({ navigate }) => navigate("/settings"),
-    },
-    {
-      id: "table.open-in-console",
-      title: labels.openTableInConsole,
-      description:
-        context.resource.type === "table"
-          ? context.resource.tableName
-          : undefined,
-      category: labels.tableCategory,
-      keywords: ["sql", "query", "console"],
-      isAvailable: (currentContext) =>
-        currentContext.resource.type === "table",
-      getRelevance: (currentContext) =>
-        currentContext.resource.type === "table" ? 100 : 0,
-      execute: (runtime, currentContext) => {
-        if (currentContext.resource.type !== "table") return;
-        runtime.openTableConsole(currentContext.resource);
+      icon: "command",
+      primaryAction: {
+        id: "app.open-settings",
+        label: labels.openSettings,
+        execute: () => scope.runtime.navigate("/settings"),
       },
     },
   ];
+
+  if (scope.table) {
+    const table = scope.table;
+    items.push({
+      id: "table.open-in-console",
+      title: labels.openTableInConsole,
+      description: table.tableName,
+      group: labels.tableCategory,
+      keywords: ["sql", "query", "console"],
+      icon: "command",
+      relevance: PINNED_PALETTE_RELEVANCE,
+      primaryAction: {
+        id: "table.open-in-console",
+        label: labels.openTableInConsole,
+        execute: () =>
+          scope.runtime.openEditor(
+            createTableConsoleRequest(
+              {
+                connectionId: table.connectionId,
+                objectName: table.tableName,
+                schema: table.schema,
+              },
+              scope.driver,
+            ),
+          ),
+      },
+    });
+  }
+
+  return items;
 }

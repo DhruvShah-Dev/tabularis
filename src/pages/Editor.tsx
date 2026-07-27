@@ -140,7 +140,14 @@ import type {
   PendingInsertion,
   TableColumn,
   ForeignKey,
+  EditorNavigationIntent,
+  EditorNavigationRequest,
 } from "../types/editor";
+import {
+  createEditorNavigationIntent,
+  parseEditorNavigationIntent,
+} from "../utils/editorNavigation";
+import { CommandPaletteScopeBridge } from "../components/layout/CommandPaletteScopeBridge";
 import { buildForeignKeyFilterClause } from "../utils/foreignKeys";
 import { formatSqlIdentifier } from "../utils/identifiers";
 import { RelatedRecordsPanel } from "../components/ui/RelatedRecordsPanel";
@@ -152,18 +159,6 @@ import {
 } from "../utils/tabScroll";
 import { computeAutoScrollSpeed } from "../utils/notebookDnd";
 import clsx from "clsx";
-
-interface EditorState {
-  initialQuery?: string;
-  tableName?: string;
-  queryName?: string;
-  preventAutoRun?: boolean;
-  readOnly?: boolean;
-  materialized?: boolean;
-  schema?: string;
-  targetConnectionId?: string;
-  title?: string;
-}
 
 interface ExportProgress {
   rows_processed: number;
@@ -189,7 +184,15 @@ function getStatementAtCursor(
   return findStatementAtOffset(statements, offset);
 }
 
-export const Editor = () => {
+interface EditorProps {
+  /**
+   * Set by split panes only. The routed editor needs no scope of its own — the
+   * layout registers the root scope, and its `openEditor` navigates here.
+   */
+  commandScopeId?: string;
+}
+
+export const Editor = ({ commandScopeId }: EditorProps) => {
   const { t } = useTranslation();
   const {
     activeConnectionId,
@@ -1375,6 +1378,35 @@ export const Editor = () => {
       }
     },
     [activeDialect, runMultipleQueries, runQuery],
+  );
+
+  const executeEditorNavigationIntent = useCallback(
+    (intent: EditorNavigationIntent) => {
+      const tabId = addTab(intent.addTabInput);
+      if (!tabId) return;
+
+      if (intent.execution.patchReadOnlyOnDuplicate) {
+        updateTab(tabId, { readOnly: true });
+      }
+      if (!intent.execution.autoRun) return;
+
+      const sql = intent.addTabInput.query;
+      pendingExecutionsRef.current[tabId] = { sql, page: 1 };
+      const existingTab = tabsRef.current.find((tab) => tab.id === tabId);
+      if (existingTab) {
+        runAutoQuery(sql, 1, tabId);
+        delete pendingExecutionsRef.current[tabId];
+      }
+    },
+    [addTab, runAutoQuery, updateTab],
+  );
+
+  const openEditorInScope = useCallback(
+    (request: EditorNavigationRequest) =>
+      executeEditorNavigationIntent(
+        createEditorNavigationIntent(request, t("sidebar.newConsole")),
+      ),
+    [executeEditorNavigationIntent, t],
   );
 
   const runResultEntryPage = useCallback(
@@ -3106,62 +3138,34 @@ export const Editor = () => {
   });
 
   useEffect(() => {
-    const state = location.state as EditorState;
+    const intent = parseEditorNavigationIntent(
+      location.state,
+      t("sidebar.newConsole"),
+    );
     if (activeConnectionId) {
-      if (state?.initialQuery !== undefined) {
+      if (intent) {
         if (
-          state.targetConnectionId &&
-          state.targetConnectionId !== activeConnectionId
+          intent.targetConnectionId &&
+          intent.targetConnectionId !== activeConnectionId
         )
           return;
 
-        const queryKey = `${state.initialQuery}-${state.tableName}-${state.queryName}-${state.schema}-${state.title}`;
-
-        if (processingRef.current === queryKey) {
+        if (processingRef.current === intent.key) {
           // If re-navigating to the same definition with readOnly, patch any
           // existing tab that was opened without the flag (e.g. before the fix).
-          if (state.readOnly) {
-            const title = state.queryName || state.tableName || "";
+          if (intent.execution.patchReadOnlyOnDuplicate) {
             const existing = tabsRef.current.find(
-              (t) => t.connectionId === activeConnectionId && t.title === title,
+              (tab) =>
+                tab.connectionId === activeConnectionId &&
+                tab.title === intent.addTabInput.title,
             );
             if (existing) updateTab(existing.id, { readOnly: true });
           }
           return;
         }
-        processingRef.current = queryKey;
+        processingRef.current = intent.key;
 
-        const {
-          initialQuery: sql,
-          tableName: table,
-          queryName,
-          preventAutoRun,
-          readOnly: navReadOnly,
-          materialized: navMaterialized,
-          schema: navSchema,
-          title: navTitle,
-        } = state;
-        const tabId = addTab({
-          type: table ? "table" : "console",
-          title: navTitle || queryName || table || t("sidebar.newConsole"),
-          query: sql,
-          activeTable: table,
-          schema: navSchema,
-          readOnly: navReadOnly,
-          materialized: navMaterialized,
-        });
-
-        if (tabId && !preventAutoRun) {
-          // Queue execution only if not prevented
-          pendingExecutionsRef.current[tabId] = { sql: sql || "", page: 1 };
-
-          // Try immediate execution if tab exists (reused)
-          const existingTab = tabsRef.current.find((t) => t.id === tabId);
-          if (existingTab) {
-            runAutoQuery(sql || "", 1, tabId);
-            delete pendingExecutionsRef.current[tabId];
-          }
-        }
+        executeEditorNavigationIntent(intent);
 
         navigate(location.pathname, { replace: true, state: {} });
         setTimeout(() => {
@@ -3173,10 +3177,9 @@ export const Editor = () => {
     location.state,
     location.pathname,
     activeConnectionId,
-    addTab,
     updateTab,
     navigate,
-    runAutoQuery,
+    executeEditorNavigationIntent,
     t,
   ]);
 
@@ -3461,6 +3464,12 @@ export const Editor = () => {
 
   return (
     <div ref={editorRootRef} className="flex flex-col h-full bg-base">
+      {commandScopeId && (
+        <CommandPaletteScopeBridge
+          scopeId={commandScopeId}
+          openEditor={openEditorInScope}
+        />
+      )}
       {/* Tab Bar — tinted with the active connection's accent color */}
       <div
         className="flex items-center bg-elevated border-b border-default h-9 shrink-0"

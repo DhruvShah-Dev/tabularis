@@ -13,9 +13,11 @@ import type {
 import { CommandPaletteModal } from "../../../src/components/modals/CommandPaletteModal";
 
 const navigateMock = vi.fn();
-const openTableConsoleMock = vi.fn();
+const openEditorMock = vi.fn();
 const invokeMock = vi.fn();
 const showAlertMock = vi.fn();
+const setActiveTableMock = vi.fn();
+const databaseState = { activeConnectionId: "connection-1" };
 const connectionData = {
   driver: "postgres",
   capabilities: {},
@@ -45,23 +47,22 @@ vi.mock("../../../src/hooks/useAlert", () => ({
 vi.mock("../../../src/hooks/useCommandPaletteScope", () => ({
   useActiveCommandPaletteScope: () => ({
     connectionId: "connection-1",
-    context: {
+    driver: "postgres",
+    table: {
       connectionId: "connection-1",
-      resource: {
-        type: "table",
-        tableName: "users",
-        schema: "public",
-      },
+      tableName: "users",
+      schema: "public",
     },
     runtime: {
       navigate: navigateMock,
-      openTableConsole: openTableConsoleMock,
+      openEditor: openEditorMock,
     },
   }),
 }));
 
 vi.mock("../../../src/hooks/useDatabase", () => ({
   useDatabase: () => ({
+    activeConnectionId: databaseState.activeConnectionId,
     connectionDataMap: {
       "connection-1": connectionData,
     },
@@ -73,17 +74,41 @@ vi.mock("../../../src/hooks/useDatabase", () => ({
     ],
     loadDatabaseData: vi.fn(),
     loadSchemaData: vi.fn(),
+    setActiveTable: setActiveTableMock,
   }),
 }));
 
 vi.mock("../../../src/components/modals/GenerateSQLModal", () => ({
-  GenerateSQLModal: ({ tableName }: { tableName: string }) => (
-    <div>Generate SQL for {tableName}</div>
+  GenerateSQLModal: ({
+    target,
+  }: {
+    target: {
+      connectionId: string;
+      tableName: string;
+      schema?: string;
+    };
+  }) => (
+    <div>
+      Generate SQL for {target.connectionId}/{target.schema}/
+      {target.tableName}
+    </div>
   ),
 }));
 
 vi.mock("../../../src/components/modals/SchemaModal", () => ({
-  SchemaModal: () => <div>Inspect table</div>,
+  SchemaModal: ({
+    target,
+  }: {
+    target: {
+      connectionId: string;
+      tableName: string;
+      schema?: string;
+    };
+  }) => (
+    <div>
+      Inspect {target.connectionId}/{target.schema}/{target.tableName}
+    </div>
+  ),
 }));
 
 function renderPalette(
@@ -119,9 +144,11 @@ function renderPalette(
 describe("CommandPaletteModal", () => {
   beforeEach(() => {
     navigateMock.mockReset();
-    openTableConsoleMock.mockReset();
+    openEditorMock.mockReset();
     invokeMock.mockReset();
     showAlertMock.mockReset();
+    setActiveTableMock.mockReset();
+    databaseState.activeConnectionId = "connection-1";
     connectionData.tables = [{ name: "users" }];
     connectionData.views = [];
     connectionData.routines = [];
@@ -206,14 +233,29 @@ describe("CommandPaletteModal", () => {
   it("should keep keyboard focus inside the dialog", () => {
     renderPalette();
     const input = screen.getByRole("combobox");
-    const lastAction = screen.getByRole("button", {
-      name: "commandPalette.commands.openSettings",
+    const closeButton = screen.getByRole("button", {
+      name: "common.close",
     });
-    lastAction.focus();
+    closeButton.focus();
 
-    fireEvent.keyDown(lastAction, { key: "Tab" });
+    fireEvent.keyDown(closeButton, { key: "Tab" });
 
     expect(input).toHaveFocus();
+  });
+
+  it("should keep row actions out of the tab order", () => {
+    renderPalette({ state: { activePalette: "objects" } });
+
+    const rowActions = screen
+      .getAllByRole("option")
+      .flatMap((option) =>
+        Array.from(option.querySelectorAll("button")),
+      );
+
+    expect(rowActions.length).toBeGreaterThan(0);
+    expect(
+      rowActions.every((button) => button.tabIndex === -1),
+    ).toBe(true);
   });
 
   it("should keep the palette open and show execution errors", async () => {
@@ -228,7 +270,9 @@ describe("CommandPaletteModal", () => {
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
 
     expect(
-      await screen.findByText("commandPalette.executionError"),
+      await screen.findByText(
+        "commandPalette.executionError: Connection failed",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
@@ -254,6 +298,51 @@ describe("CommandPaletteModal", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("should execute object navigation through the active scope runtime", async () => {
+    const { closePalette } = renderPalette({
+      state: { activePalette: "objects" },
+    });
+
+    fireEvent.click(
+      screen.getByRole("option", { name: /users/i }),
+    );
+
+    await waitFor(() =>
+      expect(openEditorMock).toHaveBeenCalledWith({
+        kind: "table",
+        initialQuery: 'SELECT * FROM "public"."users"',
+        tableName: "users",
+        schema: "public",
+        targetConnectionId: "connection-1",
+      }),
+    );
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(closePalette).toHaveBeenCalledTimes(1);
+  });
+
+  it("should select the opened table in the explorer", async () => {
+    renderPalette({ state: { activePalette: "objects" } });
+
+    fireEvent.click(screen.getByRole("option", { name: /users/i }));
+
+    await waitFor(() =>
+      expect(setActiveTableMock).toHaveBeenCalledWith(
+        "users",
+        "public",
+      ),
+    );
+  });
+
+  it("should not touch the explorer selection when the palette targets another connection", async () => {
+    databaseState.activeConnectionId = "connection-2";
+    renderPalette({ state: { activePalette: "objects" } });
+
+    fireEvent.click(screen.getByRole("option", { name: /users/i }));
+
+    await waitFor(() => expect(openEditorMock).toHaveBeenCalled());
+    expect(setActiveTableMock).not.toHaveBeenCalled();
+  });
+
   it("should execute object quick actions through the shared pipeline", async () => {
     const { closePalette } = renderPalette({
       state: { activePalette: "objects" },
@@ -266,9 +355,27 @@ describe("CommandPaletteModal", () => {
     );
 
     expect(
-      await screen.findByText("Generate SQL for users"),
+      await screen.findByText(
+        "Generate SQL for connection-1/public/users",
+      ),
     ).toBeInTheDocument();
     expect(closePalette).toHaveBeenCalledTimes(1);
+  });
+
+  it("should preserve the full table target for inspect actions", async () => {
+    renderPalette({ state: { activePalette: "objects" } });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "editor.quickNavigator.actions.inspect",
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Inspect connection-1/public/users",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("should preserve the routine-specific error with its original reason", async () => {
@@ -282,7 +389,7 @@ describe("CommandPaletteModal", () => {
     });
 
     fireEvent.click(
-      screen.getByRole("button", { name: /refresh_users/i }),
+      screen.getByRole("option", { name: /refresh_users/i }),
     );
 
     await waitFor(() =>
@@ -313,7 +420,7 @@ describe("CommandPaletteModal", () => {
     });
 
     fireEvent.click(
-      screen.getByRole("button", { name: /audit_users/i }),
+      screen.getByRole("option", { name: /audit_users/i }),
     );
 
     await waitFor(() =>

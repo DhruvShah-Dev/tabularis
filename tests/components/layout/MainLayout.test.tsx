@@ -9,6 +9,10 @@ vi.mock("../../../src/components/layout/Sidebar", () => ({
   Sidebar: () => <aside>Sidebar</aside>,
 }));
 
+vi.mock("../../../src/components/layout/RightSidebar", () => ({
+  RightSidebar: () => <aside>Right sidebar</aside>,
+}));
+
 vi.mock("../../../src/components/layout/SplitPaneLayout", () => ({
   SplitPaneLayout: () => <div>Split pane</div>,
 }));

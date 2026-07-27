@@ -4,6 +4,13 @@ import { useCommandPaletteDispatch } from "./useCommandPalette";
 import { useConnectionManager } from "./useConnectionManager";
 import { useKeybindings } from "./useKeybindings";
 
+/** Shortcuts that must still fire while the user is typing in a field. */
+const TYPING_SAFE_SHORTCUTS = [
+  "quick_navigator",
+  "command_palette_actions",
+  "focus_table_filter",
+];
+
 /**
  * Registers global keyboard shortcuts for navigation.
  * Must be called inside a component that is a child of KeybindingsProvider and BrowserRouter.
@@ -16,24 +23,14 @@ export function useGlobalShortcuts() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't fire when typing in inputs / textareas / contenteditable (except for palette shortcuts)
       const target = e.target as HTMLElement;
-      const isQuickNavigator = matchesShortcut(e, "quick_navigator");
-      const isCommandPaletteActions = matchesShortcut(
-        e,
-        "command_palette_actions",
-      );
-      const isFocusTableFilter = matchesShortcut(
-        e,
-        "focus_table_filter",
-      );
+      const isTypingTarget =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
       if (
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable) &&
-        !isQuickNavigator &&
-        !isCommandPaletteActions &&
-        !isFocusTableFilter
+        isTypingTarget &&
+        !TYPING_SAFE_SHORTCUTS.some((id) => matchesShortcut(e, id))
       ) {
         return;
       }

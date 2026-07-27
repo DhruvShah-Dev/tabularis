@@ -1480,7 +1480,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [フィールド]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "SQL を生成できません: この接続のデータベース方言が不明です。"
   },
   "modifyColumn": {
     "titleAdd": "カラムを追加",

@@ -17,7 +17,6 @@ import {
 } from '../../utils/connectionLayout';
 import type { DividerGeometry, SplitEdge, SplitView } from '../../utils/connectionLayout';
 import { rectContains, startPointerDrag } from '../../utils/pointerDrag';
-import { CommandPaletteScopeBridge } from './CommandPaletteScopeBridge';
 
 const EDGE_OVERLAY_CLASS: Record<SplitEdge, string> = {
   left: 'left-0 top-0 bottom-0 w-1/2',
@@ -221,8 +220,7 @@ export const SplitPaneLayout = ({ layout, connectionIds }: SplitView) => {
             <div className="flex-1 overflow-hidden min-h-0">
               <PanelDatabaseProvider connectionId={connId}>
                 <EditorProvider>
-                  <CommandPaletteScopeBridge scopeId={connId} />
-                  <Editor />
+                  <Editor commandScopeId={connId} />
                 </EditorProvider>
               </PanelDatabaseProvider>
             </div>

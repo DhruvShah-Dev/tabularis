@@ -23,6 +23,7 @@ import type {
   PaletteIcon,
   PaletteItem,
 } from "../../../types/palette";
+import { PALETTE_RESULTS_ID, paletteOptionId } from "./paletteIds";
 
 const ICONS: Record<PaletteIcon, ComponentType<LucideProps>> = {
   command: Command,
@@ -79,7 +80,6 @@ export const PaletteResults = ({
   onExecute,
 }: PaletteResultsProps) => {
   const listRef = useRef<HTMLDivElement>(null);
-  let previousGroup: string | undefined;
 
   useEffect(() => {
     listRef.current
@@ -88,93 +88,106 @@ export const PaletteResults = ({
   }, [activeIndex]);
 
   return (
-    <div
-      ref={listRef}
-      id="command-palette-results"
-      role="listbox"
-      className="min-h-24 flex-1 overflow-y-auto py-1"
-    >
-      {executionError ? (
-        <div role="alert" className="px-4 py-3 text-sm text-red-400">
+    <div className="flex min-h-24 flex-1 flex-col overflow-hidden">
+      {executionError && (
+        <div
+          role="alert"
+          className="shrink-0 border-b border-default px-4 py-2 text-sm text-red-400"
+        >
           {executionError}
         </div>
-      ) : items.length === 0 ? (
-        <div role="status" className="px-4 py-8 text-center text-sm text-muted">
-          {noResults}
-        </div>
-      ) : (
-        items.map((item, index) => {
-          const showGroup = !!item.group && item.group !== previousGroup;
-          previousGroup = item.group;
-          const isActive = index === activeIndex;
+      )}
+      <div
+        ref={listRef}
+        id={PALETTE_RESULTS_ID}
+        role="listbox"
+        className="flex-1 overflow-y-auto py-1"
+      >
+        {items.length === 0 ? (
+          <div
+            role="status"
+            className="px-4 py-8 text-center text-sm text-muted"
+          >
+            {noResults}
+          </div>
+        ) : (
+          items.map((item, index) => {
+            const showGroup =
+              !!item.group && item.group !== items[index - 1]?.group;
+            const isActive = index === activeIndex;
 
-          return (
-            <Fragment key={item.id}>
-              {showGroup && (
-                <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted first:pt-2">
-                  {item.group}
-                </div>
-              )}
-              <div
-                id={`command-palette-option-${index}`}
-                role="option"
-                aria-selected={isActive}
-                data-active={isActive}
-                onMouseEnter={() => onSelect(index)}
-                className={`group flex items-center transition-colors ${
-                  isActive
-                    ? "bg-surface-secondary text-primary"
-                    : "text-secondary hover:bg-surface-secondary hover:text-primary"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => onExecute(item.primaryAction)}
-                  className="flex min-w-0 flex-1 items-center gap-3 px-4 py-2.5 text-left"
-                >
-                  <PaletteItemIcon icon={item.icon} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {item.title}
-                    </span>
-                    {item.description && (
-                      <span className="block truncate text-xs text-muted">
-                        {item.description}
-                      </span>
-                    )}
-                  </span>
-                </button>
-
-                {!!item.actions?.length && (
-                  <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                    {item.actions.map((action) => (
-                      <button
-                        key={action.id}
-                        type="button"
-                        aria-label={action.label}
-                        title={action.label}
-                        onClick={() => onExecute(action)}
-                        className="rounded p-1 text-muted transition-colors hover:bg-surface-tertiary hover:text-primary"
-                      >
-                        <PaletteItemIcon
-                          icon={action.icon ?? "command"}
-                          size={12}
-                        />
-                      </button>
-                    ))}
+            return (
+              <Fragment key={item.id}>
+                {showGroup && (
+                  <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted first:pt-2">
+                    {item.group}
                   </div>
                 )}
+                <div
+                  id={paletteOptionId(index)}
+                  role="option"
+                  aria-selected={isActive}
+                  aria-label={item.title}
+                  data-active={isActive}
+                  onMouseEnter={() => onSelect(index)}
+                  onClick={() => onExecute(item.primaryAction)}
+                  className={`group flex cursor-pointer items-center transition-colors ${
+                    isActive
+                      ? "bg-surface-secondary text-primary"
+                      : "text-secondary hover:bg-surface-secondary hover:text-primary"
+                  }`}
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-2.5 text-left">
+                    <PaletteItemIcon icon={item.icon} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">
+                        {item.title}
+                      </span>
+                      {item.description && (
+                        <span className="block truncate text-xs text-muted">
+                          {item.description}
+                        </span>
+                      )}
+                    </span>
+                  </div>
 
-                {item.badge && (
-                  <span className="mr-4 shrink-0 rounded border border-default/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-            </Fragment>
-          );
-        })
-      )}
+                  {!!item.actions?.length && (
+                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      {item.actions.map((action) => (
+                        <button
+                          key={action.id}
+                          type="button"
+                          // Keyboard users drive the palette through the
+                          // listbox, so these stay out of the tab order.
+                          tabIndex={-1}
+                          aria-label={action.label}
+                          title={action.label}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onExecute(action);
+                          }}
+                          className="rounded p-1 text-muted transition-colors hover:bg-surface-tertiary hover:text-primary"
+                        >
+                          <PaletteItemIcon
+                            icon={action.icon ?? "command"}
+                            size={12}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {item.badge && (
+                    <span className="mr-4 shrink-0 rounded border border-default/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+              </Fragment>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 };

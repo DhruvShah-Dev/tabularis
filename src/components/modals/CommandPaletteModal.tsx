@@ -2,82 +2,91 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useCommandPaletteState } from "../../hooks/useCommandPalette";
-import { CommandPaletteActionsProvider } from "../../contexts/CommandPaletteActionsProvider";
-import { CommandPaletteObjectsProvider } from "../../contexts/CommandPaletteObjectsProvider";
+import { useCommandPaletteActionItems } from "../../hooks/useCommandPaletteActionItems";
+import { useCommandPaletteObjectItems } from "../../hooks/useCommandPaletteObjectItems";
 import { GenerateSQLModal } from "./GenerateSQLModal";
 import { SchemaModal } from "./SchemaModal";
-import { Palette } from "./commandPalette/Palette";
+import {
+  Palette,
+  type PaletteLabels,
+} from "./commandPalette/Palette";
+import type { TableTarget } from "../../types/databaseObjects";
+
+/**
+ * Each palette mounts only while it is the active one: the object palette
+ * eagerly loads every schema, which must not happen for the action palette.
+ */
+const ActionPalette = () => {
+  const { t } = useTranslation();
+  const items = useCommandPaletteActionItems();
+  const labels: PaletteLabels = {
+    ariaLabel: t("commandPalette.title"),
+    searchLabel: t("commandPalette.searchLabel"),
+    placeholder: t("commandPalette.placeholder"),
+    noResults: t("commandPalette.noResults"),
+    navigationHint: t("commandPalette.navigationHint"),
+    executeHint: t("commandPalette.executeHint"),
+    escapeHint: t("commandPalette.escapeHint"),
+  };
+
+  return <Palette labels={labels} items={items} />;
+};
+
+interface ObjectPaletteProps {
+  onGenerateSql: (target: TableTarget) => void;
+  onInspect: (target: TableTarget) => void;
+}
+
+const ObjectPalette = ({
+  onGenerateSql,
+  onInspect,
+}: ObjectPaletteProps) => {
+  const { t } = useTranslation();
+  const items = useCommandPaletteObjectItems(onGenerateSql, onInspect);
+  const labels: PaletteLabels = {
+    ariaLabel: t("settings.shortcuts.quickNavigator"),
+    searchLabel: t("editor.quickNavigator.placeholder"),
+    placeholder: t("editor.quickNavigator.placeholder"),
+    noResults: t("editor.quickNavigator.noResults"),
+    navigationHint: t("editor.quickNavigator.navigationHint"),
+    escapeHint: t("editor.quickNavigator.escHint"),
+    getCountLabel: (count) =>
+      count === 1
+        ? t("editor.quickNavigator.count_one")
+        : t("editor.quickNavigator.count_other", { count }),
+  };
+
+  return <Palette labels={labels} items={items} />;
+};
 
 export const CommandPaletteModal = () => {
-  const { t } = useTranslation();
   const { activePalette } = useCommandPaletteState();
-  const [generateSQLTable, setGenerateSQLTable] = useState<string | null>(null);
-  const [inspectTable, setInspectTable] = useState<{
-    tableName: string;
-    schema?: string;
-  } | null>(null);
-  const palette =
-    activePalette === null ? null : (
-      <Palette
-        labels={
-          activePalette === "actions"
-            ? {
-                ariaLabel: t("commandPalette.title"),
-                searchLabel: t("commandPalette.searchLabel"),
-                placeholder: t("commandPalette.placeholder"),
-                noResults: t("commandPalette.noResults"),
-                navigationHint: t("commandPalette.navigationHint"),
-                executeHint: t("commandPalette.executeHint"),
-                escapeHint: t("commandPalette.escapeHint"),
-              }
-            : {
-                ariaLabel: t("settings.shortcuts.quickNavigator"),
-                searchLabel: t("editor.quickNavigator.placeholder"),
-                placeholder: t("editor.quickNavigator.placeholder"),
-                noResults: t("editor.quickNavigator.noResults"),
-                navigationHint: t(
-                  "editor.quickNavigator.navigationHint",
-                ),
-                escapeHint: t("editor.quickNavigator.escHint"),
-                getCountLabel: (count: number) =>
-                  count === 1
-                    ? t("editor.quickNavigator.count_one")
-                    : t("editor.quickNavigator.count_other", {
-                        count,
-                      }),
-              }
-        }
-      />
-    );
+  const [generateSQLTarget, setGenerateSQLTarget] =
+    useState<TableTarget | null>(null);
+  const [inspectTarget, setInspectTarget] =
+    useState<TableTarget | null>(null);
 
   return (
     <>
-      {activePalette === "actions" && (
-        <CommandPaletteActionsProvider>{palette}</CommandPaletteActionsProvider>
-      )}
+      {activePalette === "actions" && <ActionPalette />}
       {activePalette === "objects" && (
-        <CommandPaletteObjectsProvider
-          onGenerateSql={setGenerateSQLTable}
-          onInspect={(tableName, schema) =>
-            setInspectTable({ tableName, schema })
-          }
-        >
-          {palette}
-        </CommandPaletteObjectsProvider>
-      )}
-      {generateSQLTable && (
-        <GenerateSQLModal
-          isOpen
-          tableName={generateSQLTable}
-          onClose={() => setGenerateSQLTable(null)}
+        <ObjectPalette
+          onGenerateSql={setGenerateSQLTarget}
+          onInspect={setInspectTarget}
         />
       )}
-      {inspectTable && (
+      {generateSQLTarget && (
+        <GenerateSQLModal
+          isOpen
+          target={generateSQLTarget}
+          onClose={() => setGenerateSQLTarget(null)}
+        />
+      )}
+      {inspectTarget && (
         <SchemaModal
           isOpen
-          tableName={inspectTable.tableName}
-          schema={inspectTable.schema}
-          onClose={() => setInspectTable(null)}
+          target={inspectTarget}
+          onClose={() => setInspectTarget(null)}
         />
       )}
     </>

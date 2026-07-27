@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { getNavigatorItems, type NavigatorItemParams } from "../../src/utils/quickNavigator";
+import {
+  getNavigatorItems,
+  toDatabaseObject,
+  type NavigatorItemParams,
+} from "../../src/utils/quickNavigator";
 import type { SchemaData } from "../../src/contexts/DatabaseContext";
 
 describe("quickNavigator utility", () => {
@@ -109,6 +113,90 @@ describe("quickNavigator utility", () => {
       const result = getNavigatorItems(params);
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ name: "products", type: "table", schema: "sales_db", item: mockDbData.tables[0] });
+    });
+
+    it("should normalize every layout through the same object shape", () => {
+      const data: SchemaData = {
+        tables: [{ name: "users" }],
+        views: [{ name: "active_users" }],
+        routines: [{ name: "find_user", routine_type: "FUNCTION" }],
+        triggers: [{
+          name: "audit_user",
+          table_name: "users",
+          event: "UPDATE",
+          timing: "AFTER",
+        }],
+        isLoading: false,
+        isLoaded: true,
+      };
+      const base: NavigatorItemParams = {
+        activeConnectionId: "conn-1",
+        hasSchemas: false,
+        isMultiDb: false,
+        schemas: [],
+        schemaDataMap: {},
+        configuredDatabases: [],
+        databaseDataMap: {},
+        ...data,
+        activeSchema: "public",
+      };
+      const schemaItems = getNavigatorItems({
+        ...base,
+        hasSchemas: true,
+        schemas: ["public"],
+        schemaDataMap: { public: data },
+      });
+      const databaseItems = getNavigatorItems({
+        ...base,
+        isMultiDb: true,
+        configuredDatabases: ["public"],
+        databaseDataMap: { public: data },
+      });
+
+      expect(schemaItems).toEqual(getNavigatorItems(base));
+      expect(databaseItems).toEqual(getNavigatorItems(base));
+    });
+
+    it("should convert a navigator item to the canonical database object", () => {
+      const [item] = getNavigatorItems({
+        activeConnectionId: "conn-1",
+        hasSchemas: false,
+        isMultiDb: true,
+        schemas: [],
+        schemaDataMap: {},
+        configuredDatabases: ["main"],
+        databaseDataMap: {
+          main: {
+            tables: [{ name: "users" }],
+            views: [],
+            routines: [],
+            triggers: [],
+            isLoading: false,
+            isLoaded: true,
+          },
+        },
+        tables: [],
+        views: [],
+        routines: [],
+        triggers: [],
+        activeSchema: "main",
+      });
+
+      expect(
+        toDatabaseObject(item, {
+          connectionId: "conn-1",
+          driver: "sqlite",
+          isMultiDatabase: true,
+        }),
+      ).toEqual({
+        type: "table",
+        connectionId: "conn-1",
+        driver: "sqlite",
+        name: "users",
+        qualifySchema: false,
+        schema: "main",
+        title: "users (main)",
+      });
     });
   });
 });

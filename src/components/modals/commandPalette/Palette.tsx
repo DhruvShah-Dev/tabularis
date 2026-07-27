@@ -1,16 +1,18 @@
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import {
-  useCommandPaletteDispatch,
-  useCommandPaletteItems,
-} from "../../../hooks/useCommandPalette";
-import type { PaletteAction } from "../../../types/palette";
-import { resolvePaletteItems } from "../../../utils/paletteItems";
+import { useCommandPaletteDispatch } from "../../../hooks/useCommandPalette";
+import type {
+  PaletteAction,
+  PaletteItem,
+} from "../../../types/palette";
+import { toErrorMessage } from "../../../utils/errors";
+import { createPaletteSearch } from "../../../utils/paletteItems";
 import { SpotlightPalette } from "../../ui/SpotlightPalette";
 import { PaletteResults } from "./PaletteResults";
+import { PALETTE_RESULTS_ID, paletteOptionId } from "./paletteIds";
 
-interface PaletteLabels {
+export interface PaletteLabels {
   ariaLabel: string;
   searchLabel: string;
   placeholder: string;
@@ -23,11 +25,11 @@ interface PaletteLabels {
 
 interface PaletteProps {
   labels: PaletteLabels;
+  items: PaletteItem[];
 }
 
-export const Palette = ({ labels }: PaletteProps) => {
+export const Palette = ({ labels, items }: PaletteProps) => {
   const { t } = useTranslation();
-  const { items } = useCommandPaletteItems();
   const { closePalette } = useCommandPaletteDispatch();
   const previousFocusRef = useRef<HTMLElement | null>(
     document.activeElement instanceof HTMLElement
@@ -41,10 +43,8 @@ export const Palette = ({ labels }: PaletteProps) => {
     null,
   );
 
-  const results = useMemo(
-    () => resolvePaletteItems(items, query),
-    [items, query],
-  );
+  const search = useMemo(() => createPaletteSearch(items), [items]);
+  const results = useMemo(() => search(query), [search, query]);
   const activeIndex = Math.min(
     selectedIndex,
     Math.max(results.length - 1, 0),
@@ -67,8 +67,10 @@ export const Palette = ({ labels }: PaletteProps) => {
       await action.execute();
       closePalette();
       restoreFocus();
-    } catch {
-      setExecutionError(t("commandPalette.executionError"));
+    } catch (error) {
+      setExecutionError(
+        `${t("commandPalette.executionError")}: ${toErrorMessage(error)}`,
+      );
     } finally {
       setIsExecuting(false);
     }
@@ -94,11 +96,9 @@ export const Palette = ({ labels }: PaletteProps) => {
         if (item) void handleExecute(item.primaryAction);
       }}
       isBusy={isExecuting}
-      resultsId="command-palette-results"
+      resultsId={PALETTE_RESULTS_ID}
       activeDescendant={
-        results.length > 0
-          ? `command-palette-option-${activeIndex}`
-          : undefined
+        results.length > 0 ? paletteOptionId(activeIndex) : undefined
       }
       footer={
         <>

@@ -6,25 +6,23 @@ import {
 } from "react";
 
 import { CommandPaletteScopeContext } from "../contexts/CommandPaletteScopeContext";
-import { useConnectionLayoutContext } from "./useConnectionLayoutContext";
 import type { CommandScope } from "../types/commands";
-import { ROOT_COMMAND_SCOPE_ID } from "../utils/commandScopeStore";
 
-function useCommandScopeStore() {
-  const store = useContext(CommandPaletteScopeContext);
-  if (!store) {
+function useCommandScopeContext() {
+  const context = useContext(CommandPaletteScopeContext);
+  if (!context) {
     throw new Error(
       "Command palette scopes must be used inside CommandPaletteProvider",
     );
   }
-  return store;
+  return context;
 }
 
 export function useRegisterCommandPaletteScope(
   scopeId: string,
   scope: CommandScope,
 ) {
-  const store = useCommandScopeStore();
+  const { store } = useCommandScopeContext();
 
   useLayoutEffect(
     () => store.registerScope(scopeId, scope),
@@ -33,19 +31,10 @@ export function useRegisterCommandPaletteScope(
 }
 
 export function useActiveCommandPaletteScope(): CommandScope | undefined {
-  const store = useCommandScopeStore();
-  const {
-    explorerConnectionId,
-    isSplitVisible,
-    splitView,
-  } = useConnectionLayoutContext();
-  const scopeId =
-    splitView && isSplitVisible && explorerConnectionId
-      ? explorerConnectionId
-      : ROOT_COMMAND_SCOPE_ID;
+  const { activeScopeId, store } = useCommandScopeContext();
   const getSnapshot = useCallback(
-    () => store.getScope(scopeId),
-    [scopeId, store],
+    () => store.getScope(activeScopeId),
+    [activeScopeId, store],
   );
 
   return useSyncExternalStore(

@@ -1418,7 +1418,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [字段]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "无法生成 SQL：此连接的数据库方言未知。"
   },
   "modifyColumn": {
     "titleAdd": "添加列",

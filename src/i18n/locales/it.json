@@ -1491,7 +1491,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [campi]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "Impossibile generare SQL: il dialetto del database di questa connessione è sconosciuto."
   },
   "modifyColumn": {
     "titleAdd": "Aggiungi Colonna",

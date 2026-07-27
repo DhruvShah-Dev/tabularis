@@ -3,20 +3,19 @@ import { memo } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CommandPaletteProvider } from "../../src/contexts/CommandPaletteProvider";
-import { CommandPaletteActionsProvider } from "../../src/contexts/CommandPaletteActionsProvider";
 import { CommandPaletteScopeBridge } from "../../src/components/layout/CommandPaletteScopeBridge";
 import {
   useCommandPaletteDispatch,
-  useCommandPaletteItems,
   useCommandPaletteState,
 } from "../../src/hooks/useCommandPalette";
+import { useCommandPaletteActionItems } from "../../src/hooks/useCommandPaletteActionItems";
 import type {
   CommandPaletteDispatchContextType,
-  CommandPaletteItemsContextType,
   CommandPaletteStateContextType,
 } from "../../src/contexts/CommandPaletteContext";
+import type { PaletteItem } from "../../src/types/palette";
 import { ROOT_COMMAND_SCOPE_ID } from "../../src/utils/commandScopeStore";
-import { resolvePaletteItems } from "../../src/utils/paletteItems";
+import { createPaletteSearch } from "../../src/utils/paletteItems";
 
 const navigateMock = vi.fn();
 const addTabMock = vi.fn(() => "console-tab");
@@ -70,7 +69,7 @@ vi.mock("../../src/hooks/useConnectionLayoutContext", () => ({
 }));
 
 interface PaletteContexts {
-  items: CommandPaletteItemsContextType;
+  items: PaletteItem[];
   dispatch: CommandPaletteDispatchContextType;
   state: CommandPaletteStateContextType;
 }
@@ -80,7 +79,7 @@ function ContextConsumer({
 }: {
   onContexts: (contexts: PaletteContexts) => void;
 }) {
-  const items = useCommandPaletteItems();
+  const items = useCommandPaletteActionItems();
   const dispatch = useCommandPaletteDispatch();
   const state = useCommandPaletteState();
   onContexts({ items, dispatch, state });
@@ -98,9 +97,7 @@ function PaletteTestHarness({
     <>
       <CommandPaletteScopeBridge scopeId={ROOT_COMMAND_SCOPE_ID} />
       {activePalette === "actions" ? (
-        <CommandPaletteActionsProvider>
-          <ContextConsumer onContexts={onContexts} />
-        </CommandPaletteActionsProvider>
+        <ContextConsumer onContexts={onContexts} />
       ) : (
         <DispatchAndStateConsumer onContexts={onContexts} />
       )}
@@ -116,7 +113,7 @@ function DispatchAndStateConsumer({
   const dispatch = useCommandPaletteDispatch();
   const state = useCommandPaletteState();
   onContexts({
-    items: { items: [] },
+    items: [],
     dispatch,
     state,
   });
@@ -156,7 +153,7 @@ describe("CommandPaletteProvider", () => {
     act(() => palette!.dispatch.openPalette("actions"));
 
     expect(
-      resolvePaletteItems(palette!.items.items, "").map(
+      createPaletteSearch(palette!.items)("").map(
         (item) => item.id,
       ),
     ).toEqual([
@@ -219,7 +216,7 @@ describe("CommandPaletteProvider", () => {
 
     act(() => palette!.dispatch.openPalette("actions"));
 
-    const command = palette!.items.items.find(
+    const command = palette!.items.find(
       (item) => item.id === "table.open-in-console",
     );
 
@@ -227,13 +224,19 @@ describe("CommandPaletteProvider", () => {
       await command!.primaryAction.execute();
     });
 
-    expect(addTabMock).toHaveBeenCalledWith({
-      type: "console",
-      title: "users",
-      query: 'SELECT * FROM "public"."users"',
-      schema: "public",
+    // The root scope has no in-place editor, so it routes through route state
+    // — the same path every other object navigation uses.
+    expect(navigateMock).toHaveBeenCalledWith("/editor", {
+      state: {
+        kind: "console",
+        initialQuery: 'SELECT * FROM "public"."users"',
+        queryName: "users",
+        preventAutoRun: true,
+        schema: "public",
+        targetConnectionId: "connection-1",
+      },
     });
-    expect(navigateMock).toHaveBeenCalledWith("/editor");
+    expect(addTabMock).not.toHaveBeenCalled();
   });
 
   it("should not notify dispatch consumers when the active tab changes", () => {

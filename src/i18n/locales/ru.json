@@ -1474,7 +1474,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [поля]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "Не удалось сгенерировать SQL: диалект базы данных для этого подключения неизвестен."
   },
   "modifyColumn": {
     "titleAdd": "Добавить столбец",

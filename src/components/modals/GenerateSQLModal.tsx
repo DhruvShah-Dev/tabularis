@@ -15,23 +15,26 @@ import {
   type Index,
 } from "../../utils/sqlGenerator";
 import { toBindParamName } from "../../utils/queryParameters";
+import type { TableTarget } from "../../types/databaseObjects";
+import { openEditor } from "../../utils/editorNavigation";
 
 interface GenerateSQLModalProps {
   isOpen: boolean;
   onClose: () => void;
-  tableName: string;
+  target: TableTarget;
 }
 
 export const GenerateSQLModal = ({
   isOpen,
   onClose,
-  tableName,
+  target,
 }: GenerateSQLModalProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { activeConnectionId, activeDriver, activeSchema, activeCapabilities } =
-    useDatabase();
+  const { connectionDataMap } = useDatabase();
   const { showAlert } = useAlert();
+  const { connectionId, tableName, schema } = target;
+  const connectionData = connectionDataMap[connectionId];
   type SqlTab = "create" | "select-all" | "select-fields" | "update" | "delete";
   const [tab, setTab] = useState<SqlTab>("create");
   const [sql, setSql] = useState<string>("");
@@ -40,25 +43,36 @@ export const GenerateSQLModal = ({
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!isOpen || !activeConnectionId || !tableName) return;
+    if (!isOpen || !connectionId || !tableName) return;
+
+    const dialect =
+      connectionData?.capabilities ?? connectionData?.driver;
+    if (!dialect) {
+      // Guessing a dialect here silently emits SQL for the wrong database.
+      showAlert(t("generateSQL.unknownDialect"), {
+        title: t("common.error"),
+        kind: "error",
+      });
+      return;
+    }
 
     const generateSQL = async () => {
       setLoading(true);
       try {
-        const schemaParam = activeSchema ? { schema: activeSchema } : {};
+        const schemaParam = schema ? { schema } : {};
         const [fetchedColumns, foreignKeys, indexes] = await Promise.all([
           invoke<TableColumn[]>("get_columns", {
-            connectionId: activeConnectionId,
+            connectionId,
             tableName,
             ...schemaParam,
           }),
           invoke<ForeignKey[]>("get_foreign_keys", {
-            connectionId: activeConnectionId,
+            connectionId,
             tableName,
             ...schemaParam,
           }),
           invoke<Index[]>("get_indexes", {
-            connectionId: activeConnectionId,
+            connectionId,
             tableName,
             ...schemaParam,
           }),
@@ -70,7 +84,7 @@ export const GenerateSQLModal = ({
           fetchedColumns,
           foreignKeys,
           indexes,
-          activeCapabilities ?? "sqlite",
+          dialect,
         );
         setSql(generatedSQL);
       } catch (err) {
@@ -84,12 +98,12 @@ export const GenerateSQLModal = ({
     void generateSQL();
   }, [
     isOpen,
-    activeConnectionId,
+    connectionId,
     tableName,
-    activeDriver,
-    activeCapabilities,
+    connectionData?.capabilities,
+    connectionData?.driver,
     t,
-    activeSchema,
+    schema,
     showAlert,
   ]);
 
@@ -121,14 +135,13 @@ export const GenerateSQLModal = ({
   const displayedSql = getTabSql(tab);
 
   const handleRunInConsole = () => {
-    navigate("/editor", {
-      state: {
-        initialQuery: displayedSql,
-        queryName: `${tableName} – ${tab}`,
-        undefined,
-        preventAutoRun: true,
-        schema: activeSchema ?? undefined
-      },
+    openEditor(navigate, {
+      kind: "console",
+      initialQuery: displayedSql,
+      queryName: `${tableName} – ${tab}`,
+      preventAutoRun: true,
+      schema,
+      targetConnectionId: connectionId,
     });
     onClose();
   };

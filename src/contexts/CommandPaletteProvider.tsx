@@ -4,6 +4,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useLocation } from "react-router-dom";
 
 import {
   CommandPaletteDispatchContext,
@@ -11,7 +12,11 @@ import {
 } from "./CommandPaletteContext";
 import { CommandPaletteScopeContext } from "./CommandPaletteScopeContext";
 import { useConnectionLayoutContext } from "../hooks/useConnectionLayoutContext";
-import { createCommandScopeStore, ROOT_COMMAND_SCOPE_ID } from "../utils/commandScopeStore";
+import {
+  createCommandScopeStore,
+  getActiveCommandScopeId,
+} from "../utils/commandScopeStore";
+import { resolveRenderedSplitLayout } from "../utils/connectionLayout";
 import type { CommandPaletteMode } from "../types/commands";
 
 interface CommandPaletteProviderProps {
@@ -26,20 +31,26 @@ export const CommandPaletteProvider = ({
     isSplitVisible,
     splitView,
   } = useConnectionLayoutContext();
+  const location = useLocation();
   const [scopeStore] = useState(createCommandScopeStore);
 
   const [activePalette, setActivePalette] =
     useState<CommandPaletteMode | null>(null);
 
-  const activeScopeId =
-    splitView && isSplitVisible && explorerConnectionId
-      ? explorerConnectionId
-      : ROOT_COMMAND_SCOPE_ID;
+  const activeScopeId = getActiveCommandScopeId({
+    explorerConnectionId,
+    isSplitRendered: !!resolveRenderedSplitLayout({
+      splitView,
+      isSplitVisible,
+      pathname: location.pathname,
+    }),
+  });
 
   const openPalette = useCallback((nextMode: CommandPaletteMode) => {
+    const activeScope = scopeStore.getScope(activeScopeId);
     if (
       nextMode === "objects" &&
-      !scopeStore.getScope(activeScopeId)?.connectionId
+      !activeScope?.connectionId
     ) {
       return;
     }
@@ -62,11 +73,18 @@ export const CommandPaletteProvider = ({
     }),
     [closePalette, openPalette],
   );
+  const scopeValue = useMemo(
+    () => ({
+      activeScopeId,
+      store: scopeStore,
+    }),
+    [activeScopeId, scopeStore],
+  );
 
   return (
     <CommandPaletteDispatchContext.Provider value={dispatchValue}>
       <CommandPaletteStateContext.Provider value={stateValue}>
-        <CommandPaletteScopeContext.Provider value={scopeStore}>
+        <CommandPaletteScopeContext.Provider value={scopeValue}>
           {children}
         </CommandPaletteScopeContext.Provider>
       </CommandPaletteStateContext.Provider>

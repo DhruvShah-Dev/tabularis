@@ -4,8 +4,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useEditor } from "../../hooks/useEditor";
 import { useRegisterCommandPaletteScope } from "../../hooks/useCommandPaletteScope";
-import { createCommandContext } from "../../utils/commandContext";
-import { newConsoleForTable } from "../../utils/newConsole";
+import { resolveCommandTable } from "../../utils/commandTable";
+import { openEditor as navigateToEditor } from "../../utils/editorNavigation";
 import type {
   CommandRuntime,
   CommandScope,
@@ -13,10 +13,12 @@ import type {
 
 interface CommandPaletteScopeBridgeProps {
   scopeId: string;
+  openEditor?: CommandRuntime["openEditor"];
 }
 
 export const CommandPaletteScopeBridge = ({
   scopeId,
+  openEditor,
 }: CommandPaletteScopeBridgeProps) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -25,14 +27,14 @@ export const CommandPaletteScopeBridge = ({
     activeDriver,
     activeSchema,
   } = useDatabase();
-  const { activeTab, addTab } = useEditor();
+  const { activeTab } = useEditor();
   const activeTable = activeTab?.activeTable ?? null;
   const activeTabSchema = activeTab?.schema;
   const activeTabType = activeTab?.type;
 
-  const context = useMemo(
+  const table = useMemo(
     () =>
-      createCommandContext({
+      resolveCommandTable({
         pathname: location.pathname,
         activeConnectionId,
         activeSchema,
@@ -57,31 +59,21 @@ export const CommandPaletteScopeBridge = ({
   const runtime = useMemo<CommandRuntime>(
     () => ({
       navigate: (path) => navigate(path),
-      openTableConsole: (resource) => {
-        const spec = newConsoleForTable(
-          resource.tableName,
-          activeDriver,
-          resource.schema,
-        );
-        addTab({
-          type: "console",
-          title: spec.title,
-          query: spec.sql,
-          schema: spec.schema,
-        });
-        navigate("/editor");
-      },
+      openEditor:
+        openEditor ??
+        ((request) => navigateToEditor(navigate, request)),
     }),
-    [activeDriver, addTab, navigate],
+    [navigate, openEditor],
   );
 
   const scope = useMemo<CommandScope>(
     () => ({
       connectionId: activeConnectionId,
-      context,
+      driver: activeDriver,
+      table,
       runtime,
     }),
-    [activeConnectionId, context, runtime],
+    [activeConnectionId, activeDriver, runtime, table],
   );
 
   useRegisterCommandPaletteScope(scopeId, scope);
