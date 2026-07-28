@@ -276,6 +276,9 @@ describe("DataGrid select all", () => {
 
     fireEvent.contextMenu(screen.getByText("Alice"));
 
+    // Both scopes are explicit in the menu: the selection and the full result.
+    expect(await screen.findByText("dataGrid.copySelectedN")).toBeTruthy();
+
     const item = await screen.findByText("dataGrid.copyAllRows");
     fireEvent.click(item);
 
@@ -306,36 +309,7 @@ describe("DataGrid select all", () => {
     expect(onCopyAllRows).toHaveBeenCalled();
   });
 
-  it("asks with the unknown-total message when the total is unknown", async () => {
-    const onCopyAllRows = vi.fn();
-    const Harness = () => {
-      const [selected, setSelected] = useState<Set<number>>(new Set());
-      return (
-        <DataGrid
-          columns={columns}
-          data={data}
-          selectedRows={selected}
-          onSelectionChange={setSelected}
-          totalRows={null}
-          hasMore
-          onCopyAllRows={onCopyAllRows}
-          readonly
-        />
-      );
-    };
-    const { container } = render(<Harness />);
-
-    fireEvent.mouseDown(container.querySelector("table")!);
-    fireEvent.keyDown(document, { key: "a", metaKey: true });
-    fireEvent.keyDown(document, { key: "c", metaKey: true });
-
-    await screen.findByText("dataGrid.copyAllRowsMessageUnknown");
-    fireEvent.click(screen.getByText("dataGrid.copyAllRowsConfirm"));
-
-    expect(onCopyAllRows).toHaveBeenCalled();
-  });
-
-  it("asks before copying a full-page selection beyond the loaded page", async () => {
+  it("copies a full-page selection instantly and reports N of M in the toast", async () => {
     const onCopyAllRows = vi.fn();
     const Harness = () => {
       const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -356,53 +330,20 @@ describe("DataGrid select all", () => {
     fireEvent.mouseDown(container.querySelector("table")!);
     fireEvent.keyDown(document, { key: "a", metaKey: true });
 
-    // Selecting alone never opens the dialog or touches the clipboard.
-    expect(screen.queryByText("dataGrid.copyAllRowsTitle")).toBeNull();
+    // Selecting alone never copies.
     expect(writeText).not.toHaveBeenCalled();
 
-    // Copying a selection that covers the whole loaded page does.
-    fireEvent.keyDown(document, { key: "c", metaKey: true });
-    await screen.findByText("dataGrid.copyAllRowsTitle");
-    expect(writeText).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByText("dataGrid.copyAllRowsConfirm"));
-
-    expect(onCopyAllRows).toHaveBeenCalled();
-    expect(writeText).not.toHaveBeenCalled();
-  });
-
-  it("copies only the loaded rows when the copy-all dialog is cancelled", async () => {
-    const onCopyAllRows = vi.fn();
-    const Harness = () => {
-      const [selected, setSelected] = useState<Set<number>>(new Set());
-      return (
-        <DataGrid
-          columns={columns}
-          data={data}
-          selectedRows={selected}
-          onSelectionChange={setSelected}
-          totalRows={10}
-          onCopyAllRows={onCopyAllRows}
-          readonly
-        />
-      );
-    };
-    const { container } = render(<Harness />);
-
-    fireEvent.mouseDown(container.querySelector("table")!);
-    fireEvent.keyDown(document, { key: "a", metaKey: true });
+    // Copying is instant — no dialog, no copy-all fetch. The toast states
+    // "loaded of total" so a page-only copy is never silent.
     fireEvent.keyDown(document, { key: "c", metaKey: true });
 
-    await screen.findByText("dataGrid.copyAllRowsTitle");
-    fireEvent.click(screen.getByText("common.cancel"));
-
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
     expect(onCopyAllRows).not.toHaveBeenCalled();
-    expect(writeText).toHaveBeenCalled();
-    expect(writeText.mock.calls[0][0]).toContain("Alice");
     await waitFor(() =>
-      expect(showToastMock).toHaveBeenCalledWith("dataGrid.copiedRows", {
-        kind: "success",
-      }),
+      expect(showToastMock).toHaveBeenCalledWith(
+        "dataGrid.copiedRowsOfTotal",
+        { kind: "success" },
+      ),
     );
   });
 });

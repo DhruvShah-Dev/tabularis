@@ -76,7 +76,6 @@ import {
   getSelectedRows,
   copyTextToClipboard,
 } from "../../utils/clipboard";
-import { ConfirmModal } from "../modals/ConfirmModal";
 import type {
   PendingInsertion,
   TableColumn,
@@ -461,37 +460,6 @@ export const DataGrid = React.memo(
       [selectedRowIndices, lastSelectedRowIndex, updateSelection],
     );
 
-    const [showCopyAllConfirm, setShowCopyAllConfirm] = useState(false);
-
-    const copyLoadedRows = useCallback(() => {
-      const allRows = mergedRows.map((r) => r.rowData);
-      const text = formatRowsForCopy(allRows, columns, copyFormat ?? "csv", {
-        withHeaders: true,
-        csvIncludeHeaders,
-        csvDelimiter,
-        tableName,
-      });
-      copyTextToClipboard(text)
-        .then(() => {
-          showToast(t("dataGrid.copiedRows", { count: allRows.length }), {
-            kind: "success",
-          });
-        })
-        .catch((e) => {
-          showAlert(t("common.error") + ": " + e, { title: t("common.error"), kind: "error" });
-        });
-    }, [
-      mergedRows,
-      columns,
-      copyFormat,
-      csvIncludeHeaders,
-      csvDelimiter,
-      tableName,
-      showAlert,
-      showToast,
-      t,
-    ]);
-
     // True when the result set continues beyond the loaded page and the parent
     // can fetch and copy it in full. The total may be unknown (user hasn't
     // requested a row count) — has_more is enough to offer the full copy.
@@ -499,11 +467,19 @@ export const DataGrid = React.memo(
       !!onCopyAllRows &&
       (totalRows != null ? totalRows > mergedRows.length : hasMore === true);
 
-    // True when the selection covers every loaded row — copying then offers
-    // the full (unpaginated) result set instead of just the page.
+    // True when the selection covers every loaded row — the toast then says
+    // "N of M" so a page-only copy of a larger result is never silent.
     const selectionCoversAllLoaded =
       selectedRowIndices.size > 0 &&
       selectedRowIndices.size === mergedRows.length;
+
+    const rowsCopiedToast = useCallback(
+      (count: number) =>
+        hasUnloadedRows && selectionCoversAllLoaded && totalRows != null
+          ? t("dataGrid.copiedRowsOfTotal", { loaded: count, total: totalRows })
+          : t("dataGrid.copiedRows", { count }),
+      [hasUnloadedRows, selectionCoversAllLoaded, totalRows, t],
+    );
 
     const handleSelectAll = useCallback(() => {
       setFocusedCell(null);
@@ -1368,13 +1344,11 @@ export const DataGrid = React.memo(
     ]);
 
     const copyToClipboard = useCallback(
-      async (text: string, copiedRowCount?: number) => {
+      async (text: string, toastMessage?: string) => {
         try {
           await copyTextToClipboard(text);
-          if (copiedRowCount != null) {
-            showToast(t("dataGrid.copiedRows", { count: copiedRowCount }), {
-              kind: "success",
-            });
+          if (toastMessage) {
+            showToast(toastMessage, { kind: "success" });
           }
         } catch (e) {
           console.error("Copy failed:", e);
@@ -1401,30 +1375,22 @@ export const DataGrid = React.memo(
     const copySelectedOrContextRow = useCallback(async () => {
       if (!contextMenu) return;
 
-      if (
-        selectedRowIndices.size > 0 &&
-        hasUnloadedRows &&
-        selectionCoversAllLoaded
-      ) {
-        setShowCopyAllConfirm(true);
-        setContextMenu(null);
-        return;
-      }
-
       const rows =
         selectedRowIndices.size > 0
           ? getSelectedRows(data, selectedRowIndices)
           : [contextMenu.row];
 
-      await copyToClipboard(formatRows(rows, true), rows.length);
+      await copyToClipboard(
+        formatRows(rows, true),
+        rowsCopiedToast(rows.length),
+      );
     }, [
       contextMenu,
       selectedRowIndices,
       data,
       formatRows,
       copyToClipboard,
-      hasUnloadedRows,
-      selectionCoversAllLoaded,
+      rowsCopiedToast,
     ]);
 
     const copyHeaderName = useCallback(async () => {
@@ -1448,23 +1414,17 @@ export const DataGrid = React.memo(
 
     const copySelectedCells = useCallback(async () => {
       if (selectedRowIndices.size === 0) return;
-      // Copying a selection that covers the whole loaded page offers the full
-      // result set instead.
-      if (hasUnloadedRows && selectionCoversAllLoaded) {
-        setShowCopyAllConfirm(true);
-        return;
-      }
+      const rows = getSelectedRows(data, selectedRowIndices);
       await copyToClipboard(
-        formatRows(getSelectedRows(data, selectedRowIndices), true),
-        selectedRowIndices.size,
+        formatRows(rows, true),
+        rowsCopiedToast(rows.length),
       );
     }, [
       selectedRowIndices,
       data,
       formatRows,
       copyToClipboard,
-      hasUnloadedRows,
-      selectionCoversAllLoaded,
+      rowsCopiedToast,
     ]);
 
     // Copies one column for the selected rows, or every visible row when
@@ -1922,7 +1882,10 @@ export const DataGrid = React.memo(
               });
 
               menuItems.push({
-                label: t("dataGrid.copySelectedRows"),
+                label: t("dataGrid.copySelectedN", {
+                  count:
+                    selectedRowIndices.size > 0 ? selectedRowIndices.size : 1,
+                }),
                 icon: Copy,
                 action: copySelectedOrContextRow,
               });
@@ -2077,32 +2040,6 @@ export const DataGrid = React.memo(
           )}
 
           {/* Row Editor Sidebar is now rendered in the RightSidebar layout component */}
-
-          <ConfirmModal
-            isOpen={showCopyAllConfirm}
-            onClose={() => {
-              setShowCopyAllConfirm(false);
-              // Cancelled: keep the page-only behavior.
-              copyLoadedRows();
-            }}
-            onConfirm={() => {
-              setShowCopyAllConfirm(false);
-              onCopyAllRows?.();
-            }}
-            title={t("dataGrid.copyAllRowsTitle")}
-            message={
-              totalRows != null
-                ? t("dataGrid.copyAllRowsMessage", {
-                    loaded: mergedRows.length,
-                    total: totalRows,
-                  })
-                : t("dataGrid.copyAllRowsMessageUnknown", {
-                    loaded: mergedRows.length,
-                  })
-            }
-            confirmLabel={t("dataGrid.copyAllRowsConfirm")}
-            variant="info"
-          />
         </div>
       </>
     );
