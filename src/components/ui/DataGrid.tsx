@@ -69,16 +69,13 @@ import {
 import { useRightSidebar } from "../../hooks/useRightSidebar";
 import { useDatabase } from "../../hooks/useDatabase";
 import {
-  rowsToCSV,
-  rowsToCSVWithHeaders,
-  rowsToJSON,
-  rowsToSqlInsert,
-  rowsToMarkdown,
   columnValuesForCopy,
   columnValuesToInClause,
+  formatRowsForCopy,
   getSelectedRows,
   copyTextToClipboard,
 } from "../../utils/clipboard";
+import { ConfirmModal } from "../modals/ConfirmModal";
 import type {
   PendingInsertion,
   TableColumn,
@@ -126,6 +123,14 @@ interface DataGridProps {
   sortClause?: string;
   onSort?: (colName: string) => void;
   readonly?: boolean;
+  /**
+   * Total rows in the full result set when known (server-side pagination).
+   * When greater than the loaded row count and `onCopyAllRows` is provided,
+   * select-all offers to copy the entire result set instead of just the page.
+   */
+  totalRows?: number | null;
+  /** Fetches and copies every row of the result set (not just the page). */
+  onCopyAllRows?: () => void;
 }
 
 export const DataGrid = React.memo(
@@ -162,6 +167,8 @@ export const DataGrid = React.memo(
     sortClause,
     onSort,
     readonly: readonlyProp,
+    totalRows,
+    onCopyAllRows,
   }: DataGridProps) => {
     const { t } = useTranslation();
     const { activeSchema, connections } = useDatabase();
@@ -450,6 +457,35 @@ export const DataGrid = React.memo(
       [selectedRowIndices, lastSelectedRowIndex, updateSelection],
     );
 
+    const [showCopyAllConfirm, setShowCopyAllConfirm] = useState(false);
+
+    const copyLoadedRows = useCallback(() => {
+      const allRows = mergedRows.map((r) => r.rowData);
+      const text = formatRowsForCopy(allRows, columns, copyFormat ?? "csv", {
+        withHeaders: true,
+        csvIncludeHeaders,
+        csvDelimiter,
+        tableName,
+      });
+      copyTextToClipboard(text).catch((e) => {
+        showAlert(t("common.error") + ": " + e, { title: t("common.error"), kind: "error" });
+      });
+    }, [
+      mergedRows,
+      columns,
+      copyFormat,
+      csvIncludeHeaders,
+      csvDelimiter,
+      tableName,
+      showAlert,
+      t,
+    ]);
+
+    // True when the result set continues beyond the loaded page and the parent
+    // can fetch and copy it in full.
+    const hasUnloadedRows =
+      totalRows != null && totalRows > mergedRows.length && !!onCopyAllRows;
+
     const handleSelectAll = useCallback(() => {
       setFocusedCell(null);
       onForeignKeyHidePanel?.();
@@ -458,32 +494,21 @@ export const DataGrid = React.memo(
       } else {
         const allIndices = new Set(mergedRows.map((_, i) => i));
         updateSelection(allIndices);
-        const allRows = mergedRows.map((r) => r.rowData);
-        const text = copyFormat === "json"
-          ? rowsToJSON(allRows, columns)
-          : copyFormat === "sql-insert"
-          ? rowsToSqlInsert(allRows, columns, tableName ?? "table")
-          : copyFormat === "markdown"
-          ? rowsToMarkdown(allRows, columns, "null", csvIncludeHeaders)
-          : csvIncludeHeaders
-          ? rowsToCSVWithHeaders(allRows, columns, "null", csvDelimiter)
-          : rowsToCSV(allRows, "null", csvDelimiter);
-        copyTextToClipboard(text).catch((e) => {
-          showAlert(t("common.error") + ": " + e, { title: t("common.error"), kind: "error" });
-        });
+        // When the result is paginated, ask before copying: the whole result
+        // set or just the loaded page.
+        if (hasUnloadedRows) {
+          setShowCopyAllConfirm(true);
+        } else {
+          copyLoadedRows();
+        }
       }
     }, [
       selectedRowIndices.size,
       mergedRows,
       updateSelection,
       onForeignKeyHidePanel,
-      columns,
-      copyFormat,
-      csvDelimiter,
-      csvIncludeHeaders,
-      tableName,
-      showAlert,
-      t,
+      hasUnloadedRows,
+      copyLoadedRows,
     ]);
 
     useEffect(() => {
@@ -1348,16 +1373,13 @@ export const DataGrid = React.memo(
     );
 
     const formatRows = useCallback(
-      (rows: unknown[][], withHeaders = false) => {
-        if (copyFormat === "json") return rowsToJSON(rows, columns);
-        if (copyFormat === "sql-insert")
-          return rowsToSqlInsert(rows, columns, tableName ?? "table");
-        if (copyFormat === "markdown")
-          return rowsToMarkdown(rows, columns, "null", withHeaders && csvIncludeHeaders);
-        if (withHeaders && csvIncludeHeaders)
-          return rowsToCSVWithHeaders(rows, columns, "null", csvDelimiter);
-        return rowsToCSV(rows, "null", csvDelimiter);
-      },
+      (rows: unknown[][], withHeaders = false) =>
+        formatRowsForCopy(rows, columns, copyFormat ?? "csv", {
+          withHeaders,
+          csvIncludeHeaders,
+          csvDelimiter,
+          tableName,
+        }),
       [columns, copyFormat, csvDelimiter, csvIncludeHeaders, tableName],
     );
 
@@ -1987,6 +2009,26 @@ export const DataGrid = React.memo(
           )}
 
           {/* Row Editor Sidebar is now rendered in the RightSidebar layout component */}
+
+          <ConfirmModal
+            isOpen={showCopyAllConfirm}
+            onClose={() => {
+              setShowCopyAllConfirm(false);
+              // Cancelled: keep the page-only behavior.
+              copyLoadedRows();
+            }}
+            onConfirm={() => {
+              setShowCopyAllConfirm(false);
+              onCopyAllRows?.();
+            }}
+            title={t("dataGrid.copyAllRowsTitle")}
+            message={t("dataGrid.copyAllRowsMessage", {
+              loaded: mergedRows.length,
+              total: totalRows,
+            })}
+            confirmLabel={t("dataGrid.copyAllRowsConfirm")}
+            variant="info"
+          />
         </div>
       </>
     );

@@ -223,4 +223,56 @@ describe("DataGrid select all", () => {
 
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([0, 1]));
   });
+
+  it("asks before copying when the result set exceeds the loaded page", async () => {
+    const onCopyAllRows = vi.fn();
+    const { container } = render(
+      <DataGrid
+        columns={columns}
+        data={data}
+        selectedRows={new Set()}
+        onSelectionChange={vi.fn()}
+        totalRows={10}
+        onCopyAllRows={onCopyAllRows}
+        readonly
+      />,
+    );
+
+    fireEvent.mouseDown(container.querySelector("table")!);
+    fireEvent.keyDown(document, { key: "a", metaKey: true });
+
+    // Nothing copied yet — the user must choose full result vs. loaded page.
+    expect(writeText).not.toHaveBeenCalled();
+
+    await screen.findByText("dataGrid.copyAllRowsTitle");
+    fireEvent.click(screen.getByText("dataGrid.copyAllRowsConfirm"));
+
+    expect(onCopyAllRows).toHaveBeenCalled();
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("copies only the loaded rows when the copy-all dialog is cancelled", async () => {
+    const onCopyAllRows = vi.fn();
+    const { container } = render(
+      <DataGrid
+        columns={columns}
+        data={data}
+        selectedRows={new Set()}
+        onSelectionChange={vi.fn()}
+        totalRows={10}
+        onCopyAllRows={onCopyAllRows}
+        readonly
+      />,
+    );
+
+    fireEvent.mouseDown(container.querySelector("table")!);
+    fireEvent.keyDown(document, { key: "a", metaKey: true });
+
+    await screen.findByText("dataGrid.copyAllRowsTitle");
+    fireEvent.click(screen.getByText("common.cancel"));
+
+    expect(onCopyAllRows).not.toHaveBeenCalled();
+    expect(writeText).toHaveBeenCalled();
+    expect(writeText.mock.calls[0][0]).toContain("Alice");
+  });
 });

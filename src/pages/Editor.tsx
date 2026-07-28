@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
+import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import { isMultiDatabaseCapable } from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
@@ -2967,6 +2968,66 @@ export const Editor = () => {
   const handleExportJSON = () => handleExportCommon("json");
   const handleExportMarkdown = () => handleExportCommon("markdown");
 
+  // Re-runs the active tab's query without pagination and copies the full
+  // result set to the clipboard. Triggered from the grid's select-all flow
+  // when the result continues beyond the loaded page.
+  const handleCopyAllRows = useCallback(async () => {
+    if (!activeTab || !activeConnectionId) return;
+    const totalRows = activeTab.result?.pagination?.total_rows;
+    const columns = activeTab.result?.columns ?? [];
+    if (!totalRows || columns.length === 0) return;
+
+    const effectiveSchema =
+      activeCapabilities?.schemas === true ? activeTab.schema : undefined;
+    const tabForQuery = { ...activeTab, schema: effectiveSchema };
+    const query =
+      activeTab.type === "table" && activeTab.activeTable
+        ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
+        : activeTab.query;
+    if (!query || !query.trim()) return;
+
+    // Mirror runQuery's schema resolution so the full fetch targets the same
+    // database/schema as the page the user is looking at.
+    const schema = activeTab?.schema ?? activeSchema;
+
+    try {
+      const res = await invoke<QueryResult>("execute_query", {
+        connectionId: activeConnectionId,
+        query,
+        limit: totalRows,
+        page: 1,
+        ...(schema ? { schema } : {}),
+      });
+      const text = formatRowsForCopy(res.rows, res.columns ?? columns, copyFormat, {
+        withHeaders: true,
+        csvIncludeHeaders,
+        csvDelimiter,
+        tableName: activeTab.activeTable,
+      });
+      await copyTextToClipboard(text);
+      showAlert(t("dataGrid.copied"), {
+        title: t("dataGrid.copyAllRowsTitle"),
+        kind: "info",
+      });
+    } catch (e) {
+      showAlert(t("common.error") + ": " + e, {
+        title: t("common.error"),
+        kind: "error",
+      });
+    }
+  }, [
+    activeTab,
+    activeConnectionId,
+    activeCapabilities,
+    activeDriver,
+    activeSchema,
+    copyFormat,
+    csvDelimiter,
+    csvIncludeHeaders,
+    showAlert,
+    t,
+  ]);
+
   const handleRunDropdownToggle = useCallback(() => {
     if (!isRunDropdownOpen) {
       // Monaco Editor: split queries from editor
@@ -4117,6 +4178,8 @@ export const Editor = () => {
                           : undefined
                       }
                       readonly={driverReadonly || !!activeTab.materialized}
+                      totalRows={activeTab.result?.pagination?.total_rows}
+                      onCopyAllRows={handleCopyAllRows}
                     />
                   </div>
                   {activeFkQuery && activeConnectionId && (
