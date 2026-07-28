@@ -259,6 +259,29 @@ describe("DataGrid select all", () => {
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([0, 1]));
   });
 
+  it("offers Copy All with the total count when rows are unloaded", async () => {
+    const onCopyAllRows = vi.fn();
+    render(
+      <DataGrid
+        columns={columns}
+        data={data}
+        tableName="users"
+        selectedRows={new Set()}
+        onSelectionChange={vi.fn()}
+        totalRows={10}
+        onCopyAllRows={onCopyAllRows}
+        readonly
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText("Alice"));
+
+    const item = await screen.findByText("dataGrid.copyAllRows");
+    fireEvent.click(item);
+
+    expect(onCopyAllRows).toHaveBeenCalled();
+  });
+
   it("asks before copying a full-page selection beyond the loaded page", async () => {
     const onCopyAllRows = vi.fn();
     const Harness = () => {

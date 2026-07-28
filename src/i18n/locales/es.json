@@ -982,6 +982,7 @@
     "copyAllRowsTitle": "¿Copiar todas las filas?",
     "copyAllRowsMessage": "Solo {{loaded}} de {{total}} filas están cargadas actualmente. ¿Copiar todo el resultado ({{total}} filas) al portapapeles?",
     "copyAllRowsConfirm": "Copiar Todas las Filas",
+    "copyAllRows": "Copiar Todo ({{count}})",
     "copiedRows": "{{count}} fila(s) copiada(s) al portapapeles",
     "copyColumnName": "Copiar nombre de columna",
     "copyColumnNameQuoted": "Copiar como `columna`",

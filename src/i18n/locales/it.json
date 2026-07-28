@@ -982,6 +982,7 @@
     "copyAllRowsTitle": "Copiare tutte le righe?",
     "copyAllRowsMessage": "Solo {{loaded}} di {{total}} righe sono attualmente caricate. Copiare l'intero risultato ({{total}} righe) negli appunti?",
     "copyAllRowsConfirm": "Copia Tutte le Righe",
+    "copyAllRows": "Copia Tutto ({{count}})",
     "copiedRows": "{{count}} riga/righe copiate negli appunti",
     "copyColumnName": "Copia nome colonna",
     "copyColumnNameQuoted": "Copia come `colonna`",

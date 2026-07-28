@@ -2984,7 +2984,12 @@ export const Editor = () => {
     const tabForQuery = { ...activeTab, schema: effectiveSchema };
     const query =
       activeTab.type === "table" && activeTab.activeTable
-        ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
+        ? // limitOverride: copy-all goes beyond the tab's "Total Limit" — the
+          // user explicitly asked for every row. Sort is kept so the copy
+          // matches the on-screen order.
+          reconstructTableQuery(tabForQuery, activeDriver ?? undefined, {
+            limitOverride: null,
+          })
         : activeTab.query;
     if (!query || !query.trim()) return;
 

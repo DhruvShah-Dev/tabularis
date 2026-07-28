@@ -1955,6 +1955,19 @@ export const DataGrid = React.memo(
                 },
               });
 
+              // Direct one-click path to copy the entire result set when the
+              // page is only part of it (count makes the scope explicit).
+              if (hasUnloadedRows) {
+                menuItems.push({
+                  label: t("dataGrid.copyAllRows", { count: totalRows }),
+                  icon: Copy,
+                  action: () => {
+                    onCopyAllRows?.();
+                    setContextMenu(null);
+                  },
+                });
+              }
+
               if (!readonlyProp) {
                 menuItems.push(
                   {
