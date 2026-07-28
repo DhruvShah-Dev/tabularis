@@ -38,6 +38,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useAlert } from "../../hooks/useAlert";
 import {
   USE_DEFAULT_SENTINEL,
+  DATA_GRID_ROW_HEIGHT,
   formatCellValue,
   getColumnSortState,
   calculateSelectionRange,
@@ -45,6 +46,9 @@ import {
   getResultValueType,
   buildPkMap,
   serializePkKey,
+  resolveInsertionCellDisplay,
+  resolveExistingCellDisplay,
+  type ColumnDisplayInfo,
   type MergedRow,
 } from "../../utils/dataGrid";
 import { useSettings } from "../../hooks/useSettings";
@@ -126,6 +130,21 @@ interface DataGridProps {
   onSort?: (colName: string) => void;
   readonly?: boolean;
 }
+
+// Keys handled by the grid itself when a cell is focused; anything else keeps
+// its default behaviour.
+const NAVIGATION_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+  "Enter",
+  "F2",
+]);
 
 export const DataGrid = React.memo(
   ({
@@ -902,8 +921,13 @@ export const DataGrid = React.memo(
       const editingCell = editingCellRef.current;
       if (e.key === "Enter") {
         handleEditCommit();
+        // The editor unmounts here, dropping focus to <body>. Hand it back to
+        // the grid so arrow-key navigation keeps working. Only for keyboard
+        // exits — committing via blur must leave focus wherever the user clicked.
+        parentRef.current?.focus({ preventScroll: true });
       } else if (e.key === "Escape") {
         setEditingCell(null);
+        parentRef.current?.focus({ preventScroll: true });
       } else if (e.key === "Tab") {
         e.preventDefault(); // Prevent default tab behavior
 
@@ -1083,7 +1107,7 @@ export const DataGrid = React.memo(
     const rowVirtualizer = useVirtualizer({
       count: tableRows.length,
       getScrollElement: () => parentRef.current,
-      estimateSize: () => 35,
+      estimateSize: () => DATA_GRID_ROW_HEIGHT,
       overscan: 10,
     });
 
@@ -1454,6 +1478,168 @@ export const DataGrid = React.memo(
       setContextMenu(null);
     }, [contextMenu, copyCellValue]);
 
+    // The value the mouse path hands to handleCellDoubleClick: pending changes
+    // applied and the auto-increment/DEFAULT placeholders normalized to an empty
+    // editor, so keyboard editing never exposes the internal sentinel.
+    const editableCellValue = useCallback(
+      (mergedRow: MergedRow, colIndex: number): unknown => {
+        const colName = columns[colIndex];
+        const columnInfo: ColumnDisplayInfo = {
+          colName,
+          autoIncrementColumns,
+          defaultValueColumns,
+          nullableColumns,
+        };
+        const cellValue = mergedRow.rowData[colIndex];
+        const resolved =
+          mergedRow.type === "insertion"
+            ? resolveInsertionCellDisplay(cellValue, columnInfo)
+            : resolveExistingCellDisplay(
+                cellValue,
+                pkIndexMaps.length > 0 && pkColumns
+                  ? serializePkKey(
+                      buildPkMap(pkColumns, mergedRow.rowData, pkIndexMaps),
+                    )
+                  : null,
+                pkColumns,
+                pendingChanges,
+                columnInfo,
+              );
+        return resolved.isAutoIncrementPlaceholder ||
+          resolved.isDefaultValuePlaceholder
+          ? ""
+          : resolved.displayValue;
+      },
+      [
+        columns,
+        autoIncrementColumns,
+        defaultValueColumns,
+        nullableColumns,
+        pkIndexMaps,
+        pkColumns,
+        pendingChanges,
+      ],
+    );
+
+    // Arrow-key cell navigation. Bound to the grid container instead of the
+    // document so that pages rendering several grids (e.g. a notebook with
+    // multiple SQL cells) only move the one the user is actually inside.
+    const handleGridKeyDown = useCallback(
+      (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (editingCellRef.current) return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+        // Let anything that handles keys itself keep them: text inputs, and the
+        // focusable controls living inside cells and headers (FK/BLOB buttons,
+        // sortable column headers) — Enter must still activate those.
+        const target = e.target as HTMLElement;
+        if (
+          target.isContentEditable ||
+          target.closest("input, textarea, select, button, [role='button']")
+        ) {
+          return;
+        }
+
+        const totalRows = mergedRows.length;
+        const totalCols = columns.length;
+        if (totalRows === 0) return;
+
+        if (!NAVIGATION_KEYS.has(e.key)) return;
+        e.preventDefault();
+
+        // First keystroke inside an unfocused grid enters at the top-left cell.
+        if (!focusedCell) {
+          setFocusedCell({ rowIndex: 0, colIndex: 0 });
+          return;
+        }
+
+        const { rowIndex, colIndex } = focusedCell;
+        let nextRow = rowIndex;
+        let nextCol = colIndex;
+
+        switch (e.key) {
+          case "ArrowUp":
+            nextRow = Math.max(0, rowIndex - 1);
+            break;
+          case "ArrowDown":
+            nextRow = Math.min(totalRows - 1, rowIndex + 1);
+            break;
+          case "ArrowLeft":
+            nextCol = Math.max(0, colIndex - 1);
+            break;
+          case "ArrowRight":
+            nextCol = Math.min(totalCols - 1, colIndex + 1);
+            break;
+          case "Home":
+            nextCol = 0;
+            break;
+          case "End":
+            nextCol = totalCols - 1;
+            break;
+          case "PageUp":
+          case "PageDown": {
+            // One viewport worth of rows, minus one so the row the user came
+            // from stays visible as an anchor.
+            const height = parentRef.current?.clientHeight ?? 0;
+            const step = Math.max(
+              1,
+              Math.floor(height / DATA_GRID_ROW_HEIGHT) - 1,
+            );
+            nextRow =
+              e.key === "PageUp"
+                ? Math.max(0, rowIndex - step)
+                : Math.min(totalRows - 1, rowIndex + step);
+            break;
+          }
+          case "Enter":
+          case "F2": {
+            const mergedRow = mergedRows[rowIndex];
+            if (!mergedRow) return;
+            handleCellDoubleClick(
+              rowIndex,
+              colIndex,
+              editableCellValue(mergedRow, colIndex),
+            );
+            return;
+          }
+        }
+
+        if (nextRow !== rowIndex || nextCol !== colIndex) {
+          setFocusedCell({ rowIndex: nextRow, colIndex: nextCol });
+        }
+      },
+      [
+        focusedCell,
+        mergedRows,
+        columns,
+        editableCellValue,
+        handleCellDoubleClick,
+      ],
+    );
+
+    // Keep the focused cell visible: the virtualizer covers the vertical axis,
+    // scrolling the cell itself covers the horizontal one on wide tables.
+    useEffect(() => {
+      if (!focusedCell) return;
+      const parent = parentRef.current;
+      if (!parent) return;
+      if (!parent.contains(document.activeElement)) {
+        parent.focus({ preventScroll: true });
+      }
+      rowVirtualizer.scrollToIndex(focusedCell.rowIndex, { align: "auto" });
+      // scrollToIndex only updates the virtualizer's state — a row that was
+      // outside the window is mounted on the next frame, so look the cell up
+      // then rather than synchronously (a multi-row PageDown would miss it).
+      const frame = requestAnimationFrame(() => {
+        parent
+          .querySelector<HTMLTableCellElement>(
+            `tr[data-row-index="${focusedCell.rowIndex}"] td[data-col-index="${focusedCell.colIndex}"]`,
+          )
+          ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      });
+      return () => cancelAnimationFrame(frame);
+    }, [focusedCell, rowVirtualizer]);
+
     // Handle keyboard shortcuts
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -1581,7 +1767,9 @@ export const DataGrid = React.memo(
       <>
         <div
           ref={parentRef}
-          className="h-full overflow-auto border border-default rounded bg-elevated relative"
+          tabIndex={0}
+          onKeyDown={handleGridKeyDown}
+          className="h-full overflow-auto border border-default rounded bg-elevated relative focus:outline-none"
         >
           <table className="w-full text-left border-collapse">
             <thead
