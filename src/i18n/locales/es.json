@@ -150,6 +150,8 @@
     "noTablesMatch": "No hay tablas que coincidan",
     "filterDatabases": "Filtrar bases de datos...",
     "manageDatabases": "Gestionar Bases de Datos",
+    "databaseSelectionUpdated": "Selección de bases de datos actualizada",
+    "droppedDatabasesRemoved": "Se eliminaron porque ya no existen en el servidor: {{names}}",
     "structure": "Estructura",
     "favorites": "Favoritos",
     "queryHistory": "Historial",
@@ -187,7 +189,9 @@
     },
     "addToSplitGroup": "Añadir al Grupo Dividido",
     "removeFromSplitGroup": "Quitar del Grupo",
-    "movePanel": "Mover panel"
+    "movePanel": "Mover panel",
+    "refreshDatabaseList": "Actualizar lista de bases de datos",
+    "databaseListUpToDate": "La lista de bases de datos está actualizada"
   },
   "groups": {
     "title": "Grupos",
@@ -258,6 +262,12 @@
   "connections": {
     "title": "Conexiones",
     "addConnection": "Agregar Conexión",
+    "newSqliteDatabase": {
+      "menuLabel": "Nueva base de datos SQLite…",
+      "dialogTitle": "Nueva base de datos SQLite",
+      "fileType": "Base de datos SQLite",
+      "error": "No se pudo crear la base de datos SQLite"
+    },
     "noConnections": "No hay conexiones activas",
     "createFirst": "Crea tu primera conexión",
     "active": "Activa",
@@ -396,6 +406,13 @@
     "delimiterPipe": "Pipe (|)",
     "csvIncludeHeaders": "Incluir encabezados CSV",
     "csvIncludeHeadersDesc": "Incluir una fila de encabezado con los nombres de las columnas al copiar filas como CSV.",
+    "rowEditorFollowSelection": "El editor de filas sigue la selección",
+    "rowEditorFollowSelectionDesc": "Cuando la barra lateral del editor de filas está abierta, se actualiza automáticamente para mostrar la fila recién seleccionada.",
+    "cellDoubleClickAction": "Acción de doble clic en celda",
+    "cellDoubleClickActionDesc": "Elija qué sucede al hacer doble clic en una celda de datos.",
+    "cellDoubleClickInline": "Edición en línea",
+    "cellDoubleClickSidebar": "Abrir en barra lateral",
+    "cellDoubleClickBoth": "Ambos",
     "csvHeaders": "Exportar nombres de columnas",
     "detectJsonInTextColumns": "Detectar JSON en columnas de texto",
     "detectJsonInTextColumnsDesc": "Muestra el visor de JSON cuando una celda de texto sin tipar contiene un objeto o array JSON. Añade un pequeño coste de análisis por celda.",
@@ -460,6 +477,7 @@
     },
     "language": "Idioma",
     "languageDesc": "Elige tu idioma preferido. 'Auto' usará el idioma del sistema.",
+    "languageSearch": "Buscar idiomas...",
     "auto": "Auto (Sistema)",
     "english": "English",
     "italian": "Italiano",
@@ -700,6 +718,7 @@
       "tabSwitcher": "Cambiar pestaña",
       "copySelection": "Copiar selección",
       "toggleSidebar": "Mostrar/ocultar barra lateral",
+      "toggleRightSidebar": "Alternar barra lateral derecha",
       "focusTableFilter": "Enfocar el filtro de tablas",
       "openConnections": "Abrir conexiones",
       "newConnection": "Nueva conexión",
@@ -838,6 +857,7 @@
     "filePathPlaceholder": "/ruta/absoluta/db.sqlite",
     "folderPathPlaceholder": "/ruta/absoluta/carpeta",
     "browseFile": "Explorar archivo",
+    "createSqliteFile": "Nuevo",
     "browseFolder": "Explorar carpeta",
     "useSsh": "Usar Túnel SSH",
     "sshHost": "Host SSH",
@@ -1490,7 +1510,14 @@
     "subtitle": "Fila #{{row}}",
     "save": "Guardar Cambios",
     "cancel": "Cancelar",
-    "enterValue": "Ingresar valor..."
+    "enterValue": "Ingresar valor...",
+    "pin": "Fijar",
+    "unpin": "Desfijar"
+  },
+  "rightSidebar": {
+    "resize": "Redimensionar",
+    "collapse": "Contraer",
+    "expand": "Expandir"
   },
   "contextMenu": {
     "openSidebar": "Abrir Barra Lateral",
