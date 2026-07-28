@@ -37,6 +37,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useAlert } from "../../hooks/useAlert";
+import { useToast } from "../../hooks/useToast";
 import {
   USE_DEFAULT_SENTINEL,
   formatCellValue,
@@ -173,6 +174,7 @@ export const DataGrid = React.memo(
     const { t } = useTranslation();
     const { activeSchema, connections } = useDatabase();
     const { showAlert } = useAlert();
+    const { showToast } = useToast();
     const { settings } = useSettings();
     const rightSidebar = useRightSidebar();
     const colorByType = settings.resultColorByType ?? false;
@@ -467,9 +469,15 @@ export const DataGrid = React.memo(
         csvDelimiter,
         tableName,
       });
-      copyTextToClipboard(text).catch((e) => {
-        showAlert(t("common.error") + ": " + e, { title: t("common.error"), kind: "error" });
-      });
+      copyTextToClipboard(text)
+        .then(() => {
+          showToast(t("dataGrid.copiedRows", { count: allRows.length }), {
+            kind: "success",
+          });
+        })
+        .catch((e) => {
+          showAlert(t("common.error") + ": " + e, { title: t("common.error"), kind: "error" });
+        });
     }, [
       mergedRows,
       columns,
@@ -478,6 +486,7 @@ export const DataGrid = React.memo(
       csvDelimiter,
       tableName,
       showAlert,
+      showToast,
       t,
     ]);
 
@@ -1355,11 +1364,14 @@ export const DataGrid = React.memo(
     ]);
 
     const copyToClipboard = useCallback(
-      async (text: string) => {
+      async (text: string, copiedRowCount?: number) => {
         try {
           await copyTextToClipboard(text);
-          // Optional: show a brief success message
-          // showAlert(t("dataGrid.copied"), { title: t("common.success"), kind: "info" });
+          if (copiedRowCount != null) {
+            showToast(t("dataGrid.copiedRows", { count: copiedRowCount }), {
+              kind: "success",
+            });
+          }
         } catch (e) {
           console.error("Copy failed:", e);
           showAlert(t("common.error") + ": " + e, {
@@ -1368,7 +1380,7 @@ export const DataGrid = React.memo(
           });
         }
       },
-      [t, showAlert],
+      [t, showAlert, showToast],
     );
 
     const formatRows = useCallback(
@@ -1400,7 +1412,7 @@ export const DataGrid = React.memo(
           ? getSelectedRows(data, selectedRowIndices)
           : [contextMenu.row];
 
-      await copyToClipboard(formatRows(rows, true));
+      await copyToClipboard(formatRows(rows, true), rows.length);
     }, [
       contextMenu,
       selectedRowIndices,
@@ -1440,6 +1452,7 @@ export const DataGrid = React.memo(
       }
       await copyToClipboard(
         formatRows(getSelectedRows(data, selectedRowIndices), true),
+        selectedRowIndices.size,
       );
     }, [
       selectedRowIndices,

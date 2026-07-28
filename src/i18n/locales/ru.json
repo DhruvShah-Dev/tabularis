@@ -952,6 +952,7 @@
     "copyAllRowsTitle": "Скопировать все строки?",
     "copyAllRowsMessage": "Загружено только {{loaded}} из {{total}} строк. Скопировать весь результат ({{total}} строк) в буфер обмена?",
     "copyAllRowsConfirm": "Скопировать все строки",
+    "copiedRows": "Скопировано строк в буфер обмена: {{count}}",
     "copyColumnName": "Копировать имя столбца",
     "copyColumnNameQuoted": "Копировать как `column`",
     "copyColumnNameTable": "Копировать как table.column",

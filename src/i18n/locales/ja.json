@@ -969,6 +969,7 @@
     "copyAllRowsTitle": "すべての行をコピーしますか？",
     "copyAllRowsMessage": "現在 {{total}} 行中 {{loaded}} 行のみ読み込まれています。結果セット全体（{{total}} 行）をクリップボードにコピーしますか？",
     "copyAllRowsConfirm": "すべての行をコピー",
+    "copiedRows": "{{count}} 行をクリップボードにコピーしました",
     "copyColumnName": "カラム名をコピー",
     "copyColumnNameQuoted": "`column` 形式でコピー",
     "copyColumnNameTable": "table.column 形式でコピー",

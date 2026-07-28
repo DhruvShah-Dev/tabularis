@@ -993,6 +993,7 @@
     "copyAllRowsTitle": "Copier toutes les lignes ?",
     "copyAllRowsMessage": "Seules {{loaded}} lignes sur {{total}} sont actuellement chargées. Copier l'ensemble du résultat ({{total}} lignes) dans le presse-papiers ?",
     "copyAllRowsConfirm": "Copier Toutes les Lignes",
+    "copiedRows": "{{count}} ligne(s) copiée(s) dans le presse-papiers",
     "copyColumnName": "Copier le nom de colonne",
     "copyColumnNameQuoted": "Copier comme `column`",
     "copyColumnNameTable": "Copier comme table.column",

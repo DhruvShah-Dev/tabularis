@@ -1,4 +1,4 @@
-import { render, fireEvent, screen } from "@testing-library/react";
+import { render, fireEvent, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { vi } from "vitest";
 import { DataGrid } from "../../../src/components/ui/DataGrid";
@@ -9,6 +9,12 @@ vi.mock("../../../src/hooks/useDatabase", () => ({
 
 vi.mock("../../../src/hooks/useAlert", () => ({
   useAlert: () => ({ showAlert: vi.fn() }),
+}));
+
+const { showToastMock } = vi.hoisted(() => ({ showToastMock: vi.fn() }));
+
+vi.mock("../../../src/hooks/useToast", () => ({
+  useToast: () => ({ showToast: showToastMock }),
 }));
 
 vi.mock("../../../src/hooks/useSettings", () => ({
@@ -109,6 +115,7 @@ describe("DataGrid select all", () => {
 
   beforeEach(() => {
     writeText.mockClear();
+    showToastMock.mockClear();
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText },
       configurable: true,
@@ -135,7 +142,7 @@ describe("DataGrid select all", () => {
     expect(writeText).not.toHaveBeenCalled();
   });
 
-  it("copies the selected rows with Cmd/Ctrl+C", () => {
+  it("copies the selected rows with Cmd/Ctrl+C", async () => {
     const Harness = () => {
       const [selected, setSelected] = useState<Set<number>>(new Set());
       return (
@@ -156,6 +163,11 @@ describe("DataGrid select all", () => {
 
     expect(writeText).toHaveBeenCalled();
     expect(writeText.mock.calls[0][0]).toContain("Alice");
+    await waitFor(() =>
+      expect(showToastMock).toHaveBeenCalledWith("dataGrid.copiedRows", {
+        kind: "success",
+      }),
+    );
   });
 
   it("ignores Cmd/Ctrl+A when the grid was not interacted with", () => {
@@ -311,5 +323,10 @@ describe("DataGrid select all", () => {
     expect(onCopyAllRows).not.toHaveBeenCalled();
     expect(writeText).toHaveBeenCalled();
     expect(writeText.mock.calls[0][0]).toContain("Alice");
+    await waitFor(() =>
+      expect(showToastMock).toHaveBeenCalledWith("dataGrid.copiedRows", {
+        kind: "success",
+      }),
+    );
   });
 });

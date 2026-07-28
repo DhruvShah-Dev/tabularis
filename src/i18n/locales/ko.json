@@ -955,6 +955,7 @@
     "copyAllRowsTitle": "모든 행을 복사하시겠습니까?",
     "copyAllRowsMessage": "현재 {{total}}개 행 중 {{loaded}}개만 로드되었습니다. 전체 결과({{total}}개 행)를 클립보드에 복사하시겠습니까?",
     "copyAllRowsConfirm": "모든 행 복사",
+    "copiedRows": "{{count}}개 행을 클립보드에 복사했습니다",
     "copyColumnName": "컬럼 이름 복사",
     "copyColumnNameQuoted": "`column` 형식으로 복사",
     "copyColumnNameTable": "table.column 형식으로 복사",

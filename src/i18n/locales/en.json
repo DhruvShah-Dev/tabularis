@@ -1003,6 +1003,7 @@
     "copyAllRowsTitle": "Copy all rows?",
     "copyAllRowsMessage": "Only {{loaded}} of {{total}} rows are currently loaded. Copy the entire result set ({{total}} rows) to the clipboard?",
     "copyAllRowsConfirm": "Copy All Rows",
+    "copiedRows": "Copied {{count}} row(s) to clipboard",
     "copyColumnName": "Copy column name",
     "copyColumnNameQuoted": "Copy as `column`",
     "copyColumnNameTable": "Copy as table.column",

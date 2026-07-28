@@ -111,6 +111,7 @@ import { createNotebook, renameNotebook } from "../utils/notebookStore";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useAlert } from "../hooks/useAlert";
+import { useToast } from "../hooks/useToast";
 import { useDatabase } from "../hooks/useDatabase";
 import { useDrivers } from "../hooks/useDrivers";
 import { getConnectionAccent } from "../utils/driverUI";
@@ -211,6 +212,7 @@ export const Editor = () => {
   const location = useLocation();
   const { matchesShortcut, isMac } = useKeybindings();
   const { showAlert } = useAlert();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const driverReadonly = isReadonly(activeCapabilities);
@@ -3005,9 +3007,8 @@ export const Editor = () => {
         tableName: activeTab.activeTable,
       });
       await copyTextToClipboard(text);
-      showAlert(t("dataGrid.copied"), {
-        title: t("dataGrid.copyAllRowsTitle"),
-        kind: "info",
+      showToast(t("dataGrid.copiedRows", { count: res.rows.length }), {
+        kind: "success",
       });
     } catch (e) {
       showAlert(t("common.error") + ": " + e, {
@@ -3025,6 +3026,7 @@ export const Editor = () => {
     csvDelimiter,
     csvIncludeHeaders,
     showAlert,
+    showToast,
     t,
   ]);
 
