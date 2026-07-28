@@ -486,29 +486,28 @@ export const DataGrid = React.memo(
     const hasUnloadedRows =
       totalRows != null && totalRows > mergedRows.length && !!onCopyAllRows;
 
+    // True when the selection covers every loaded row — copying then offers
+    // the full (unpaginated) result set instead of just the page.
+    const selectionCoversAllLoaded =
+      selectedRowIndices.size > 0 &&
+      selectedRowIndices.size === mergedRows.length;
+
     const handleSelectAll = useCallback(() => {
       setFocusedCell(null);
       onForeignKeyHidePanel?.();
       if (selectedRowIndices.size === mergedRows.length) {
         updateSelection(new Set());
       } else {
+        // Select only — copying is a separate, explicit action (Cmd/Ctrl+C or
+        // the context menu), which is where the full-result-set offer appears.
         const allIndices = new Set(mergedRows.map((_, i) => i));
         updateSelection(allIndices);
-        // When the result is paginated, ask before copying: the whole result
-        // set or just the loaded page.
-        if (hasUnloadedRows) {
-          setShowCopyAllConfirm(true);
-        } else {
-          copyLoadedRows();
-        }
       }
     }, [
       selectedRowIndices.size,
       mergedRows,
       updateSelection,
       onForeignKeyHidePanel,
-      hasUnloadedRows,
-      copyLoadedRows,
     ]);
 
     useEffect(() => {
@@ -1386,13 +1385,31 @@ export const DataGrid = React.memo(
     const copySelectedOrContextRow = useCallback(async () => {
       if (!contextMenu) return;
 
+      if (
+        selectedRowIndices.size > 0 &&
+        hasUnloadedRows &&
+        selectionCoversAllLoaded
+      ) {
+        setShowCopyAllConfirm(true);
+        setContextMenu(null);
+        return;
+      }
+
       const rows =
         selectedRowIndices.size > 0
           ? getSelectedRows(data, selectedRowIndices)
           : [contextMenu.row];
 
       await copyToClipboard(formatRows(rows, true));
-    }, [contextMenu, selectedRowIndices, data, formatRows, copyToClipboard]);
+    }, [
+      contextMenu,
+      selectedRowIndices,
+      data,
+      formatRows,
+      copyToClipboard,
+      hasUnloadedRows,
+      selectionCoversAllLoaded,
+    ]);
 
     const copyHeaderName = useCallback(async () => {
       if (!headerContextMenu) return;
@@ -1415,10 +1432,23 @@ export const DataGrid = React.memo(
 
     const copySelectedCells = useCallback(async () => {
       if (selectedRowIndices.size === 0) return;
+      // Copying a selection that covers the whole loaded page offers the full
+      // result set instead.
+      if (hasUnloadedRows && selectionCoversAllLoaded) {
+        setShowCopyAllConfirm(true);
+        return;
+      }
       await copyToClipboard(
         formatRows(getSelectedRows(data, selectedRowIndices), true),
       );
-    }, [selectedRowIndices, data, formatRows, copyToClipboard]);
+    }, [
+      selectedRowIndices,
+      data,
+      formatRows,
+      copyToClipboard,
+      hasUnloadedRows,
+      selectionCoversAllLoaded,
+    ]);
 
     // Copies one column for the selected rows, or every visible row when
     // nothing is selected, using the same export format as other copy actions.

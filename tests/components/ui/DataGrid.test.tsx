@@ -115,7 +115,7 @@ describe("DataGrid select all", () => {
     });
   });
 
-  it("selects all loaded rows with Cmd/Ctrl+A after interacting with the grid", () => {
+  it("selects all loaded rows with Cmd/Ctrl+A without copying", () => {
     const onSelectionChange = vi.fn();
     const { container } = render(
       <DataGrid
@@ -131,6 +131,29 @@ describe("DataGrid select all", () => {
     fireEvent.keyDown(document, { key: "a", metaKey: true });
 
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([0, 1]));
+    // Selecting never touches the clipboard — copying is a separate action.
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("copies the selected rows with Cmd/Ctrl+C", () => {
+    const Harness = () => {
+      const [selected, setSelected] = useState<Set<number>>(new Set());
+      return (
+        <DataGrid
+          columns={columns}
+          data={data}
+          selectedRows={selected}
+          onSelectionChange={setSelected}
+          readonly
+        />
+      );
+    };
+    const { container } = render(<Harness />);
+
+    fireEvent.mouseDown(container.querySelector("table")!);
+    fireEvent.keyDown(document, { key: "a", metaKey: true });
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
+
     expect(writeText).toHaveBeenCalled();
     expect(writeText.mock.calls[0][0]).toContain("Alice");
   });
@@ -224,27 +247,36 @@ describe("DataGrid select all", () => {
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([0, 1]));
   });
 
-  it("asks before copying when the result set exceeds the loaded page", async () => {
+  it("asks before copying a full-page selection beyond the loaded page", async () => {
     const onCopyAllRows = vi.fn();
-    const { container } = render(
-      <DataGrid
-        columns={columns}
-        data={data}
-        selectedRows={new Set()}
-        onSelectionChange={vi.fn()}
-        totalRows={10}
-        onCopyAllRows={onCopyAllRows}
-        readonly
-      />,
-    );
+    const Harness = () => {
+      const [selected, setSelected] = useState<Set<number>>(new Set());
+      return (
+        <DataGrid
+          columns={columns}
+          data={data}
+          selectedRows={selected}
+          onSelectionChange={setSelected}
+          totalRows={10}
+          onCopyAllRows={onCopyAllRows}
+          readonly
+        />
+      );
+    };
+    const { container } = render(<Harness />);
 
     fireEvent.mouseDown(container.querySelector("table")!);
     fireEvent.keyDown(document, { key: "a", metaKey: true });
 
-    // Nothing copied yet — the user must choose full result vs. loaded page.
+    // Selecting alone never opens the dialog or touches the clipboard.
+    expect(screen.queryByText("dataGrid.copyAllRowsTitle")).toBeNull();
     expect(writeText).not.toHaveBeenCalled();
 
+    // Copying a selection that covers the whole loaded page does.
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
     await screen.findByText("dataGrid.copyAllRowsTitle");
+    expect(writeText).not.toHaveBeenCalled();
+
     fireEvent.click(screen.getByText("dataGrid.copyAllRowsConfirm"));
 
     expect(onCopyAllRows).toHaveBeenCalled();
@@ -253,20 +285,25 @@ describe("DataGrid select all", () => {
 
   it("copies only the loaded rows when the copy-all dialog is cancelled", async () => {
     const onCopyAllRows = vi.fn();
-    const { container } = render(
-      <DataGrid
-        columns={columns}
-        data={data}
-        selectedRows={new Set()}
-        onSelectionChange={vi.fn()}
-        totalRows={10}
-        onCopyAllRows={onCopyAllRows}
-        readonly
-      />,
-    );
+    const Harness = () => {
+      const [selected, setSelected] = useState<Set<number>>(new Set());
+      return (
+        <DataGrid
+          columns={columns}
+          data={data}
+          selectedRows={selected}
+          onSelectionChange={setSelected}
+          totalRows={10}
+          onCopyAllRows={onCopyAllRows}
+          readonly
+        />
+      );
+    };
+    const { container } = render(<Harness />);
 
     fireEvent.mouseDown(container.querySelector("table")!);
     fireEvent.keyDown(document, { key: "a", metaKey: true });
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
 
     await screen.findByText("dataGrid.copyAllRowsTitle");
     fireEvent.click(screen.getByText("common.cancel"));
