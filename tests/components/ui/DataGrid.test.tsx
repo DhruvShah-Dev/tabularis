@@ -282,6 +282,59 @@ describe("DataGrid select all", () => {
     expect(onCopyAllRows).toHaveBeenCalled();
   });
 
+  it("offers Copy All without a count when the total is unknown", async () => {
+    const onCopyAllRows = vi.fn();
+    render(
+      <DataGrid
+        columns={columns}
+        data={data}
+        tableName="users"
+        selectedRows={new Set()}
+        onSelectionChange={vi.fn()}
+        totalRows={null}
+        hasMore
+        onCopyAllRows={onCopyAllRows}
+        readonly
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText("Alice"));
+
+    const item = await screen.findByText("dataGrid.copyAll");
+    fireEvent.click(item);
+
+    expect(onCopyAllRows).toHaveBeenCalled();
+  });
+
+  it("asks with the unknown-total message when the total is unknown", async () => {
+    const onCopyAllRows = vi.fn();
+    const Harness = () => {
+      const [selected, setSelected] = useState<Set<number>>(new Set());
+      return (
+        <DataGrid
+          columns={columns}
+          data={data}
+          selectedRows={selected}
+          onSelectionChange={setSelected}
+          totalRows={null}
+          hasMore
+          onCopyAllRows={onCopyAllRows}
+          readonly
+        />
+      );
+    };
+    const { container } = render(<Harness />);
+
+    fireEvent.mouseDown(container.querySelector("table")!);
+    fireEvent.keyDown(document, { key: "a", metaKey: true });
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
+
+    await screen.findByText("dataGrid.copyAllRowsMessageUnknown");
+    fireEvent.click(screen.getByText("dataGrid.copyAllRowsConfirm"));
+
+    expect(onCopyAllRows).toHaveBeenCalled();
+  });
+
   it("asks before copying a full-page selection beyond the loaded page", async () => {
     const onCopyAllRows = vi.fn();
     const Harness = () => {

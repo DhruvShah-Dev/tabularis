@@ -958,6 +958,8 @@
     "copyAllRowsMessage": "Es sind nur {{loaded}} von {{total}} Zeilen geladen. Das gesamte Ergebnis ({{total}} Zeilen) in die Zwischenablage kopieren?",
     "copyAllRowsConfirm": "Alle Zeilen kopieren",
     "copyAllRows": "Alle kopieren ({{count}})",
+    "copyAll": "Alle kopieren",
+    "copyAllRowsMessageUnknown": "Es sind nur {{loaded}} Zeilen geladen und das Ergebnis geht über diese Seite hinaus. Das gesamte Ergebnis in die Zwischenablage kopieren?",
     "copiedRows": "{{count}} Zeile(n) in die Zwischenablage kopiert",
     "copyColumnName": "Spaltennamen kopieren",
     "copyColumnNameQuoted": "Als `column` kopieren",

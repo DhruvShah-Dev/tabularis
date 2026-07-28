@@ -126,10 +126,11 @@ interface DataGridProps {
   readonly?: boolean;
   /**
    * Total rows in the full result set when known (server-side pagination).
-   * When greater than the loaded row count and `onCopyAllRows` is provided,
-   * select-all offers to copy the entire result set instead of just the page.
+   * Null when the user hasn't requested a row count yet.
    */
   totalRows?: number | null;
+  /** True when more pages exist beyond the loaded one. */
+  hasMore?: boolean;
   /** Fetches and copies every row of the result set (not just the page). */
   onCopyAllRows?: () => void;
 }
@@ -169,6 +170,7 @@ export const DataGrid = React.memo(
     onSort,
     readonly: readonlyProp,
     totalRows,
+    hasMore,
     onCopyAllRows,
   }: DataGridProps) => {
     const { t } = useTranslation();
@@ -491,9 +493,11 @@ export const DataGrid = React.memo(
     ]);
 
     // True when the result set continues beyond the loaded page and the parent
-    // can fetch and copy it in full.
+    // can fetch and copy it in full. The total may be unknown (user hasn't
+    // requested a row count) — has_more is enough to offer the full copy.
     const hasUnloadedRows =
-      totalRows != null && totalRows > mergedRows.length && !!onCopyAllRows;
+      !!onCopyAllRows &&
+      (totalRows != null ? totalRows > mergedRows.length : hasMore === true);
 
     // True when the selection covers every loaded row — copying then offers
     // the full (unpaginated) result set instead of just the page.
@@ -1956,10 +1960,14 @@ export const DataGrid = React.memo(
               });
 
               // Direct one-click path to copy the entire result set when the
-              // page is only part of it (count makes the scope explicit).
+              // page is only part of it (count makes the scope explicit when
+              // the total is known).
               if (hasUnloadedRows) {
                 menuItems.push({
-                  label: t("dataGrid.copyAllRows", { count: totalRows }),
+                  label:
+                    totalRows != null
+                      ? t("dataGrid.copyAllRows", { count: totalRows })
+                      : t("dataGrid.copyAll"),
                   icon: Copy,
                   action: () => {
                     onCopyAllRows?.();
@@ -2082,10 +2090,16 @@ export const DataGrid = React.memo(
               onCopyAllRows?.();
             }}
             title={t("dataGrid.copyAllRowsTitle")}
-            message={t("dataGrid.copyAllRowsMessage", {
-              loaded: mergedRows.length,
-              total: totalRows,
-            })}
+            message={
+              totalRows != null
+                ? t("dataGrid.copyAllRowsMessage", {
+                    loaded: mergedRows.length,
+                    total: totalRows,
+                  })
+                : t("dataGrid.copyAllRowsMessageUnknown", {
+                    loaded: mergedRows.length,
+                  })
+            }
             confirmLabel={t("dataGrid.copyAllRowsConfirm")}
             variant="info"
           />

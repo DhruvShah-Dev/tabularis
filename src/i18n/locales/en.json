@@ -1004,6 +1004,8 @@
     "copyAllRowsMessage": "Only {{loaded}} of {{total}} rows are currently loaded. Copy the entire result set ({{total}} rows) to the clipboard?",
     "copyAllRowsConfirm": "Copy All Rows",
     "copyAllRows": "Copy All ({{count}})",
+    "copyAll": "Copy All",
+    "copyAllRowsMessageUnknown": "Only {{loaded}} rows are currently loaded and the result continues beyond this page. Copy the entire result set to the clipboard?",
     "copiedRows": "Copied {{count}} row(s) to clipboard",
     "copyColumnName": "Copy column name",
     "copyColumnNameQuoted": "Copy as `column`",

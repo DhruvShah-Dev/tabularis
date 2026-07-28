@@ -996,6 +996,8 @@
     "copyAllRowsMessage": "Apenas {{loaded}} de {{total}} linhas estão carregadas. Copiar todo o resultado ({{total}} linhas) para a área de transferência?",
     "copyAllRowsConfirm": "Copiar Todas as Linhas",
     "copyAllRows": "Copiar Tudo ({{count}})",
+    "copyAll": "Copiar Tudo",
+    "copyAllRowsMessageUnknown": "Apenas {{loaded}} linhas estão carregadas e o resultado continua além desta página. Copiar todo o resultado para a área de transferência?",
     "copiedRows": "{{count}} linha(s) copiada(s) para a área de transferência",
     "copyColumnName": "Copiar nome da coluna",
     "copyColumnNameQuoted": "Copiar como `column`",

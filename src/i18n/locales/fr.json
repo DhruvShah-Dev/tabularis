@@ -994,6 +994,8 @@
     "copyAllRowsMessage": "Seules {{loaded}} lignes sur {{total}} sont actuellement chargées. Copier l'ensemble du résultat ({{total}} lignes) dans le presse-papiers ?",
     "copyAllRowsConfirm": "Copier Toutes les Lignes",
     "copyAllRows": "Tout Copier ({{count}})",
+    "copyAll": "Tout Copier",
+    "copyAllRowsMessageUnknown": "Seules {{loaded}} lignes sont actuellement chargées et le résultat continue au-delà de cette page. Copier l'ensemble du résultat dans le presse-papiers ?",
     "copiedRows": "{{count}} ligne(s) copiée(s) dans le presse-papiers",
     "copyColumnName": "Copier le nom de colonne",
     "copyColumnNameQuoted": "Copier comme `column`",

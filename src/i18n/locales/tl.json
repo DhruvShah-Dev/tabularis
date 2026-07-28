@@ -989,6 +989,8 @@
     "copyAllRowsMessage": "{{loaded}} lang sa {{total}} na row ang kasalukuyang naka-load. Kopyahin ang buong resulta ({{total}} na row) sa clipboard?",
     "copyAllRowsConfirm": "Kopyahin Lahat ng Row",
     "copyAllRows": "Kopyahin Lahat ({{count}})",
+    "copyAll": "Kopyahin Lahat",
+    "copyAllRowsMessageUnknown": "{{loaded}} row lang ang kasalukuyang naka-load at may karagdagan pa ang resulta lampas sa page na ito. Kopyahin ang buong resulta sa clipboard?",
     "copiedRows": "Nakopya ang {{count}} row sa clipboard",
     "copyColumnName": "Kopyahin ang pangalan ng column",
     "copyColumnNameQuoted": "Kopyahin bilang `column`",

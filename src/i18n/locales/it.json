@@ -983,6 +983,8 @@
     "copyAllRowsMessage": "Solo {{loaded}} di {{total}} righe sono attualmente caricate. Copiare l'intero risultato ({{total}} righe) negli appunti?",
     "copyAllRowsConfirm": "Copia Tutte le Righe",
     "copyAllRows": "Copia Tutto ({{count}})",
+    "copyAll": "Copia Tutto",
+    "copyAllRowsMessageUnknown": "Solo {{loaded}} righe sono attualmente caricate e il risultato continua oltre questa pagina. Copiare l'intero risultato negli appunti?",
     "copiedRows": "{{count}} riga/righe copiate negli appunti",
     "copyColumnName": "Copia nome colonna",
     "copyColumnNameQuoted": "Copia come `colonna`",

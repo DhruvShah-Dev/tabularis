@@ -2977,7 +2977,7 @@ export const Editor = () => {
     if (!activeTab || !activeConnectionId) return;
     const totalRows = activeTab.result?.pagination?.total_rows;
     const columns = activeTab.result?.columns ?? [];
-    if (!totalRows || columns.length === 0) return;
+    if (columns.length === 0) return;
 
     const effectiveSchema =
       activeCapabilities?.schemas === true ? activeTab.schema : undefined;
@@ -3001,7 +3001,9 @@ export const Editor = () => {
       const res = await invoke<QueryResult>("execute_query", {
         connectionId: activeConnectionId,
         query,
-        limit: totalRows,
+        // When the total is unknown (no row count requested yet), fall back to
+        // a large practical cap; the toast reports the actual rows fetched.
+        limit: totalRows ?? 1_000_000,
         page: 1,
         ...(schema ? { schema } : {}),
       });
@@ -4186,6 +4188,7 @@ export const Editor = () => {
                       }
                       readonly={driverReadonly || !!activeTab.materialized}
                       totalRows={activeTab.result?.pagination?.total_rows}
+                      hasMore={activeTab.result?.pagination?.has_more}
                       onCopyAllRows={handleCopyAllRows}
                     />
                   </div>

@@ -925,6 +925,8 @@
     "copyAllRowsMessage": "当前仅加载了 {{total}} 行中的 {{loaded}} 行。要将整个结果集（{{total}} 行）复制到剪贴板吗？",
     "copyAllRowsConfirm": "复制所有行",
     "copyAllRows": "复制全部（{{count}}）",
+    "copyAll": "复制全部",
+    "copyAllRowsMessageUnknown": "当前仅加载了 {{loaded}} 行，结果在本页之后仍有更多。要将整个结果集复制到剪贴板吗？",
     "copiedRows": "已复制 {{count}} 行到剪贴板",
     "copyColumnName": "复制列名",
     "copyColumnNameQuoted": "复制为 `列`",

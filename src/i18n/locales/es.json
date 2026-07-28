@@ -983,6 +983,8 @@
     "copyAllRowsMessage": "Solo {{loaded}} de {{total}} filas están cargadas actualmente. ¿Copiar todo el resultado ({{total}} filas) al portapapeles?",
     "copyAllRowsConfirm": "Copiar Todas las Filas",
     "copyAllRows": "Copiar Todo ({{count}})",
+    "copyAll": "Copiar Todo",
+    "copyAllRowsMessageUnknown": "Solo {{loaded}} filas están cargadas actualmente y el resultado continúa más allá de esta página. ¿Copiar todo el resultado al portapapeles?",
     "copiedRows": "{{count}} fila(s) copiada(s) al portapapeles",
     "copyColumnName": "Copiar nombre de columna",
     "copyColumnNameQuoted": "Copiar como `columna`",
