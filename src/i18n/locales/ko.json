@@ -950,6 +950,8 @@
     "copyCell": "셀 복사",
     "copyRow": "행 복사",
     "copySelectedRows": "선택한 행 복사",
+    "selectAll": "전체 선택",
+    "deselectAll": "전체 선택 해제",
     "copyColumnName": "컬럼 이름 복사",
     "copyColumnNameQuoted": "`column` 형식으로 복사",
     "copyColumnNameTable": "table.column 형식으로 복사",

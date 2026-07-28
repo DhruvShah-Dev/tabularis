@@ -977,6 +977,8 @@
     "copyCell": "Copia cella",
     "copyRow": "Copia riga",
     "copySelectedRows": "Copia riga/righe selezionate",
+    "selectAll": "Seleziona Tutti",
+    "deselectAll": "Deseleziona Tutti",
     "copyColumnName": "Copia nome colonna",
     "copyColumnNameQuoted": "Copia come `colonna`",
     "copyColumnNameTable": "Copia come tabella.colonna",

@@ -919,6 +919,8 @@
     "copyCell": "复制单元格",
     "copyRow": "复制行",
     "copySelectedRows": "复制选中的行",
+    "selectAll": "全选",
+    "deselectAll": "取消全选",
     "copyColumnName": "复制列名",
     "copyColumnNameQuoted": "复制为 `列`",
     "copyColumnNameTable": "复制为 表.列",

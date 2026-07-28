@@ -952,6 +952,8 @@
     "copyCell": "Zelle kopieren",
     "copyRow": "Zeile kopieren",
     "copySelectedRows": "Ausgewählte Zeile(n) kopieren",
+    "selectAll": "Alle auswählen",
+    "deselectAll": "Alle abwählen",
     "copyColumnName": "Spaltennamen kopieren",
     "copyColumnNameQuoted": "Als `column` kopieren",
     "copyColumnNameTable": "Als table.column kopieren",

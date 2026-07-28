@@ -32,6 +32,7 @@ import {
   FileDigit,
   ExternalLink,
   PanelBottomOpen,
+  ListChecks,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -1054,6 +1055,10 @@ export const DataGrid = React.memo(
     );
 
     const parentRef = useRef<HTMLDivElement>(null);
+    // Tracks whether this grid was the last one interacted with, so
+    // document-level shortcuts (Cmd/Ctrl+A) only act on the active grid when
+    // several grids are mounted (e.g. multi-result panels).
+    const isActiveGridRef = useRef(false);
     const [parentViewportWidth, setParentViewportWidth] = useState(0);
 
     useEffect(() => {
@@ -1454,6 +1459,18 @@ export const DataGrid = React.memo(
       setContextMenu(null);
     }, [contextMenu, copyCellValue]);
 
+    // Track the last-interacted grid so document-level shortcuts don't fire in
+    // every mounted grid at once.
+    useEffect(() => {
+      const handleMouseDown = (e: MouseEvent) => {
+        isActiveGridRef.current = !!parentRef.current?.contains(
+          e.target as Node,
+        );
+      };
+      document.addEventListener("mousedown", handleMouseDown);
+      return () => document.removeEventListener("mousedown", handleMouseDown);
+    }, []);
+
     // Handle keyboard shortcuts
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -1471,6 +1488,22 @@ export const DataGrid = React.memo(
           }
         }
 
+        // CMD/CTRL + A — select all loaded rows
+        if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+          const target = e.target as HTMLElement | null;
+          const isEditableTarget =
+            target instanceof HTMLInputElement ||
+            target instanceof HTMLTextAreaElement ||
+            target instanceof HTMLSelectElement ||
+            target?.isContentEditable === true;
+          // Only handle if not editing a cell, focus is not in a text field,
+          // and this grid was the last one interacted with.
+          if (!editingCell && !isEditableTarget && isActiveGridRef.current) {
+            e.preventDefault();
+            handleSelectAll();
+          }
+        }
+
         // Delete / Backspace — delete selected rows
         if ((e.key === "Delete" || e.key === "Backspace") && !editingCell && !readonlyProp && selectedRowIndices.size > 0) {
           e.preventDefault();
@@ -1480,7 +1513,7 @@ export const DataGrid = React.memo(
 
       document.addEventListener("keydown", handleKeyDown);
       return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [editingCell, selectedRowIndices, focusedCell, copyCellValue, copySelectedCells, readonlyProp, deleteRowsByIndices]);
+    }, [editingCell, selectedRowIndices, focusedCell, copyCellValue, copySelectedCells, readonlyProp, deleteRowsByIndices, handleSelectAll]);
 
     // Stable per-row dependency bundle. Memoizing it lets React.memo on MemoRow
     // skip re-rendering rows that didn't change during scroll.
@@ -1591,6 +1624,7 @@ export const DataGrid = React.memo(
                 <tr key={headerGroup.id}>
                   <th
                     onClick={handleSelectAll}
+                    title={t("dataGrid.selectAll")}
                     className="px-2 py-2 text-xs font-semibold text-muted border-b border-r border-default bg-base sticky left-0 z-20 text-center select-none w-[50px] min-w-[50px] cursor-pointer hover:bg-elevated"
                   >
                     #
@@ -1834,6 +1868,20 @@ export const DataGrid = React.memo(
                 icon: Copy,
                 action: async () => {
                   await copyColumnValuesAsInClause(contextMenu.colIndex);
+                  setContextMenu(null);
+                },
+              });
+
+              menuItems.push({ separator: true });
+
+              menuItems.push({
+                label:
+                  selectedRowIndices.size === mergedRows.length
+                    ? t("dataGrid.deselectAll")
+                    : t("dataGrid.selectAll"),
+                icon: ListChecks,
+                action: () => {
+                  handleSelectAll();
                   setContextMenu(null);
                 },
               });

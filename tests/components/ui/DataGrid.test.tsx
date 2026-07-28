@@ -1,4 +1,5 @@
-import { render } from "@testing-library/react";
+import { render, fireEvent, screen } from "@testing-library/react";
+import { useState } from "react";
 import { vi } from "vitest";
 import { DataGrid } from "../../../src/components/ui/DataGrid";
 
@@ -32,6 +33,22 @@ vi.mock("../../../src/hooks/useRightSidebar", () => ({
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
+}));
+
+// JSDOM has no layout, so the real virtualizer renders zero rows. Mock it to
+// render every row — tests here assert behavior, not virtualization.
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({
+        index,
+        key: index,
+        start: index * 35,
+        end: (index + 1) * 35,
+        size: 35,
+      })),
+    getTotalSize: () => count * 35,
+  }),
 }));
 
 class ResizeObserverMock {
@@ -78,5 +95,132 @@ describe("DataGrid layout", () => {
     expect(tooltips[0]).toHaveClass("hidden", "left-0");
     expect(tooltips[1]).toHaveClass("hidden", "right-0");
     expect(tooltips[1]).not.toHaveClass("left-0");
+  });
+});
+
+describe("DataGrid select all", () => {
+  const columns = ["id", "name"];
+  const data: unknown[][] = [
+    [1, "Alice"],
+    [2, "Bob"],
+  ];
+
+  const writeText = vi.fn().mockResolvedValue(undefined);
+
+  beforeEach(() => {
+    writeText.mockClear();
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+  });
+
+  it("selects all loaded rows with Cmd/Ctrl+A after interacting with the grid", () => {
+    const onSelectionChange = vi.fn();
+    const { container } = render(
+      <DataGrid
+        columns={columns}
+        data={data}
+        selectedRows={new Set()}
+        onSelectionChange={onSelectionChange}
+        readonly
+      />,
+    );
+
+    fireEvent.mouseDown(container.querySelector("table")!);
+    fireEvent.keyDown(document, { key: "a", metaKey: true });
+
+    expect(onSelectionChange).toHaveBeenCalledWith(new Set([0, 1]));
+    expect(writeText).toHaveBeenCalled();
+    expect(writeText.mock.calls[0][0]).toContain("Alice");
+  });
+
+  it("ignores Cmd/Ctrl+A when the grid was not interacted with", () => {
+    const onSelectionChange = vi.fn();
+    render(
+      <DataGrid
+        columns={columns}
+        data={data}
+        selectedRows={new Set()}
+        onSelectionChange={onSelectionChange}
+        readonly
+      />,
+    );
+
+    fireEvent.keyDown(document, { key: "a", metaKey: true });
+
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it("ignores Cmd/Ctrl+A coming from editable targets", () => {
+    const onSelectionChange = vi.fn();
+    const { container } = render(
+      <>
+        <input data-testid="external-input" />
+        <DataGrid
+          columns={columns}
+          data={data}
+          selectedRows={new Set()}
+          onSelectionChange={onSelectionChange}
+          readonly
+        />
+      </>,
+    );
+
+    fireEvent.mouseDown(container.querySelector("table")!);
+    fireEvent.keyDown(screen.getByTestId("external-input"), {
+      key: "a",
+      metaKey: true,
+    });
+
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it("toggles select all via the # header cell", () => {
+    const calls: Set<number>[] = [];
+    const Harness = () => {
+      const [selected, setSelected] = useState<Set<number>>(new Set());
+      return (
+        <DataGrid
+          columns={columns}
+          data={data}
+          selectedRows={selected}
+          onSelectionChange={(next: Set<number>) => {
+            calls.push(next);
+            setSelected(next);
+          }}
+          readonly
+        />
+      );
+    };
+    const { container } = render(<Harness />);
+
+    const headerCell = container.querySelector("th")!;
+    fireEvent.click(headerCell);
+    expect(calls[0]).toEqual(new Set([0, 1]));
+
+    fireEvent.click(headerCell);
+    expect(calls[1]).toEqual(new Set());
+  });
+
+  it("offers Select All in the row context menu", async () => {
+    const onSelectionChange = vi.fn();
+    render(
+      <DataGrid
+        columns={columns}
+        data={data}
+        tableName="users"
+        selectedRows={new Set()}
+        onSelectionChange={onSelectionChange}
+        readonly
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText("Alice"));
+
+    const item = await screen.findByText("dataGrid.selectAll");
+    fireEvent.click(item);
+
+    expect(onSelectionChange).toHaveBeenCalledWith(new Set([0, 1]));
   });
 });

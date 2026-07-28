@@ -988,6 +988,8 @@
     "copyCell": "Copier la cellule",
     "copyRow": "Copier la ligne",
     "copySelectedRows": "Copier la/les ligne(s) sélectionnée(s)",
+    "selectAll": "Tout sélectionner",
+    "deselectAll": "Tout désélectionner",
     "copyColumnName": "Copier le nom de colonne",
     "copyColumnNameQuoted": "Copier comme `column`",
     "copyColumnNameTable": "Copier comme table.column",

@@ -998,6 +998,8 @@
     "copyCell": "Copy Cell",
     "copyRow": "Copy Row",
     "copySelectedRows": "Copy selected row(s)",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
     "copyColumnName": "Copy column name",
     "copyColumnNameQuoted": "Copy as `column`",
     "copyColumnNameTable": "Copy as table.column",

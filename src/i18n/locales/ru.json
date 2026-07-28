@@ -947,6 +947,8 @@
     "copyCell": "Копировать ячейку",
     "copyRow": "Копировать строку",
     "copySelectedRows": "Копировать выбранные строки",
+    "selectAll": "Выбрать все",
+    "deselectAll": "Снять выбор",
     "copyColumnName": "Копировать имя столбца",
     "copyColumnNameQuoted": "Копировать как `column`",
     "copyColumnNameTable": "Копировать как table.column",

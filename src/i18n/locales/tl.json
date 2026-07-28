@@ -983,6 +983,8 @@
     "copyCell": "Kopyahin ang Cell",
     "copyRow": "Kopyahin ang Row",
     "copySelectedRows": "Kopyahin ang napiling row",
+    "selectAll": "Piliin Lahat",
+    "deselectAll": "Alisin ang Lahat sa Pagpili",
     "copyColumnName": "Kopyahin ang pangalan ng column",
     "copyColumnNameQuoted": "Kopyahin bilang `column`",
     "copyColumnNameTable": "Kopyahin bilang table.column",
