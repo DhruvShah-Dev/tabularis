@@ -92,8 +92,6 @@ export function getSelectedRows(
   return sortedIndices.map((idx) => data[idx]);
 }
 
-type CopyFormat = "csv" | "json" | "sql-insert" | "markdown";
-
 interface ColumnCopyOptions {
   format: CopyFormat;
   delimiter?: string;

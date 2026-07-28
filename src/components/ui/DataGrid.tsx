@@ -1689,7 +1689,11 @@ export const DataGrid = React.memo(
                 <tr key={headerGroup.id}>
                   <th
                     onClick={handleSelectAll}
-                    title={t("dataGrid.selectAll")}
+                    title={
+                      selectedRowIndices.size === mergedRows.length
+                        ? t("dataGrid.deselectAll")
+                        : t("dataGrid.selectAll")
+                    }
                     className="px-2 py-2 text-xs font-semibold text-muted border-b border-r border-default bg-base sticky left-0 z-20 text-center select-none w-[50px] min-w-[50px] cursor-pointer hover:bg-elevated"
                   >
                     #
