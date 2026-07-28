@@ -1126,8 +1126,6 @@
       "noResults": "일치하는 항목이 없습니다",
       "count_one": "항목 1개",
       "count_other": "항목 {{count}}개",
-      "navigationHint": "↑↓로 이동, Enter로 열기",
-      "escHint": "Esc로 닫기",
       "type_table": "테이블",
       "type_view": "뷰",
       "type_routine": "루틴",
@@ -1998,13 +1996,13 @@
   },
   "commandPalette": {
     "title": "명령 팔레트",
+    "objectsTitle": "데이터베이스 객체",
     "searchLabel": "명령 검색",
     "placeholder": "작업 검색...",
     "executionError": "작업을 완료할 수 없습니다",
     "noResults": "일치하는 작업이 없습니다",
-    "navigationHint": "↑↓ 이동",
-    "executeHint": "Enter 실행",
-    "escapeHint": "Esc 닫기",
+    "navigationHint": "이동",
+    "escapeHint": "닫기",
     "categories": {
       "navigation": "탐색",
       "table": "테이블"

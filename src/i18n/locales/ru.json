@@ -1077,8 +1077,6 @@
       "noResults": "Совпадающие элементы не найдены",
       "count_one": "1 элемент",
       "count_other": "{{count}} элементов",
-      "navigationHint": "↑↓ для навигации, Enter для открытия",
-      "escHint": "Esc для закрытия",
       "type_table": "таблица",
       "type_view": "представление",
       "type_routine": "процедура",
@@ -2065,13 +2063,13 @@
   },
   "commandPalette": {
     "title": "Панель команд",
+    "objectsTitle": "Объекты базы данных",
     "searchLabel": "Поиск команд",
     "placeholder": "Искать действия...",
     "executionError": "Не удалось выполнить действие",
     "noResults": "Подходящие действия не найдены",
-    "navigationHint": "↑↓ Навигация",
-    "executeHint": "Enter Выполнить",
-    "escapeHint": "Esc Закрыть",
+    "navigationHint": "Навигация",
+    "escapeHint": "Закрыть",
     "categories": {
       "navigation": "Навигация",
       "table": "Таблица"

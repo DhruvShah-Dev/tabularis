@@ -18,7 +18,6 @@ export interface PaletteLabels {
   placeholder: string;
   noResults: string;
   navigationHint: string;
-  executeHint?: string;
   escapeHint: string;
   getCountLabel?: (count: number) => string;
 }
@@ -27,6 +26,26 @@ interface PaletteProps {
   labels: PaletteLabels;
   items: PaletteItem[];
 }
+
+const KEY_CAP =
+  "px-1 py-0.5 rounded bg-surface-secondary text-muted text-[9px] font-mono";
+
+const PaletteHint = ({
+  keys,
+  label,
+}: {
+  keys: string[];
+  label: string;
+}) => (
+  <span className="flex items-center gap-1">
+    {keys.map((key) => (
+      <kbd key={key} className={KEY_CAP}>
+        {key}
+      </kbd>
+    ))}
+    {label}
+  </span>
+);
 
 export const Palette = ({ labels, items }: PaletteProps) => {
   const { t } = useTranslation();
@@ -104,9 +123,11 @@ export const Palette = ({ labels, items }: PaletteProps) => {
         <>
           <span>{labels.getCountLabel?.(results.length)}</span>
           <div className="flex gap-4">
-            <span>{labels.navigationHint}</span>
-            {labels.executeHint && <span>{labels.executeHint}</span>}
-            <span>{labels.escapeHint}</span>
+            <PaletteHint
+              keys={["↑", "↓"]}
+              label={labels.navigationHint}
+            />
+            <PaletteHint keys={["Esc"]} label={labels.escapeHint} />
           </div>
         </>
       }

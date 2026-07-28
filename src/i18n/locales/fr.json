@@ -1189,8 +1189,6 @@
       "noResults": "Aucun élément correspondant trouvé",
       "count_one": "1 élément",
       "count_other": "{{count}} éléments",
-      "navigationHint": "↑↓ pour naviguer, Entrée pour ouvrir",
-      "escHint": "Échap pour fermer",
       "type_table": "table",
       "type_view": "vue",
       "type_routine": "routine",
@@ -2072,13 +2070,13 @@
   },
   "commandPalette": {
     "title": "Palette de commandes",
+    "objectsTitle": "Objets de base de données",
     "searchLabel": "Rechercher des commandes",
     "placeholder": "Rechercher des actions...",
     "executionError": "L’action n’a pas pu être exécutée",
     "noResults": "Aucune action correspondante",
-    "navigationHint": "↑↓ Naviguer",
-    "executeHint": "Entrée Exécuter",
-    "escapeHint": "Échap Fermer",
+    "navigationHint": "Naviguer",
+    "escapeHint": "Fermer",
     "categories": {
       "navigation": "Navigation",
       "table": "Table"

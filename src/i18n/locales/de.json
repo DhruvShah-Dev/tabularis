@@ -1083,8 +1083,6 @@
       "noResults": "Keine passenden Elemente gefunden",
       "count_one": "1 Element",
       "count_other": "{{count}} Elemente",
-      "navigationHint": "↑↓ zum Navigieren, Enter zum Öffnen",
-      "escHint": "Esc zum Schließen",
       "type_table": "Tabelle",
       "type_view": "View",
       "type_routine": "Routine",
@@ -1994,13 +1992,13 @@
   },
   "commandPalette": {
     "title": "Befehlspalette",
+    "objectsTitle": "Datenbankobjekte",
     "searchLabel": "Befehle suchen",
     "placeholder": "Aktionen suchen...",
     "executionError": "Die Aktion konnte nicht ausgeführt werden",
     "noResults": "Keine passenden Aktionen gefunden",
-    "navigationHint": "↑↓ Navigieren",
-    "executeHint": "Enter Ausführen",
-    "escapeHint": "Esc Schließen",
+    "navigationHint": "Navigieren",
+    "escapeHint": "Schließen",
     "categories": {
       "navigation": "Navigation",
       "table": "Tabelle"

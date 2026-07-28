@@ -1182,8 +1182,6 @@
       "noResults": "Walang tumugmang elemento na nahanap",
       "count_one": "1 elemento",
       "count_other": "{{count}} elemento",
-      "navigationHint": "↑↓ para mag-navigate, Enter para buksan",
-      "escHint": "Esc para isara",
       "type_table": "table",
       "type_view": "view",
       "type_routine": "routine",
@@ -2064,13 +2062,13 @@
   },
   "commandPalette": {
     "title": "Command Palette",
+    "objectsTitle": "Mga Object ng Database",
     "searchLabel": "Maghanap ng mga command",
     "placeholder": "Maghanap ng mga aksyon...",
     "executionError": "Hindi makumpleto ang aksyon",
     "noResults": "Walang nakitang katugmang aksyon",
-    "navigationHint": "↑↓ Mag-navigate",
-    "executeHint": "Enter Isagawa",
-    "escapeHint": "Esc Isara",
+    "navigationHint": "Mag-navigate",
+    "escapeHint": "Isara",
     "categories": {
       "navigation": "Navigation",
       "table": "Talahanayan"

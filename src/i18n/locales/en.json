@@ -1199,8 +1199,6 @@
       "noResults": "No matching elements found",
       "count_one": "1 element",
       "count_other": "{{count}} elements",
-      "navigationHint": "↑↓ to navigate, Enter to open",
-      "escHint": "Esc to close",
       "type_table": "table",
       "type_view": "view",
       "type_routine": "routine",
@@ -2083,13 +2081,13 @@
   },
   "commandPalette": {
     "title": "Command Palette",
+    "objectsTitle": "Database Objects",
     "searchLabel": "Search commands",
     "placeholder": "Search actions...",
     "executionError": "The action could not be completed",
     "noResults": "No matching actions found",
-    "navigationHint": "↑↓ Navigate",
-    "executeHint": "Enter Execute",
-    "escapeHint": "Esc Close",
+    "navigationHint": "Navigate",
+    "escapeHint": "Close",
     "categories": {
       "navigation": "Navigation",
       "table": "Table"

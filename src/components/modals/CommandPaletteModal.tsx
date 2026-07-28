@@ -25,7 +25,6 @@ const ActionPalette = () => {
     placeholder: t("commandPalette.placeholder"),
     noResults: t("commandPalette.noResults"),
     navigationHint: t("commandPalette.navigationHint"),
-    executeHint: t("commandPalette.executeHint"),
     escapeHint: t("commandPalette.escapeHint"),
   };
 
@@ -44,12 +43,12 @@ const ObjectPalette = ({
   const { t } = useTranslation();
   const items = useCommandPaletteObjectItems(onGenerateSql, onInspect);
   const labels: PaletteLabels = {
-    ariaLabel: t("settings.shortcuts.quickNavigator"),
+    ariaLabel: t("commandPalette.objectsTitle"),
     searchLabel: t("editor.quickNavigator.placeholder"),
     placeholder: t("editor.quickNavigator.placeholder"),
     noResults: t("editor.quickNavigator.noResults"),
-    navigationHint: t("editor.quickNavigator.navigationHint"),
-    escapeHint: t("editor.quickNavigator.escHint"),
+    navigationHint: t("commandPalette.navigationHint"),
+    escapeHint: t("commandPalette.escapeHint"),
     getCountLabel: (count) =>
       count === 1
         ? t("editor.quickNavigator.count_one")

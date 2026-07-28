@@ -1050,8 +1050,6 @@
       "noResults": "未找到匹配的元素",
       "count_one": "1 个元素",
       "count_other": "{{count}} 个元素",
-      "navigationHint": "↑↓ 导航，Enter 打开",
-      "escHint": "Esc 关闭",
       "type_table": "表",
       "type_view": "视图",
       "type_routine": "例程",
@@ -1934,13 +1932,13 @@
   },
   "commandPalette": {
     "title": "命令面板",
+    "objectsTitle": "数据库对象",
     "searchLabel": "搜索命令",
     "placeholder": "搜索操作...",
     "executionError": "无法完成操作",
     "noResults": "未找到匹配的操作",
-    "navigationHint": "↑↓ 导航",
-    "executeHint": "Enter 执行",
-    "escapeHint": "Esc 关闭",
+    "navigationHint": "导航",
+    "escapeHint": "关闭",
     "categories": {
       "navigation": "导航",
       "table": "表"

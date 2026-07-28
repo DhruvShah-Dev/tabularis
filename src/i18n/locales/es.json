@@ -1102,8 +1102,6 @@
       "noResults": "No se encontraron elementos coincidentes",
       "count_one": "1 elemento",
       "count_other": "{{count}} elementos",
-      "navigationHint": "↑↓ para navegar, Enter para abrir",
-      "escHint": "Esc para cerrar",
       "type_table": "tabla",
       "type_view": "vista",
       "type_routine": "rutina",
@@ -1916,13 +1914,13 @@
   },
   "commandPalette": {
     "title": "Paleta de comandos",
+    "objectsTitle": "Objetos de base de datos",
     "searchLabel": "Buscar comandos",
     "placeholder": "Buscar acciones...",
     "executionError": "No se pudo completar la acción",
     "noResults": "No se encontraron acciones coincidentes",
-    "navigationHint": "↑↓ Navegar",
-    "executeHint": "Enter Ejecutar",
-    "escapeHint": "Esc Cerrar",
+    "navigationHint": "Navegar",
+    "escapeHint": "Cerrar",
     "categories": {
       "navigation": "Navegación",
       "table": "Tabla"
