@@ -1890,6 +1890,23 @@ export const DataGrid = React.memo(
                 action: copySelectedOrContextRow,
               });
 
+              // Direct one-click path to copy the entire result set when the
+              // page is only part of it — kept next to "Copy Selected" so the
+              // two copy scopes read as a pair (count explicit when known).
+              if (hasUnloadedRows) {
+                menuItems.push({
+                  label:
+                    totalRows != null
+                      ? t("dataGrid.copyAllRows", { count: totalRows })
+                      : t("dataGrid.copyAll"),
+                  icon: Copy,
+                  action: () => {
+                    onCopyAllRows?.();
+                    setContextMenu(null);
+                  },
+                });
+              }
+
               menuItems.push({
                 label: t("dataGrid.copyColumnValues"),
                 icon: Copy,
@@ -1921,23 +1938,6 @@ export const DataGrid = React.memo(
                   setContextMenu(null);
                 },
               });
-
-              // Direct one-click path to copy the entire result set when the
-              // page is only part of it (count makes the scope explicit when
-              // the total is known).
-              if (hasUnloadedRows) {
-                menuItems.push({
-                  label:
-                    totalRows != null
-                      ? t("dataGrid.copyAllRows", { count: totalRows })
-                      : t("dataGrid.copyAll"),
-                  icon: Copy,
-                  action: () => {
-                    onCopyAllRows?.();
-                    setContextMenu(null);
-                  },
-                });
-              }
 
               if (!readonlyProp) {
                 menuItems.push(
