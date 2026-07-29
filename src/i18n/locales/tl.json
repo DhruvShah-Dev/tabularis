@@ -983,6 +983,7 @@
     "copyCell": "Kopyahin ang Cell",
     "copyRow": "Kopyahin ang Row",
     "selectAll": "Piliin Lahat",
+    "selectAllN": "Piliin Lahat ({{count}})",
     "deselectAll": "Alisin ang Lahat sa Pagpili",
     "copySelectedN": "Kopyahin ang Napili ({{count}})",
     "selectColumn": "Piliin ang Column",

@@ -977,6 +977,7 @@
     "copyCell": "Copia cella",
     "copyRow": "Copia riga",
     "selectAll": "Seleziona Tutti",
+    "selectAllN": "Seleziona Tutti ({{count}})",
     "deselectAll": "Deseleziona Tutti",
     "copySelectedN": "Copia Selezionate ({{count}})",
     "selectColumn": "Seleziona Colonna",

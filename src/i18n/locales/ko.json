@@ -950,6 +950,7 @@
     "copyCell": "셀 복사",
     "copyRow": "행 복사",
     "selectAll": "전체 선택",
+    "selectAllN": "전체 선택 ({{count}})",
     "deselectAll": "전체 선택 해제",
     "copySelectedN": "선택 항목 복사 ({{count}})",
     "selectColumn": "열 선택",

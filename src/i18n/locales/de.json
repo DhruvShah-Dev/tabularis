@@ -952,6 +952,7 @@
     "copyCell": "Zelle kopieren",
     "copyRow": "Zeile kopieren",
     "selectAll": "Alle auswählen",
+    "selectAllN": "Alle auswählen ({{count}})",
     "deselectAll": "Alle abwählen",
     "copySelectedN": "Auswahl kopieren ({{count}})",
     "selectColumn": "Spalte auswählen",

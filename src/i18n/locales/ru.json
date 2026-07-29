@@ -947,6 +947,7 @@
     "copyCell": "Копировать ячейку",
     "copyRow": "Копировать строку",
     "selectAll": "Выбрать все",
+    "selectAllN": "Выбрать все ({{count}})",
     "deselectAll": "Снять выбор",
     "copySelectedN": "Скопировать выбранные ({{count}})",
     "selectColumn": "Выбрать столбец",

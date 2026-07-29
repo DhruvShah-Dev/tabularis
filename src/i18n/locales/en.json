@@ -998,6 +998,7 @@
     "copyCell": "Copy Cell",
     "copyRow": "Copy Row",
     "selectAll": "Select All",
+    "selectAllN": "Select All ({{count}})",
     "deselectAll": "Deselect All",
     "copySelectedN": "Copy Selected ({{count}})",
     "selectColumn": "Select Column",

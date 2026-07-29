@@ -1765,6 +1765,15 @@ export const DataGrid = React.memo(
                       }`}
                       onContextMenu={(e) => {
                         e.preventDefault();
+                        // macOS turns Ctrl+click into a contextmenu event — the
+                        // user almost certainly meant "toggle this column".
+                        if (e.ctrlKey) {
+                          handleColumnHeaderSelectRef.current(
+                            headerColIndex,
+                            e,
+                          );
+                          return;
+                        }
                         setHeaderContextMenu({
                           x: e.clientX,
                           y: e.clientY,
@@ -2029,7 +2038,7 @@ export const DataGrid = React.memo(
                 label:
                   selectedRowIndices.size === mergedRows.length
                     ? t("dataGrid.deselectAll")
-                    : t("dataGrid.selectAll"),
+                    : t("dataGrid.selectAllN", { count: mergedRows.length }),
                 icon: ListChecks,
                 action: () => {
                   handleSelectAll();

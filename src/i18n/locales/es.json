@@ -977,6 +977,7 @@
     "copyCell": "Copiar Celda",
     "copyRow": "Copiar Fila",
     "selectAll": "Seleccionar Todo",
+    "selectAllN": "Seleccionar Todo ({{count}})",
     "deselectAll": "Deseleccionar Todo",
     "copySelectedN": "Copiar Seleccionadas ({{count}})",
     "selectColumn": "Seleccionar Columna",

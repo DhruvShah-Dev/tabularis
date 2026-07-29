@@ -964,6 +964,7 @@
     "copyCell": "セルをコピー",
     "copyRow": "行をコピー",
     "selectAll": "すべて選択",
+    "selectAllN": "すべて選択（{{count}}）",
     "deselectAll": "すべて解除",
     "copySelectedN": "選択をコピー（{{count}}）",
     "selectColumn": "列を選択",

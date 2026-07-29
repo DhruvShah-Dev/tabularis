@@ -919,6 +919,7 @@
     "copyCell": "复制单元格",
     "copyRow": "复制行",
     "selectAll": "全选",
+    "selectAllN": "全选（{{count}}）",
     "deselectAll": "取消全选",
     "copySelectedN": "复制选中（{{count}}）",
     "selectColumn": "选择列",

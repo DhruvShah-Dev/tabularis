@@ -253,7 +253,7 @@ describe("DataGrid select all", () => {
 
     fireEvent.contextMenu(screen.getByText("Alice"));
 
-    const item = await screen.findByText("dataGrid.selectAll");
+    const item = await screen.findByText("dataGrid.selectAllN");
     fireEvent.click(item);
 
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([0, 1]));
@@ -434,8 +434,7 @@ describe("DataGrid column selection", () => {
     );
   });
 
-  it("header context menu offers select column and copy selected columns", async () => {
-    const { container } = renderGrid();
+  it("header context menu offers select column and copy selected columns", async () => {    const { container } = renderGrid();
 
     fireEvent.contextMenu(container.querySelectorAll("th")[1]);
     fireEvent.click(await screen.findByText("dataGrid.selectColumn"));
@@ -448,5 +447,17 @@ describe("DataGrid column selection", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     const copied = writeText.mock.calls[0][0] as string;
     expect(copied).not.toContain("Alice");
+  });
+
+  it("Ctrl+click on macOS (contextmenu event) toggles the column without opening the menu", () => {
+    const { container } = renderGrid();
+
+    // macOS turns Ctrl+click into a contextmenu event on the header.
+    fireEvent.contextMenu(container.querySelectorAll("th")[1], {
+      ctrlKey: true,
+    });
+
+    expect(container.querySelectorAll("th")[1]).toHaveClass("bg-blue-500/20");
+    expect(screen.queryByText("dataGrid.copyColumnName")).toBeNull();
   });
 });

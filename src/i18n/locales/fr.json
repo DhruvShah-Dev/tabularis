@@ -988,6 +988,7 @@
     "copyCell": "Copier la cellule",
     "copyRow": "Copier la ligne",
     "selectAll": "Tout sélectionner",
+    "selectAllN": "Tout sélectionner ({{count}})",
     "deselectAll": "Tout désélectionner",
     "copySelectedN": "Copier la sélection ({{count}})",
     "selectColumn": "Sélectionner la colonne",
