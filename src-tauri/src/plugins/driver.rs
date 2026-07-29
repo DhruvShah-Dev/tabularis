@@ -765,6 +765,70 @@ impl DatabaseDriver for RpcDriver {
         serde_json::from_value(res).map_err(|e| e.to_string())
     }
 
+    // --- BLOB helpers ---------------------------------------------------------
+
+    async fn save_blob_to_file(
+        &self,
+        params: &ConnectionParams,
+        table: &str,
+        col_name: &str,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
+        schema: Option<&str>,
+        file_path: &str,
+    ) -> Result<(), String> {
+        let res = self
+            .process
+            .call(
+                "save_blob_to_file",
+                json!({
+                    "params": params,
+                    "table": table,
+                    "col_name": col_name,
+                    "pk_map": pk_map,
+                    "schema": schema,
+                    "file_path": file_path
+                }),
+            )
+            .await;
+        match res {
+            Ok(_) => Ok(()),
+            Err(e) if is_method_not_found(&e) => {
+                Err("BLOB file export not supported by this driver".into())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn fetch_blob_as_data_url(
+        &self,
+        params: &ConnectionParams,
+        table: &str,
+        col_name: &str,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        let res = self
+            .process
+            .call(
+                "fetch_blob_as_data_url",
+                json!({
+                    "params": params,
+                    "table": table,
+                    "col_name": col_name,
+                    "pk_map": pk_map,
+                    "schema": schema
+                }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => {
+                Err("BLOB preview not supported by this driver".into())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     async fn get_create_table_sql(
         &self,
         table_name: &str,
@@ -1371,5 +1435,104 @@ mod tests {
             )
             .await
             .expect("drop_trigger");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_save_blob_to_file() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "save_blob_to_file");
+            assert_eq!(request.params["table"], "documents");
+            assert_eq!(request.params["col_name"], "content");
+            assert_eq!(request.params["pk_map"]["id"], 42);
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["file_path"], "/tmp/out.pdf");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            Value::Null
+        });
+
+        let mut pk_map = HashMap::new();
+        pk_map.insert("id".to_string(), json!(42));
+
+        driver
+            .save_blob_to_file(
+                &test_connection_params(),
+                "documents",
+                "content",
+                &pk_map,
+                Some("public"),
+                "/tmp/out.pdf",
+            )
+            .await
+            .expect("save_blob_to_file");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_save_blob_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "save_blob_to_file");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let pk_map = HashMap::new();
+        let result = driver
+            .save_blob_to_file(
+                &test_connection_params(),
+                "t",
+                "c",
+                &pk_map,
+                None,
+                "/tmp/x",
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("BLOB file export not supported"));
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_fetch_blob_as_data_url() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "fetch_blob_as_data_url");
+            assert_eq!(request.params["table"], "images");
+            assert_eq!(request.params["col_name"], "data");
+            assert_eq!(request.params["pk_map"]["id"], 7);
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            json!("data:image/png;base64,iVBORw0KGgo=")
+        });
+
+        let mut pk_map = HashMap::new();
+        pk_map.insert("id".to_string(), json!(7));
+
+        let url = driver
+            .fetch_blob_as_data_url(
+                &test_connection_params(),
+                "images",
+                "data",
+                &pk_map,
+                Some("public"),
+            )
+            .await
+            .expect("fetch_blob_as_data_url");
+
+        assert_eq!(url, "data:image/png;base64,iVBORw0KGgo=");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_fetch_blob_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "fetch_blob_as_data_url");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let pk_map = HashMap::new();
+        let result = driver
+            .fetch_blob_as_data_url(&test_connection_params(), "t", "c", &pk_map, None)
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("BLOB preview not supported"));
     }
 }
