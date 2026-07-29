@@ -63,6 +63,10 @@ export interface RowCtx {
   parentViewportWidth: number;
   readonly: boolean | undefined;
   updateSelection: (s: Set<number>) => void;
+  /** Currently selected column indices (DBeaver-style column selection). */
+  selectedColIndices: Set<number>;
+  /** Clears the column selection (row/column selection are exclusive). */
+  clearColSelection: () => void;
   setFocusedCell: React.Dispatch<
     React.SetStateAction<{ rowIndex: number; colIndex: number } | null>
   >;
@@ -169,6 +173,8 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
     parentViewportWidth,
     readonly: readonlyProp,
     updateSelection,
+    selectedColIndices,
+    clearColSelection,
     setFocusedCell,
     setExpandedCell,
     setEditingCell,
@@ -347,6 +353,7 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
                 }
                 setFocusedCell({ rowIndex, colIndex });
                 updateSelection(new Set());
+                clearColSelection();
 
                 if (fkForPreview && onForeignKeyShowPanel) {
                   onForeignKeyShowPanel(fkForPreview, rawCellValue);
@@ -367,7 +374,7 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
               onContextMenu={(e) =>
                 handleContextMenu(e, rowOriginal, rowIndex, colIndex, colName)
               }
-              className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 font-mono ${isEditing ? "relative" : "whitespace-nowrap truncate max-w-[300px]"} ${fkForPreview ? "cursor-pointer" : "cursor-text"} ${stateClass} ${isFocused ? "ring-2 ring-inset ring-blue-400" : ""}`}
+              className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 font-mono ${isEditing ? "relative" : "whitespace-nowrap truncate max-w-[300px]"} ${fkForPreview ? "cursor-pointer" : "cursor-text"} ${stateClass} ${selectedColIndices.has(colIndex) ? "bg-blue-500/15" : ""} ${isFocused ? "ring-2 ring-inset ring-blue-400" : ""}`}
               title={
                 !isEditing ? truncateCellPreview(formattedDisplay).text : ""
               }

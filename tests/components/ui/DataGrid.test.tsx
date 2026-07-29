@@ -347,3 +347,106 @@ describe("DataGrid select all", () => {
     );
   });
 });
+
+describe("DataGrid column selection", () => {
+  const columns = ["id", "name"];
+  const data: unknown[][] = [
+    [1, "Alice"],
+    [2, "Bob"],
+  ];
+
+  const writeText = vi.fn().mockResolvedValue(undefined);
+
+  beforeEach(() => {
+    writeText.mockClear();
+    showToastMock.mockClear();
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+  });
+
+  const renderGrid = (onSort = vi.fn()) => {
+    const utils = render(
+      <DataGrid
+        columns={columns}
+        data={data}
+        selectedRows={new Set()}
+        onSelectionChange={vi.fn()}
+        onSort={onSort}
+        readonly
+      />,
+    );
+    return { ...utils, onSort };
+  };
+
+  it("Cmd/Ctrl+click selects a column without sorting; plain click still sorts", () => {
+    const { container, onSort } = renderGrid();
+
+    fireEvent.click(screen.getByText("id"), { metaKey: true });
+
+    expect(onSort).not.toHaveBeenCalled();
+    expect(container.querySelectorAll("th")[1]).toHaveClass("bg-blue-500/20");
+
+    fireEvent.click(screen.getByText("name"));
+    expect(onSort).toHaveBeenCalledWith("name");
+  });
+
+  it("copies only the selected columns with Cmd/Ctrl+C", async () => {
+    renderGrid();
+
+    fireEvent.click(screen.getByText("id"), { metaKey: true });
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("id");
+    expect(copied).not.toContain("Alice");
+    await waitFor(() =>
+      expect(showToastMock).toHaveBeenCalledWith("dataGrid.copiedRows", {
+        kind: "success",
+      }),
+    );
+  });
+
+  it("Shift+click range-selects columns from the anchor", async () => {
+    renderGrid();
+
+    fireEvent.click(screen.getByText("id"), { metaKey: true });
+    fireEvent.click(screen.getByText("name"), { shiftKey: true });
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("Alice");
+  });
+
+  it("row selection clears column selection and vice versa", () => {
+    const { container } = renderGrid();
+
+    fireEvent.click(screen.getByText("id"), { metaKey: true });
+    expect(container.querySelectorAll("th")[1]).toHaveClass("bg-blue-500/20");
+
+    // Click the row-number cell of the first row → column selection clears.
+    fireEvent.click(container.querySelector("tbody tr td")!);
+    expect(container.querySelectorAll("th")[1]).not.toHaveClass(
+      "bg-blue-500/20",
+    );
+  });
+
+  it("header context menu offers select column and copy selected columns", async () => {
+    const { container } = renderGrid();
+
+    fireEvent.contextMenu(container.querySelectorAll("th")[1]);
+    fireEvent.click(await screen.findByText("dataGrid.selectColumn"));
+    expect(container.querySelectorAll("th")[1]).toHaveClass("bg-blue-500/20");
+
+    fireEvent.contextMenu(container.querySelectorAll("th")[1]);
+    const item = await screen.findByText("dataGrid.copySelectedColumns");
+    fireEvent.click(item);
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).not.toContain("Alice");
+  });
+});

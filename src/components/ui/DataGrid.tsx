@@ -74,6 +74,7 @@ import {
   columnValuesToInClause,
   formatRowsForCopy,
   getSelectedRows,
+  projectColumns,
   copyTextToClipboard,
 } from "../../utils/clipboard";
 import type {
@@ -207,6 +208,7 @@ export const DataGrid = React.memo(
       x: number;
       y: number;
       colName: string;
+      colIndex: number;
     } | null>(null);
     const [editingCell, setEditingCell] = useState<{
       rowIndex: number;
@@ -227,6 +229,14 @@ export const DataGrid = React.memo(
     const [internalSelectedRowIndices, setInternalSelectedRowIndices] =
       useState<Set<number>>(new Set());
     const [lastSelectedRowIndex, setLastSelectedRowIndex] = useState<
+      number | null
+    >(null);
+    // Column selection (DBeaver-style): indices into `columns`. Grid-local —
+    // unlike row selection it isn't persisted to tab state.
+    const [selectedColIndices, setSelectedColIndices] = useState<Set<number>>(
+      new Set(),
+    );
+    const [lastSelectedColIndex, setLastSelectedColIndex] = useState<
       number | null
     >(null);
     const [focusedCell, setFocusedCell] = useState<{
@@ -456,9 +466,45 @@ export const DataGrid = React.memo(
         }
 
         updateSelection(newSelected);
+        // Row and column selection are mutually exclusive (keeps copy
+        // semantics unambiguous).
+        setSelectedColIndices(new Set());
       },
       [selectedRowIndices, lastSelectedRowIndex, updateSelection],
     );
+
+    // Column header selection: Cmd/Ctrl+click toggles one column, Shift+click
+    // range-selects from the anchor. Plain click stays reserved for sorting.
+    const handleColumnHeaderSelect = useCallback(
+      (index: number, event: React.MouseEvent) => {
+        setFocusedCell(null);
+        onForeignKeyHidePanel?.();
+        // Row and column selection are mutually exclusive.
+        updateSelection(new Set());
+        if (event.shiftKey && lastSelectedColIndex !== null) {
+          setSelectedColIndices(
+            new Set(calculateSelectionRange(lastSelectedColIndex, index)),
+          );
+        } else {
+          setSelectedColIndices((prev) => toggleSetValue(prev, index));
+          setLastSelectedColIndex(index);
+        }
+      },
+      [lastSelectedColIndex, updateSelection, onForeignKeyHidePanel],
+    );
+
+    const clearColSelection = useCallback(
+      () => setSelectedColIndices(new Set()),
+      [],
+    );
+
+    // tableColumns is memoized without selection deps (rebuilding column defs
+    // on every selection change would churn react-table), so the header click
+    // reaches the latest handler through a ref.
+    const handleColumnHeaderSelectRef = useRef(handleColumnHeaderSelect);
+    useEffect(() => {
+      handleColumnHeaderSelectRef.current = handleColumnHeaderSelect;
+    });
 
     // True when the result set continues beyond the loaded page and the parent
     // can fetch and copy it in full. The total may be unknown (user hasn't
@@ -1017,7 +1063,17 @@ export const DataGrid = React.memo(
                         : t("dataGrid.clearSort")
                   ) : undefined}
                   className={`relative flex items-center gap-2 select-none group/header ${onSort ? "cursor-pointer" : ""}`}
-                  onClick={() => onSort && onSort(colName)}
+                  onClick={(e) => {
+                    // Modifier clicks select columns instead of sorting:
+                    // Cmd/Ctrl toggles one, Shift range-selects from the anchor.
+                    if (e.metaKey || e.ctrlKey || e.shiftKey) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleColumnHeaderSelectRef.current(index, e);
+                      return;
+                    }
+                    if (onSort) onSort(colName);
+                  }}
                   onKeyDown={(e) => { if (onSort && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onSort(colName); } }}
                   title={
                     // Suppress the native sort-hint title while the type tooltip
@@ -1435,9 +1491,33 @@ export const DataGrid = React.memo(
 
     // Copies one column for the selected rows, or every visible row when
     // nothing is selected, using the same export format as other copy actions.
+    // Copies the selected columns (all loaded rows) in the active copy format.
+    const copySelectedColumns = useCallback(async () => {
+      if (selectedColIndices.size === 0) return;
+      const projected = projectColumns(data, columns, selectedColIndices);
+      await copyToClipboard(
+        formatRowsForCopy(projected.rows, projected.columns, copyFormat ?? "csv", {
+          withHeaders: true,
+          csvIncludeHeaders,
+          csvDelimiter,
+          tableName,
+        }),
+        rowsCopiedToast(data.length),
+      );
+    }, [
+      selectedColIndices,
+      data,
+      columns,
+      copyFormat,
+      csvIncludeHeaders,
+      csvDelimiter,
+      tableName,
+      copyToClipboard,
+      rowsCopiedToast,
+    ]);
+
     const copyColumnValues = useCallback(
-      async (colIndex: number) => {
-        if (colIndex < 0) return;
+      async (colIndex: number) => {        if (colIndex < 0) return;
         const rows =
           selectedRowIndices.size > 0
             ? getSelectedRows(data, selectedRowIndices)
@@ -1516,6 +1596,9 @@ export const DataGrid = React.memo(
             if (focusedCell) {
               e.preventDefault();
               copyCellValue(focusedCell.rowIndex, focusedCell.colIndex);
+            } else if (selectedColIndices.size > 0) {
+              e.preventDefault();
+              copySelectedColumns();
             } else if (selectedRowIndices.size > 0) {
               e.preventDefault();
               copySelectedCells();
@@ -1548,7 +1631,7 @@ export const DataGrid = React.memo(
 
       document.addEventListener("keydown", handleKeyDown);
       return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [editingCell, selectedRowIndices, focusedCell, copyCellValue, copySelectedCells, readonlyProp, deleteRowsByIndices, handleSelectAll]);
+    }, [editingCell, selectedRowIndices, selectedColIndices, focusedCell, copyCellValue, copySelectedCells, copySelectedColumns, readonlyProp, deleteRowsByIndices, handleSelectAll]);
 
     // Stable per-row dependency bundle. Memoizing it lets React.memo on MemoRow
     // skip re-rendering rows that didn't change during scroll.
@@ -1571,6 +1654,8 @@ export const DataGrid = React.memo(
         parentViewportWidth,
         readonly: readonlyProp,
         updateSelection,
+        selectedColIndices,
+        clearColSelection,
         setFocusedCell,
         setExpandedCell,
         setEditingCell,
@@ -1607,6 +1692,8 @@ export const DataGrid = React.memo(
         parentViewportWidth,
         readonlyProp,
         updateSelection,
+        selectedColIndices,
+        clearColSelection,
         setFocusedCell,
         setExpandedCell,
         setEditingCell,
@@ -1668,16 +1755,21 @@ export const DataGrid = React.memo(
                   >
                     #
                   </th>
-                  {headerGroup.headers.map((header) => (
+                  {headerGroup.headers.map((header, headerColIndex) => (
                     <th
                       key={header.id}
-                      className="px-4 py-2 text-xs font-semibold text-secondary tracking-wider border-b border-r border-default last:border-r-0 whitespace-nowrap"
+                      className={`px-4 py-2 text-xs font-semibold tracking-wider border-b border-r border-default last:border-r-0 whitespace-nowrap ${
+                        selectedColIndices.has(headerColIndex)
+                          ? "text-primary bg-blue-500/20"
+                          : "text-secondary"
+                      }`}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         setHeaderContextMenu({
                           x: e.clientX,
                           y: e.clientY,
                           colName: header.id,
+                          colIndex: headerColIndex,
                         });
                       }}
                     >
@@ -2006,6 +2098,37 @@ export const DataGrid = React.memo(
               y={headerContextMenu.y}
               onClose={() => setHeaderContextMenu(null)}
               items={[
+                {
+                  label: selectedColIndices.has(headerContextMenu.colIndex)
+                    ? t("dataGrid.deselectColumn")
+                    : t("dataGrid.selectColumn"),
+                  icon: ListChecks,
+                  action: () => {
+                    const next = toggleSetValue(
+                      selectedColIndices,
+                      headerContextMenu.colIndex,
+                    );
+                    setSelectedColIndices(next);
+                    // Row and column selection are mutually exclusive.
+                    if (next.size > 0) updateSelection(new Set());
+                    setHeaderContextMenu(null);
+                  },
+                },
+                ...(selectedColIndices.size > 0
+                  ? [
+                      {
+                        label: t("dataGrid.copySelectedColumns", {
+                          count: selectedColIndices.size,
+                        }),
+                        icon: Copy,
+                        action: async () => {
+                          await copySelectedColumns();
+                          setHeaderContextMenu(null);
+                        },
+                      } as ContextMenuItem,
+                    ]
+                  : []),
+                { separator: true } as ContextMenuItem,
                 {
                   label: t("dataGrid.copyColumnName"),
                   icon: Copy,

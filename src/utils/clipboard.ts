@@ -92,6 +92,19 @@ export function getSelectedRows(
   return sortedIndices.map((idx) => data[idx]);
 }
 
+/** Project rows/columns down to the selected column indices, in column order. */
+export function projectColumns(
+  rows: unknown[][],
+  columns: string[],
+  colIndices: Set<number>,
+): { rows: unknown[][]; columns: string[] } {
+  const sorted = Array.from(colIndices).sort((a, b) => a - b);
+  return {
+    rows: rows.map((row) => sorted.map((idx) => row[idx])),
+    columns: sorted.map((idx) => columns[idx]),
+  };
+}
+
 interface ColumnCopyOptions {
   format: CopyFormat;
   delimiter?: string;
