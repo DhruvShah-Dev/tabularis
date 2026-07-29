@@ -1502,12 +1502,18 @@
     "noConnectionDesc": "Cannot display diagram without a connection ID.",
     "switchToVertical": "Switch to Vertical Layout",
     "switchToHorizontal": "Switch to Horizontal Layout",
+    "lockNodes": "Lock node positions",
+    "unlockNodes": "Unlock nodes to move them",
     "vertical": "Vertical",
     "horizontal": "Horizontal",
     "showAllTables": "Show All Tables",
     "showAll": "Show All",
     "focusedOn": "Focused on",
-    "focusOnTable": "Focus on Table"
+    "focusOnTable": "Focus on Table",
+    "exportMermaid": "Export as Mermaid diagram",
+    "exportSuccess": "Diagram exported",
+    "exportDbml": "Export as DBML",
+    "export": "Export"
   },
   "views": {
     "createView": "Create View",

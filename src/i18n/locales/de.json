@@ -1453,12 +1453,18 @@
     "noConnectionDesc": "Diagramm kann ohne Verbindungs-ID nicht angezeigt werden.",
     "switchToVertical": "Zum vertikalen Layout wechseln",
     "switchToHorizontal": "Zum horizontalen Layout wechseln",
+    "lockNodes": "Knotenpositionen sperren",
+    "unlockNodes": "Knoten zum Verschieben entsperren",
     "vertical": "Vertikal",
     "horizontal": "Horizontal",
     "showAllTables": "Alle Tabellen anzeigen",
     "showAll": "Alle anzeigen",
     "focusedOn": "Fokussiert auf",
-    "focusOnTable": "Auf Tabelle fokussieren"
+    "focusOnTable": "Auf Tabelle fokussieren",
+    "exportMermaid": "Als Mermaid-Diagramm exportieren",
+    "exportSuccess": "Diagramm exportiert",
+    "exportDbml": "Als DBML exportieren",
+    "export": "Exportieren"
   },
   "views": {
     "createView": "Ansicht erstellen",
