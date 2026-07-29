@@ -293,6 +293,14 @@ impl DatabaseDriver for RpcDriver {
         self.data_types.clone()
     }
 
+    fn map_inferred_type(&self, kind: &str) -> String {
+        self.manifest
+            .type_mappings
+            .get(kind)
+            .cloned()
+            .unwrap_or_else(|| kind.to_string())
+    }
+
     fn build_connection_url(&self, _params: &ConnectionParams) -> Result<String, String> {
         // Plugin drivers manage their own connections — no URL needed.
         Ok(format!("{}://...", self.manifest.id))
@@ -476,6 +484,91 @@ impl DatabaseDriver for RpcDriver {
             )
             .await?;
         serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    // --- Materialized views -------------------------------------------------
+
+    async fn get_materialized_views(
+        &self,
+        params: &ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<ViewInfo>, String> {
+        let res = self
+            .process
+            .call(
+                "get_materialized_views",
+                json!({ "params": params, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => Ok(Vec::new()),
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn get_materialized_view_columns(
+        &self,
+        params: &ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<TableColumn>, String> {
+        let res = self
+            .process
+            .call(
+                "get_materialized_view_columns",
+                json!({ "params": params, "view_name": view_name, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => Ok(Vec::new()),
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn get_materialized_view_definition(
+        &self,
+        params: &ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        let res = self
+            .process
+            .call(
+                "get_materialized_view_definition",
+                json!({ "params": params, "view_name": view_name, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => {
+                Err("Materialized views are not supported by this driver".to_string())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn refresh_materialized_view(
+        &self,
+        params: &ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
+        let res = self
+            .process
+            .call(
+                "refresh_materialized_view",
+                json!({ "params": params, "view_name": view_name, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(_) => Ok(()),
+            Err(e) if is_method_not_found(&e) => {
+                Err("Materialized views are not supported by this driver".to_string())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     async fn get_routines(
@@ -1096,6 +1189,7 @@ mod tests {
             icon: String::new(),
             settings: Vec::new(),
             ui_extensions: None,
+            type_mappings: HashMap::new(),
         }
     }
 
@@ -1534,5 +1628,182 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("BLOB preview not supported"));
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_get_materialized_views() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_materialized_views");
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            json!([{ "name": "mv_sales", "schema": "public" }])
+        });
+
+        let views = driver
+            .get_materialized_views(&test_connection_params(), Some("public"))
+            .await
+            .expect("get_materialized_views");
+
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].name, "mv_sales");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_materialized_views_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "get_materialized_views");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let views = driver
+            .get_materialized_views(&test_connection_params(), None)
+            .await
+            .expect("fallback returns empty vec");
+
+        assert!(views.is_empty());
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_get_materialized_view_columns() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_materialized_view_columns");
+            assert_eq!(request.params["view_name"], "mv_sales");
+            assert_eq!(request.params["schema"], "public");
+            json!([{ "name": "total", "data_type": "numeric", "is_pk": false, "is_nullable": true, "is_auto_increment": false }])
+        });
+
+        let cols = driver
+            .get_materialized_view_columns(
+                &test_connection_params(),
+                "mv_sales",
+                Some("public"),
+            )
+            .await
+            .expect("get_materialized_view_columns");
+
+        assert_eq!(cols.len(), 1);
+        assert_eq!(cols[0].name, "total");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_get_materialized_view_definition() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_materialized_view_definition");
+            assert_eq!(request.params["view_name"], "mv_sales");
+            json!("SELECT sum(amount) FROM sales")
+        });
+
+        let def = driver
+            .get_materialized_view_definition(
+                &test_connection_params(),
+                "mv_sales",
+                Some("public"),
+            )
+            .await
+            .expect("get_materialized_view_definition");
+
+        assert_eq!(def, "SELECT sum(amount) FROM sales");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_materialized_view_definition_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "get_materialized_view_definition");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let result = driver
+            .get_materialized_view_definition(&test_connection_params(), "mv_x", None)
+            .await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("Materialized views are not supported"));
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_refresh_materialized_view() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "refresh_materialized_view");
+            assert_eq!(request.params["view_name"], "mv_sales");
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            Value::Null
+        });
+
+        driver
+            .refresh_materialized_view(&test_connection_params(), "mv_sales", Some("public"))
+            .await
+            .expect("refresh_materialized_view");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_refresh_materialized_view_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "refresh_materialized_view");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let result = driver
+            .refresh_materialized_view(&test_connection_params(), "mv_x", None)
+            .await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("Materialized views are not supported"));
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_map_inferred_type_uses_manifest_mappings() {
+        let (tx, _rx) = mpsc::channel::<PluginCommand>(1);
+        let (shutdown_tx, _shutdown_rx) = oneshot::channel();
+
+        let mut manifest = test_manifest();
+        manifest
+            .type_mappings
+            .insert("DATETIME".to_string(), "TIMESTAMP".to_string());
+        manifest
+            .type_mappings
+            .insert("JSON".to_string(), "JSONB".to_string());
+
+        let driver = RpcDriver {
+            manifest,
+            process: Arc::new(PluginProcess {
+                sender: tx,
+                next_id: AtomicU64::new(1),
+                shutdown_tx: tokio::sync::Mutex::new(Some(shutdown_tx)),
+                pid: None,
+            }),
+            data_types: Vec::new(),
+        };
+
+        // Mapped types
+        assert_eq!(driver.map_inferred_type("DATETIME"), "TIMESTAMP");
+        assert_eq!(driver.map_inferred_type("JSON"), "JSONB");
+        // Unmapped types pass through unchanged
+        assert_eq!(driver.map_inferred_type("INTEGER"), "INTEGER");
+        assert_eq!(driver.map_inferred_type("TEXT"), "TEXT");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_map_inferred_type_passthrough_without_mappings() {
+        let (tx, _rx) = mpsc::channel::<PluginCommand>(1);
+        let (shutdown_tx, _shutdown_rx) = oneshot::channel();
+
+        let driver = RpcDriver {
+            manifest: test_manifest(), // empty type_mappings
+            process: Arc::new(PluginProcess {
+                sender: tx,
+                next_id: AtomicU64::new(1),
+                shutdown_tx: tokio::sync::Mutex::new(Some(shutdown_tx)),
+                pid: None,
+            }),
+            data_types: Vec::new(),
+        };
+
+        assert_eq!(driver.map_inferred_type("DATETIME"), "DATETIME");
+        assert_eq!(driver.map_inferred_type("JSON"), "JSON");
     }
 }
