@@ -34,6 +34,7 @@ macro_rules! require_pg {
 }
 
 mod helpers;
+mod golden_utils;
 mod schema_discovery;
 mod column_metadata;
 mod indexes;
@@ -48,3 +49,4 @@ mod multi_database;
 mod ddl_generation;
 mod explain;
 mod blob;
+mod golden;
