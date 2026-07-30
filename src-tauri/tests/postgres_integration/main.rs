@@ -45,3 +45,6 @@ mod triggers;
 mod crud;
 mod query_execution;
 mod multi_database;
+mod ddl_generation;
+mod explain;
+mod blob;
