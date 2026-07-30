@@ -204,7 +204,8 @@
     "removeFromSplitGroup": "Alisin sa Grupo",
     "movePanel": "Ilipat ang panel",
     "refreshDatabaseList": "I-refresh ang listahan ng database",
-    "databaseListUpToDate": "Up to date na ang listahan ng database"
+    "databaseListUpToDate": "Up to date na ang listahan ng database",
+    "allDatabasesRefreshed": "Na-update ang mga database: {{names}}"
   },
   "mcp": {
     "title": "Integrasyon ng MCP Server",
@@ -353,7 +354,9 @@
       },
       "betaNotice": "Ang Import from App ay nasa beta. Kung may problema ka,",
       "reportIssue": "i-report ito sa GitHub."
-    }
+    },
+    "databaseCount_one": "{{count}} database",
+    "databaseCount_other": "{{count}} database"
   },
   "connectionAppearance": {
     "section": "Hitsura",
@@ -934,7 +937,12 @@
     "testSsh": "Subukan ang SSH",
     "testSshHint": "Sinusuri lamang ang SSH tunnel (host at mga kredensyal), nang hindi kumokonekta sa database.",
     "sshTestSuccess": "Naitatag ang koneksyong SSH sa {{target}}",
-    "stopTest": "Ihinto"
+    "stopTest": "Ihinto",
+    "allDatabases": "Lahat ng database",
+    "chooseDatabases": "Pumili ng mga database",
+    "allDatabasesHint": "Sa pagkonekta, awtomatikong nilo-load ang lahat ng database sa server. Ang mga database na ginawa o tinanggal sa server ay lalabas nang kusa — hindi na kailangang i-edit ang koneksyong ito.",
+    "selectDatabasesHint": "Piliin ang mga database na isasama sa koneksyong ito.",
+    "loadDatabasesHint": "I-click ang I-load ang mga database para kunin ang mga available."
   },
   "sshConnections": {
     "title": "Mga SSH Connection",

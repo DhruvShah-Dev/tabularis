@@ -204,7 +204,8 @@
     "removeFromSplitGroup": "Retirer du groupe",
     "movePanel": "Déplacer le panneau",
     "refreshDatabaseList": "Actualiser la liste des bases",
-    "databaseListUpToDate": "La liste des bases de données est à jour"
+    "databaseListUpToDate": "La liste des bases de données est à jour",
+    "allDatabasesRefreshed": "Bases de données mises à jour : {{names}}"
   },
   "mcp": {
     "title": "Intégration du serveur MCP",
@@ -353,7 +354,9 @@
       },
       "betaNotice": "L'import depuis une app est en bêta. En cas de problème,",
       "reportIssue": "signalez-le sur GitHub."
-    }
+    },
+    "databaseCount_one": "{{count}} base de données",
+    "databaseCount_other": "{{count}} bases de données"
   },
   "connectionAppearance": {
     "section": "Apparence",
@@ -939,7 +942,12 @@
     "testSsh": "Tester SSH",
     "testSshHint": "Vérifie uniquement le tunnel SSH (hôte et identifiants), sans se connecter à la base de données.",
     "sshTestSuccess": "Connexion SSH à {{target}} établie",
-    "stopTest": "Arrêter"
+    "stopTest": "Arrêter",
+    "allDatabases": "Toutes les bases de données",
+    "chooseDatabases": "Choisir les bases de données",
+    "allDatabasesHint": "À la connexion, toutes les bases de données du serveur sont chargées automatiquement. Les bases créées ou supprimées sur le serveur apparaissent d’elles-mêmes, sans modifier cette connexion.",
+    "selectDatabasesHint": "Sélectionnez les bases de données à inclure dans cette connexion.",
+    "loadDatabasesHint": "Cliquez sur Charger les bases de données pour récupérer celles disponibles."
   },
   "sshConnections": {
     "title": "Connexions SSH",

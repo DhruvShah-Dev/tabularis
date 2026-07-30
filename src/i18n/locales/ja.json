@@ -204,7 +204,8 @@
     "removeFromSplitGroup": "グループから削除",
     "movePanel": "パネルを移動",
     "refreshDatabaseList": "データベース一覧を更新",
-    "databaseListUpToDate": "データベース一覧は最新です"
+    "databaseListUpToDate": "データベース一覧は最新です",
+    "allDatabasesRefreshed": "データベースを更新しました: {{names}}"
   },
   "mcp": {
     "title": "MCP サーバー連携",
@@ -353,7 +354,9 @@
       },
       "betaNotice": "アプリからのインポートはベータ版です。問題が発生した場合は、",
       "reportIssue": "GitHub で報告してください。"
-    }
+    },
+    "databaseCount_one": "{{count}} 件のデータベース",
+    "databaseCount_other": "{{count}} 件のデータベース"
   },
   "connectionAppearance": {
     "section": "外観",
@@ -919,7 +922,12 @@
     "testSsh": "SSH をテスト",
     "testSshHint": "データベースに接続せず、SSH トンネル(ホストと認証情報)のみを検証します。",
     "sshTestSuccess": "{{target}} への SSH 接続が確立されました",
-    "stopTest": "停止"
+    "stopTest": "停止",
+    "allDatabases": "すべてのデータベース",
+    "chooseDatabases": "データベースを選択",
+    "allDatabasesHint": "接続時にサーバー上のすべてのデータベースが自動的に読み込まれます。サーバーで作成・削除されたデータベースは、この接続を編集しなくても自動的に反映されます。",
+    "selectDatabasesHint": "この接続に含めるデータベースを選択してください。",
+    "loadDatabasesHint": "「データベースを読み込む」をクリックすると利用可能なデータベースを取得します。"
   },
   "sshConnections": {
     "title": "SSH 接続",

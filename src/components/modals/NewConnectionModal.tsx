@@ -331,6 +331,10 @@ export const NewConnectionModal = ({
   const [selectedDatabasesState, setSelectedDatabasesState] = useState<
     string[]
   >([]);
+  // Multi-db drivers: true = no explicit selection, every database on the
+  // server is loaded automatically at connect (persisted as an empty
+  // database param). Default for new connections.
+  const [loadAllDatabases, setLoadAllDatabases] = useState(true);
   const [dbSearchQuery, setDbSearchQuery] = useState("");
   const [detectJsonInTextColumns, setDetectJsonInTextColumns] = useState(false);
   const [passwordDirty, setPasswordDirty] = useState(false);
@@ -1643,11 +1647,26 @@ export const NewConnectionModal = ({
             };
         setK8sMode(isInlineK8s ? "inline" : "existing");
         initializeK8sPathOverrides(pathOptions);
+        const editDriverForDb = drivers.find(
+          (d) => d.id === initialConnection.params.driver,
+        );
+        const editIsMultiDb = isMultiDatabaseCapable(
+          editDriverForDb?.capabilities,
+        );
         if (Array.isArray(db)) {
           setSelectedDatabasesState(db);
+          setLoadAllDatabases(false);
           setFormData({ ...paramsForForm, database: db[0] ?? "" });
+        } else if (editIsMultiDb && db.trim()) {
+          // A saved single database on a multi-db driver is an explicit
+          // one-element selection.
+          setSelectedDatabasesState([db]);
+          setLoadAllDatabases(false);
+          setFormData({ ...paramsForForm });
         } else {
           setSelectedDatabasesState([]);
+          // Empty database on a multi-db driver = "all databases" mode.
+          setLoadAllDatabases(editIsMultiDb);
           setFormData({ ...paramsForForm });
         }
 
@@ -1686,10 +1705,12 @@ export const NewConnectionModal = ({
         }
 
         // Auto-load available databases when editing a multi-db connection
-        const editDriver = drivers.find(
-          (d) => d.id === initialConnection.params.driver,
-        );
-        if (isMultiDatabaseCapable(editDriver?.capabilities)) {
+        // with an explicit selection. Skipped in "all databases" mode: there
+        // is nothing to preselect, and the fetch can spawn SSH/K8s tunnels as
+        // a side effect of merely opening the dialog.
+        const editHasExplicitSelection =
+          Array.isArray(db) || (typeof db === "string" && db.trim() !== "");
+        if (editIsMultiDb && editHasExplicitSelection) {
           void loadDatabases(params, isCurrentInit);
         }
       } else {
@@ -1705,6 +1726,7 @@ export const NewConnectionModal = ({
           k8s_enabled: false,
         });
         setSelectedDatabasesState([]);
+        setLoadAllDatabases(true);
         setSshMode("existing");
         setK8sMode("existing");
         resetK8sPathOverrides();
@@ -1764,6 +1786,7 @@ export const NewConnectionModal = ({
     setK8sPathActionError(null);
     setK8sSelectionError(null);
     setSelectedDatabasesState([]);
+    setLoadAllDatabases(true);
     setDbSearchQuery("");
     setAvailableDatabases([]);
     setDatabaseLoadError(null);
@@ -1863,8 +1886,12 @@ export const NewConnectionModal = ({
           port: formData.port != null ? Number(formData.port) : undefined,
           k8s_port: effectiveK8sPort,
           database: isMultiDb
-            ? (selectedDatabasesState[0] ??
-              (typeof formData.database === "string" ? formData.database : ""))
+            ? loadAllDatabases
+              ? ""
+              : (selectedDatabasesState[0] ??
+                (typeof formData.database === "string"
+                  ? formData.database
+                  : ""))
             : formData.database,
         };
         const testParams = withInlineK8sPaths(
@@ -2030,7 +2057,7 @@ export const NewConnectionModal = ({
         return;
       }
       if (isMultiDb) {
-        if (selectedDatabasesState.length === 0) {
+        if (!loadAllDatabases && selectedDatabasesState.length === 0) {
           setStatus("error");
           setMessage(t("newConnection.noDatabasesSelected"));
           setTestResult("error");
@@ -2059,9 +2086,13 @@ export const NewConnectionModal = ({
         port: formData.port != null ? Number(formData.port) : undefined,
         k8s_port: effectiveK8sPort,
         database: isMultiDb
-          ? selectedDatabasesState.length === 1
-            ? selectedDatabasesState[0]
-            : selectedDatabasesState
+          ? loadAllDatabases
+            ? // "All databases" mode: persisted as an empty database so the
+              // list is fetched from the server on every connect.
+              ""
+            : selectedDatabasesState.length === 1
+              ? selectedDatabasesState[0]
+              : selectedDatabasesState
           : singleDatabase
             ? typeof formData.database === "string" && formData.database.trim()
               ? formData.database
@@ -2242,6 +2273,7 @@ export const NewConnectionModal = ({
 
       if (parsedIsMultiDb && parsed.database) {
         setSelectedDatabasesState([parsed.database]);
+        setLoadAllDatabases(false);
       }
 
       if (newDriver !== driver) {
@@ -2640,6 +2672,46 @@ export const NewConnectionModal = ({
   // ── rendered Databases tab content (multi-db selection) ──
   const databasesTabContent = (
     <div className="space-y-3">
+      {/* Mode switch: automatic (all databases) vs explicit selection */}
+      <div className="flex rounded-md border border-strong overflow-hidden w-fit">
+        {([true, false] as const).map((allMode) => (
+          <button
+            key={String(allMode)}
+            type="button"
+            onClick={() => {
+              setLoadAllDatabases(allMode);
+              if (allMode) setDatabasesTabError(false);
+            }}
+            className={clsx(
+              "px-3 py-1.5 text-xs font-medium transition-colors",
+              loadAllDatabases === allMode
+                ? "bg-blue-600 text-white"
+                : "bg-elevated text-secondary hover:text-primary",
+            )}
+          >
+            {allMode
+              ? t("newConnection.allDatabases", {
+                  defaultValue: "All databases",
+                })
+              : t("newConnection.chooseDatabases", {
+                  defaultValue: "Choose databases",
+                })}
+          </button>
+        ))}
+      </div>
+
+      {loadAllDatabases ? (
+        <div className="flex items-start gap-2.5 p-3 border border-strong rounded-md bg-base">
+          <Database size={14} className="text-blue-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-secondary leading-relaxed">
+            {t("newConnection.allDatabasesHint", {
+              defaultValue:
+                "Every database on the server is loaded automatically when connecting. Databases created or dropped on the server show up on their own — no need to edit this connection.",
+            })}
+          </p>
+        </div>
+      ) : (
+        <>
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted">
           {t("newConnection.selectDatabasesHint", {
@@ -2767,6 +2839,8 @@ export const NewConnectionModal = ({
             })}
           </p>
         </div>
+      )}
+        </>
       )}
     </div>
   );
@@ -3883,6 +3957,7 @@ export const NewConnectionModal = ({
                 >
                   {tab.label}
                   {tab.id === "databases" &&
+                    !loadAllDatabases &&
                     selectedDatabasesState.length > 0 && (
                       <span className="ml-1.5 text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">
                         {selectedDatabasesState.length}

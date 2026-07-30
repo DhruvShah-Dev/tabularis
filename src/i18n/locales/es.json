@@ -191,7 +191,8 @@
     "removeFromSplitGroup": "Quitar del Grupo",
     "movePanel": "Mover panel",
     "refreshDatabaseList": "Actualizar lista de bases de datos",
-    "databaseListUpToDate": "La lista de bases de datos está actualizada"
+    "databaseListUpToDate": "La lista de bases de datos está actualizada",
+    "allDatabasesRefreshed": "Bases de datos actualizadas: {{names}}"
   },
   "groups": {
     "title": "Grupos",
@@ -360,7 +361,9 @@
       },
       "betaNotice": "La importación desde otra app está en beta. Si tienes algún problema,",
       "reportIssue": "repórtalo en GitHub."
-    }
+    },
+    "databaseCount_one": "{{count}} base de datos",
+    "databaseCount_other": "{{count}} bases de datos"
   },
   "connectionAppearance": {
     "section": "Apariencia",
@@ -930,7 +933,12 @@
     "testSsh": "Probar SSH",
     "testSshHint": "Verifica solo el túnel SSH (host y credenciales), sin conectarse a la base de datos.",
     "sshTestSuccess": "Conexión SSH a {{target}} establecida",
-    "stopTest": "Detener"
+    "stopTest": "Detener",
+    "allDatabases": "Todas las bases de datos",
+    "chooseDatabases": "Elegir bases de datos",
+    "allDatabasesHint": "Al conectar se cargan automáticamente todas las bases de datos del servidor. Las bases de datos creadas o eliminadas en el servidor aparecen solas, sin editar esta conexión.",
+    "selectDatabasesHint": "Selecciona las bases de datos que incluirá esta conexión.",
+    "loadDatabasesHint": "Pulsa Cargar bases de datos para obtener las disponibles."
   },
   "sshConnections": {
     "title": "Conexiones SSH",

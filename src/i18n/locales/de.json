@@ -191,7 +191,8 @@
     "removeFromSplitGroup": "Aus der Gruppe entfernen",
     "movePanel": "Panel verschieben",
     "refreshDatabaseList": "Datenbankliste aktualisieren",
-    "databaseListUpToDate": "Datenbankliste ist aktuell"
+    "databaseListUpToDate": "Datenbankliste ist aktuell",
+    "allDatabasesRefreshed": "Datenbanken aktualisiert: {{names}}"
   },
   "mcp": {
     "title": "MCP-Server-Integration",
@@ -340,7 +341,9 @@
       },
       "betaNotice": "Der Import aus einer App befindet sich in der Beta-Phase. Falls ein Problem auftritt,",
       "reportIssue": "melde es auf GitHub."
-    }
+    },
+    "databaseCount_one": "{{count}} Datenbank",
+    "databaseCount_other": "{{count}} Datenbanken"
   },
   "connectionAppearance": {
     "section": "Darstellung",
@@ -905,7 +908,12 @@
     "testSsh": "SSH testen",
     "testSshHint": "Prüft nur den SSH-Tunnel (Host und Anmeldedaten), ohne Verbindung zur Datenbank.",
     "sshTestSuccess": "SSH-Verbindung zu {{target}} hergestellt",
-    "stopTest": "Stopp"
+    "stopTest": "Stopp",
+    "allDatabases": "Alle Datenbanken",
+    "chooseDatabases": "Datenbanken auswählen",
+    "allDatabasesHint": "Beim Verbinden werden automatisch alle Datenbanken des Servers geladen. Auf dem Server erstellte oder gelöschte Datenbanken erscheinen von selbst — ohne diese Verbindung zu bearbeiten.",
+    "selectDatabasesHint": "Die Datenbanken auswählen, die diese Verbindung enthalten soll.",
+    "loadDatabasesHint": "Auf „Datenbanken laden“ klicken, um die verfügbaren Datenbanken abzurufen."
   },
   "sshConnections": {
     "title": "SSH-Verbindungen",

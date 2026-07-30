@@ -191,7 +191,8 @@
     "removeFromSplitGroup": "Rimuovi dal Gruppo",
     "movePanel": "Sposta pannello",
     "refreshDatabaseList": "Aggiorna elenco database",
-    "databaseListUpToDate": "L'elenco dei database è aggiornato"
+    "databaseListUpToDate": "L'elenco dei database è aggiornato",
+    "allDatabasesRefreshed": "Database aggiornati: {{names}}"
   },
   "groups": {
     "title": "Gruppi",
@@ -360,7 +361,9 @@
       },
       "betaNotice": "L'importazione da un'altra app è in beta. Se riscontri un problema,",
       "reportIssue": "segnalalo su GitHub."
-    }
+    },
+    "databaseCount_one": "{{count}} database",
+    "databaseCount_other": "{{count}} database"
   },
   "connectionAppearance": {
     "section": "Aspetto",
@@ -930,7 +933,12 @@
     "testSsh": "Testa SSH",
     "testSshHint": "Verifica solo il tunnel SSH (host e credenziali), senza connettersi al database.",
     "sshTestSuccess": "Connessione SSH a {{target}} stabilita",
-    "stopTest": "Interrompi"
+    "stopTest": "Interrompi",
+    "allDatabases": "Tutti i database",
+    "chooseDatabases": "Scegli i database",
+    "allDatabasesHint": "Alla connessione vengono caricati automaticamente tutti i database del server. I database creati o eliminati sul server compaiono da soli, senza modificare questa connessione.",
+    "selectDatabasesHint": "Seleziona i database da includere in questa connessione.",
+    "loadDatabasesHint": "Premi Carica database per recuperare i database disponibili."
   },
   "sshConnections": {
     "title": "Connessioni SSH",

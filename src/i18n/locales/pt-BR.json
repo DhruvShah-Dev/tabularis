@@ -204,7 +204,8 @@
     "removeFromSplitGroup": "Remover do Grupo",
     "movePanel": "Mover painel",
     "refreshDatabaseList": "Atualizar lista de bancos de dados",
-    "databaseListUpToDate": "A lista de bancos de dados está atualizada"
+    "databaseListUpToDate": "A lista de bancos de dados está atualizada",
+    "allDatabasesRefreshed": "Bancos de dados atualizados: {{names}}"
   },
   "mcp": {
     "title": "Integração com Servidor MCP",
@@ -347,7 +348,9 @@
       },
       "betaNotice": "Importar de Aplicativo está em beta. Se encontrar um problema,",
       "reportIssue": "relate no GitHub."
-    }
+    },
+    "databaseCount_one": "{{count}} banco de dados",
+    "databaseCount_other": "{{count}} bancos de dados"
   },
   "connectionAppearance": {
     "section": "Aparência",
@@ -940,7 +943,12 @@
     "testSsh": "Testar SSH",
     "testSshHint": "Verifica apenas o túnel SSH (host e credenciais), sem conectar ao banco de dados.",
     "sshTestSuccess": "Conexão SSH com {{target}} estabelecida",
-    "stopTest": "Parar"
+    "stopTest": "Parar",
+    "allDatabases": "Todos os bancos de dados",
+    "chooseDatabases": "Escolher bancos de dados",
+    "allDatabasesHint": "Ao conectar, todos os bancos de dados do servidor são carregados automaticamente. Bancos criados ou removidos no servidor aparecem sozinhos — sem editar esta conexão.",
+    "selectDatabasesHint": "Selecione os bancos de dados a incluir nesta conexão.",
+    "loadDatabasesHint": "Clique em Carregar bancos de dados para buscar os disponíveis."
   },
   "sshConnections": {
     "title": "Conexões SSH",
