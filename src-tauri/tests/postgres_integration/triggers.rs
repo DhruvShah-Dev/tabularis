@@ -27,7 +27,7 @@ async fn test_get_trigger_definition() {
     require_pg!();
     let params = pg_params();
 
-    let def = postgres::get_trigger_definition(&params, "trg_audit", "test_schema")
+    let def = postgres::get_trigger_definition(&params, "trg_audit", "all_types", "test_schema")
         .await
         .expect("get_trigger_definition should succeed");
 
