@@ -102,6 +102,9 @@ async fn test_alter_view() {
     let view_name = "test_alter_view";
     let schema = "test_schema";
 
+    // Cleanup from any prior failed run
+    let _ = postgres::drop_view(&params, view_name, schema).await;
+
     // Create initial view
     let def1 = "SELECT id FROM test_schema.all_types";
     postgres::create_view(&params, view_name, def1, schema)

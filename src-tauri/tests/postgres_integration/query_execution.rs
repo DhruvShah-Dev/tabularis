@@ -105,10 +105,11 @@ async fn test_execute_query_null_handling() {
     require_pg!();
     let params = pg_params();
 
-    // Row 2 was seeded with all nulls except col_text (which is also NULL)
+    // Row 2 was seeded with only col_text (NULL) — most columns are null
+    // except col_uuid which has DEFAULT gen_random_uuid()
     let result = postgres::execute_query(
         &params,
-        "SELECT col_text, col_int, col_bool, col_uuid FROM test_schema.all_types WHERE id = 2",
+        "SELECT col_text, col_int, col_bool, col_bytea FROM test_schema.all_types WHERE id = 2",
         None,
         1,
         None,
@@ -118,9 +119,9 @@ async fn test_execute_query_null_handling() {
 
     assert_eq!(result.rows.len(), 1);
     let row = &result.rows[0];
-    // All columns should be JSON null
-    for val in row {
-        assert!(val.is_null(), "Expected null, got: {:?}", val);
+    // These columns have no default and weren't set — should be null
+    for (i, val) in row.iter().enumerate() {
+        assert!(val.is_null(), "Column {} expected null, got: {:?}", result.columns[i], val);
     }
 }
 

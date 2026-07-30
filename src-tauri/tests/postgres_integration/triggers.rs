@@ -51,6 +51,9 @@ async fn test_create_and_drop_trigger() {
     let trigger_name = "trg_test_temp";
     let schema = "test_schema";
 
+    // Cleanup from any prior failed run
+    let _ = postgres::drop_trigger(&params, trigger_name, "crud_scratch", schema).await;
+
     // Create trigger (reuse existing trigger function)
     let create_sql = format!(
         "CREATE TRIGGER {} BEFORE INSERT ON {}.crud_scratch \

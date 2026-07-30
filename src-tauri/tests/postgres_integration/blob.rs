@@ -11,10 +11,12 @@ async fn test_insert_and_query_bytea() {
     require_pg!();
     let params = pg_params();
 
-    // Insert bytea data using the wire format that the frontend sends
-    // The driver expects blob data as a string with hex encoding prefix
+    // The driver expects blob data in the wire format: "BLOB:<size>:<mime>:<base64>"
+    // 4 bytes (0xCA 0xFE 0xBA 0xBE) encoded as base64 = "yv66vg=="
+    let blob_wire = "BLOB:4:application/octet-stream:yv66vg==";
+
     let mut data = HashMap::new();
-    data.insert("col_bytea".to_string(), json!("\\xCAFEBABE"));
+    data.insert("col_bytea".to_string(), json!(blob_wire));
     data.insert("col_text".to_string(), json!("blob_test"));
 
     let affected = postgres::insert_record(&params, "all_types", data, "test_schema", 10_000_000)
@@ -35,7 +37,6 @@ async fn test_insert_and_query_bytea() {
     .expect("query bytea should succeed");
 
     assert_eq!(result.rows.len(), 1);
-    // bytea should come back as some representation (hex string or base64)
     assert!(!result.rows[0][0].is_null(), "bytea should not be null");
 
     // Clean up
