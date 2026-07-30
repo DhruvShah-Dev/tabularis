@@ -1680,6 +1680,7 @@ impl MysqlDriver {
                     },
                 ],
                 ui_extensions: None,
+                type_mappings: std::collections::HashMap::new(),
             },
         }
     }

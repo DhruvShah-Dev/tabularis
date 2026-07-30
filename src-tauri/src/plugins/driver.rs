@@ -293,6 +293,14 @@ impl DatabaseDriver for RpcDriver {
         self.data_types.clone()
     }
 
+    fn map_inferred_type(&self, kind: &str) -> String {
+        self.manifest
+            .type_mappings
+            .get(kind)
+            .cloned()
+            .unwrap_or_else(|| kind.to_string())
+    }
+
     fn build_connection_url(&self, _params: &ConnectionParams) -> Result<String, String> {
         // Plugin drivers manage their own connections — no URL needed.
         Ok(format!("{}://...", self.manifest.id))
@@ -1032,6 +1040,7 @@ mod tests {
             icon: String::new(),
             settings: Vec::new(),
             ui_extensions: None,
+            type_mappings: HashMap::new(),
         }
     }
 
@@ -1371,5 +1380,57 @@ mod tests {
             )
             .await
             .expect("drop_trigger");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_map_inferred_type_uses_manifest_mappings() {
+        let (tx, _rx) = mpsc::channel::<PluginCommand>(1);
+        let (shutdown_tx, _shutdown_rx) = oneshot::channel();
+
+        let mut manifest = test_manifest();
+        manifest
+            .type_mappings
+            .insert("DATETIME".to_string(), "TIMESTAMP".to_string());
+        manifest
+            .type_mappings
+            .insert("JSON".to_string(), "JSONB".to_string());
+
+        let driver = RpcDriver {
+            manifest,
+            process: Arc::new(PluginProcess {
+                sender: tx,
+                next_id: AtomicU64::new(1),
+                shutdown_tx: tokio::sync::Mutex::new(Some(shutdown_tx)),
+                pid: None,
+            }),
+            data_types: Vec::new(),
+        };
+
+        // Mapped types
+        assert_eq!(driver.map_inferred_type("DATETIME"), "TIMESTAMP");
+        assert_eq!(driver.map_inferred_type("JSON"), "JSONB");
+        // Unmapped types pass through unchanged
+        assert_eq!(driver.map_inferred_type("INTEGER"), "INTEGER");
+        assert_eq!(driver.map_inferred_type("TEXT"), "TEXT");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_map_inferred_type_passthrough_without_mappings() {
+        let (tx, _rx) = mpsc::channel::<PluginCommand>(1);
+        let (shutdown_tx, _shutdown_rx) = oneshot::channel();
+
+        let driver = RpcDriver {
+            manifest: test_manifest(), // empty type_mappings
+            process: Arc::new(PluginProcess {
+                sender: tx,
+                next_id: AtomicU64::new(1),
+                shutdown_tx: tokio::sync::Mutex::new(Some(shutdown_tx)),
+                pid: None,
+            }),
+            data_types: Vec::new(),
+        };
+
+        assert_eq!(driver.map_inferred_type("DATETIME"), "DATETIME");
+        assert_eq!(driver.map_inferred_type("JSON"), "JSON");
     }
 }
