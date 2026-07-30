@@ -19,7 +19,6 @@ pub fn pg_params() -> ConnectionParams {
 }
 
 /// Connection params targeting the secondary database (multi-database tests).
-#[allow(dead_code)]
 pub fn pg_params_secondary() -> ConnectionParams {
     ConnectionParams {
         database: DatabaseSelection::Single("tabularis_test_secondary".to_string()),

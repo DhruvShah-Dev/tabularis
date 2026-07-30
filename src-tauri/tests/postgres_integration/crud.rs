@@ -20,6 +20,13 @@ async fn test_insert_basic_types() {
         .expect("insert_record should succeed");
 
     assert_eq!(affected, 1);
+
+    // Cleanup
+    let _ = postgres::execute_query(
+        &params,
+        "DELETE FROM test_schema.crud_scratch WHERE name = 'insert_test'",
+        None, 1, None,
+    ).await;
 }
 
 #[tokio::test]
@@ -37,6 +44,13 @@ async fn test_insert_null_values() {
         .expect("insert_record with nulls should succeed");
 
     assert_eq!(affected, 1);
+
+    // Cleanup — delete rows with null name (our insert)
+    let _ = postgres::execute_query(
+        &params,
+        "DELETE FROM test_schema.crud_scratch WHERE name IS NULL",
+        None, 1, None,
+    ).await;
 }
 
 #[tokio::test]

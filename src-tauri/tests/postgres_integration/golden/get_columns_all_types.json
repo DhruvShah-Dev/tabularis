@@ -109,8 +109,7 @@
     "data_type": "uuid",
     "is_pk": false,
     "is_nullable": true,
-    "is_auto_increment": false,
-    "default_value": "gen_random_uuid()"
+    "is_auto_increment": false
   },
   {
     "name": "col_json",

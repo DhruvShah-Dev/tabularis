@@ -96,7 +96,7 @@ async fn test_mysql_integration_flow() {
 }
 
 #[tokio::test]
-// Runs against PG on port 54320 (soft-skips if unavailable)
+#[ignore] // Run via pg-integration.yml CI or --include-ignored
 async fn test_postgres_integration_flow() {
     let params = get_postgres_params();
 
@@ -338,7 +338,7 @@ async fn test_mysql_batch_preserves_transaction_atomicity() {
 /// subsequent `SELECT` in the same batch — i.e. all statements observe
 /// the same session.
 #[tokio::test]
-// Runs against PG on port 54320 (soft-skips if unavailable)
+#[ignore] // Run via pg-integration.yml CI or --include-ignored
 async fn test_postgres_batch_preserves_temp_table_and_transaction() {
     let params = get_postgres_params();
     if !wait_for_postgres(&params).await {
@@ -468,7 +468,7 @@ async fn test_mysql_affected_rows_reported_correctly() {
 }
 
 #[tokio::test]
-// Runs against PG on port 54320 (soft-skips if unavailable)
+#[ignore] // Run via pg-integration.yml CI or --include-ignored
 async fn test_postgres_affected_rows_reported_correctly() {
     let params = get_postgres_params();
     if !wait_for_postgres(&params).await {
@@ -602,7 +602,7 @@ async fn test_concurrent_cancel_aborts_all_in_flight_queries() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-// Runs against PG on port 54320 (soft-skips if unavailable)
+#[ignore] // Run via pg-integration.yml CI or --include-ignored
 async fn test_postgres_foreign_keys_via_pg_catalog() {
     let params = get_postgres_params();
     if !wait_for_postgres(&params).await {

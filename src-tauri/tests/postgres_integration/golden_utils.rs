@@ -32,7 +32,8 @@ pub fn write_golden<T: Serialize>(filename: &str, data: &T) {
         std::fs::create_dir_all(parent).expect("create golden dir");
     }
     let json = serde_json::to_string_pretty(data).expect("serialize golden data");
-    std::fs::write(&path, json).unwrap_or_else(|e| panic!("write golden file {:?}: {}", path, e));
+    std::fs::write(&path, format!("{}\n", json))
+        .unwrap_or_else(|e| panic!("write golden file {:?}: {}", path, e));
     eprintln!("  [golden] wrote {}", path.display());
 }
 

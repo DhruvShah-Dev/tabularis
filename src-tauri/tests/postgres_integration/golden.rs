@@ -189,8 +189,12 @@ async fn golden_explain_simple() {
         )
         .await
         .expect("explain_query");
+    // EXPLAIN output contains volatile cost/width values that change with table
+    // statistics, PG version, and row count. Write golden for documentation only;
+    // do NOT assert exact match. The structural assertions in explain.rs cover
+    // correctness. The plugin parity test should verify the output SHAPE matches
+    // (Plan vs Raw variant, key presence) rather than exact numeric values.
     write_golden("explain_simple.json", &result);
-    assert_golden("explain_simple.json", &result);
 }
 
 #[tokio::test]

@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS test_schema.all_types (
     col_timetz      TIME WITH TIME ZONE,
     col_timestamp   TIMESTAMP,
     col_timestamptz TIMESTAMPTZ,
-    col_uuid        UUID DEFAULT gen_random_uuid(),
+    col_uuid        UUID,
     col_json        JSON,
     col_jsonb       JSONB,
     col_bytea       BYTEA,
@@ -43,12 +43,14 @@ INSERT INTO test_schema.all_types (
     col_text, col_varchar, col_int, col_bigint, col_smallint,
     col_float, col_double, col_numeric, col_bool,
     col_date, col_time, col_timetz, col_timestamp, col_timestamptz,
+    col_uuid,
     col_json, col_jsonb, col_bytea, col_inet, col_cidr, col_macaddr,
     col_int_array, col_text_array, col_int4range, col_tsrange, col_interval
 ) SELECT
     'hello', 'world', 42, 9223372036854775807, 32767,
     3.14, 2.718281828459045, 12345.67, TRUE,
     '2026-01-15', '14:30:00', '14:30:00+02', '2026-01-15 14:30:00', '2026-01-15 14:30:00+00',
+    'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid,
     '{"key": "value"}', '{"nested": {"arr": [1,2,3]}}',
     '\xDEADBEEF', '192.168.1.1', '10.0.0.0/8', '08:00:2b:01:02:03',
     ARRAY[1,2,3], ARRAY['a','b','c'], '[1,10)', '[2026-01-01, 2026-12-31)',

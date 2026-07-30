@@ -37,15 +37,13 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-    env:
-      TABULARIS_TEST_PG: "1"
-
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Seed PostgreSQL databases
         run: |
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends postgresql-client
           bash tests/fixtures/seed_postgres.sh
 
