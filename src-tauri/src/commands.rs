@@ -1841,7 +1841,16 @@ pub async fn test_ssh_connection<R: Runtime>(
         _ => (resolved_password, resolved_passphrase),
     };
 
-    ssh_tunnel::test_ssh_connection(
+    let progress_id = ssh.progress_id.as_deref();
+    emit_test_progress(
+        &app,
+        progress_id,
+        "sshTunnel",
+        "start",
+        Some(format!("{}@{}:{}", ssh.user, ssh.host, ssh.port)),
+    );
+
+    let result = ssh_tunnel::test_ssh_connection(
         &ssh.host,
         ssh.port,
         &ssh.user,
@@ -1849,7 +1858,12 @@ pub async fn test_ssh_connection<R: Runtime>(
         ssh.key_file.as_deref(),
         resolved_passphrase.as_deref(),
         ssh.allow_passphrase_prompt.unwrap_or(false),
-    )
+    );
+    match &result {
+        Ok(_) => emit_test_progress(&app, progress_id, "sshTunnel", "ok", None),
+        Err(e) => emit_test_progress(&app, progress_id, "sshTunnel", "error", Some(e.clone())),
+    }
+    result
 }
 
 // ---------------------------------------------------------------------------

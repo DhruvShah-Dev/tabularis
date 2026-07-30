@@ -169,6 +169,10 @@ pub struct SshTestParams {
     /// id, not in the SSH connections file.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub db_connection_id: Option<String>,
+    /// When set, the test emits "connection-test-progress" events tagged with
+    /// this id so the caller can render a step log.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]

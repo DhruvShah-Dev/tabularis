@@ -58,7 +58,6 @@ import {
   classifyConnectionError,
   type ClassifiedConnectionError,
 } from "../../utils/connectionErrors";
-import { ConnectionErrorPanel } from "./connection/ConnectionErrorPanel";
 import { ConnectionDiagnosticsModal } from "./connection/ConnectionDiagnosticsModal";
 import {
   testStepLabelKey,
@@ -399,6 +398,9 @@ export const NewConnectionModal = ({
   const [sshTestMessage, setSshTestMessage] = useState<string | null>(null);
   const [sshTestError, setSshTestError] =
     useState<ClassifiedConnectionError | null>(null);
+  const [sshTestLog, setSshTestLog] = useState<ConnectionTestLogEntry[]>([]);
+  const [isSshDiagnosticsOpen, setIsSshDiagnosticsOpen] = useState(false);
+  const sshTestProgressIdRef = useRef<string | null>(null);
   const [sshSelectionError, setSshSelectionError] = useState<string | null>(
     null,
   );
@@ -862,6 +864,9 @@ export const NewConnectionModal = ({
         setSshTestStatus("idle");
         setSshTestMessage(null);
         setSshTestError(null);
+        setSshTestLog([]);
+        setIsSshDiagnosticsOpen(false);
+        sshTestProgressIdRef.current = null;
         setSshSelectionError(null);
         setSshTabError(false);
         setTestLog([]);
@@ -1053,8 +1058,27 @@ export const NewConnectionModal = ({
     setSshTestStatus("testing");
     setSshTestMessage(null);
     setSshTestError(null);
+    setSshTestLog([]);
+    setIsSshDiagnosticsOpen(false);
+    const progressId = crypto.randomUUID();
+    sshTestProgressIdRef.current = progressId;
+    let unlistenProgress: (() => void) | null = null;
 
     try {
+      unlistenProgress = await listen<ConnectionTestProgressPayload>(
+        "connection-test-progress",
+        (event) => {
+          if (event.payload.id !== sshTestProgressIdRef.current) return;
+          const entry: ConnectionTestLogEntry = {
+            step: event.payload.step,
+            status: event.payload.status,
+            detail: event.payload.detail ?? null,
+            timestamp: Date.now(),
+          };
+          setSshTestLog((previous) => [...previous, entry]);
+        },
+      );
+
       let target: string;
       if (sshMode === "existing") {
         const selected = sshConnections.find(
@@ -1068,7 +1092,7 @@ export const NewConnectionModal = ({
           setSshTabError(true);
           return;
         }
-        await testSshConnection(selected);
+        await testSshConnection(selected, { progressId });
         target = `${selected.user}@${selected.host}:${selected.port}`;
       } else {
         const port = formData.ssh_port || 22;
@@ -1089,6 +1113,7 @@ export const NewConnectionModal = ({
             dbConnectionId: sshPasswordDirty
               ? undefined
               : initialConnection?.id,
+            progressId,
           },
         );
         target = `${formData.ssh_user}@${formData.ssh_host}:${port}`;
@@ -1100,7 +1125,35 @@ export const NewConnectionModal = ({
       if (sshTestSequenceRef.current !== sequence) return;
       setSshTestStatus("error");
       setSshTestError(classifyConnectionError(toErrorMessage(err)));
+      setIsSshDiagnosticsOpen(true);
+    } finally {
+      // The failing step's event can arrive after the invoke rejects — keep
+      // the subscription alive briefly; stale ids are filtered regardless.
+      const unlisten = unlistenProgress;
+      if (unlisten) {
+        setTimeout(unlisten, 1000);
+      }
     }
+  };
+
+  // Abandons the in-flight SSH test: the invoke keeps running in the backend
+  // but its result and any late progress events are discarded.
+  const cancelSshTest = () => {
+    if (sshTestStatus !== "testing") return;
+    sshTestSequenceRef.current += 1;
+    sshTestProgressIdRef.current = null;
+    setSshTestStatus("idle");
+    setSshTestMessage(null);
+    setSshTestLog((previous) => [
+      ...previous,
+      {
+        step: "cancelled",
+        status: "cancelled",
+        detail: null,
+        timestamp: Date.now(),
+      },
+    ]);
+    setIsSshDiagnosticsOpen(true);
   };
 
   const handleInlineContextChange = useCallback(
@@ -1383,9 +1436,12 @@ export const NewConnectionModal = ({
   // result: a stale green check must not survive an edit.
   const invalidateSshTest = useCallback(() => {
     sshTestSequenceRef.current += 1;
+    sshTestProgressIdRef.current = null;
     setSshTestStatus("idle");
     setSshTestMessage(null);
     setSshTestError(null);
+    setSshTestLog([]);
+    setIsSshDiagnosticsOpen(false);
     setSshSelectionError(null);
     setSshTabError(false);
   }, []);
@@ -3272,7 +3328,7 @@ export const NewConnectionModal = ({
               {sshTestStatus === "testing" && (
                 <button
                   type="button"
-                  onClick={invalidateSshTest}
+                  onClick={cancelSshTest}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-strong bg-elevated text-xs font-medium text-secondary hover:text-red-400 hover:border-red-600/50 transition-colors"
                 >
                   <Square size={11} />
@@ -3292,7 +3348,20 @@ export const NewConnectionModal = ({
               {t("newConnection.testSshHint")}
             </p>
             {sshTestStatus === "error" && sshTestError && (
-              <ConnectionErrorPanel error={sshTestError} />
+              <div
+                role="alert"
+                className="flex items-center gap-2 text-xs text-red-400"
+              >
+                <AlertCircle size={13} className="shrink-0" />
+                <span className="truncate">{t(sshTestError.summaryKey)}</span>
+                <button
+                  type="button"
+                  onClick={() => setIsSshDiagnosticsOpen(true)}
+                  className="shrink-0 underline underline-offset-2 hover:text-red-300 transition-colors"
+                >
+                  {t("common.showDetails")}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -4005,6 +4074,12 @@ export const NewConnectionModal = ({
         onClose={() => setIsDiagnosticsOpen(false)}
         error={errorFeedback}
         log={testLog}
+      />
+      <ConnectionDiagnosticsModal
+        isOpen={isSshDiagnosticsOpen}
+        onClose={() => setIsSshDiagnosticsOpen(false)}
+        error={sshTestError}
+        log={sshTestLog}
       />
     </Modal>
   );

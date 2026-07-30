@@ -98,13 +98,14 @@ export async function deleteSshConnection(id: string): Promise<void> {
  */
 export async function testSshConnection(
   ssh: Partial<SshConnection>,
-  options: { dbConnectionId?: string } = {}
+  options: { dbConnectionId?: string; progressId?: string } = {}
 ): Promise<string> {
   return await invoke<string>("test_ssh_connection", {
     ssh: {
       ...normalizeSshParams(ssh),
       connection_id: ssh.id,
-      db_connection_id: options.dbConnectionId
+      db_connection_id: options.dbConnectionId,
+      progress_id: options.progressId
     }
   });
 }
