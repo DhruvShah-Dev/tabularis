@@ -45,17 +45,21 @@ async fn test_get_materialized_view_definition() {
     let result = postgres::get_materialized_view_definition(&params, "user_stats", "test_schema")
         .await;
 
-    // NOTE: This may fail with "error serializing parameter 0" on some PG versions
-    // due to a pre-existing driver bug in the query. If it succeeds, verify content.
-    if let Ok(def) = result {
-        assert!(
-            def.to_lowercase().contains("count"),
-            "MV definition should contain COUNT, got: {}",
-            def
-        );
-    }
-    // If it fails, we've documented the existing behavior — the plugin
-    // must match this same behavior (succeed or fail identically).
+    // KNOWN BEHAVIOR: The built-in driver errors with "error serializing parameter 0"
+    // on PG 16 for this call. This is a pre-existing driver bug.
+    // The plugin MUST replicate this exact behavior — either succeed with the definition
+    // (if the bug is fixed upstream) or fail with the same error.
+    assert!(
+        result.is_err(),
+        "Built-in driver should error on MV definition (known bug). \
+         If this passes, the driver was fixed — update this test and the plugin spec."
+    );
+    let err = result.unwrap_err();
+    assert!(
+        err.contains("serializing parameter"),
+        "Expected serialization error, got: {}",
+        err
+    );
 }
 
 #[tokio::test]

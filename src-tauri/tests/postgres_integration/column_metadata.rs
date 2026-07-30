@@ -90,17 +90,16 @@ async fn test_get_columns_character_max_length() {
         .expect("get_columns should succeed");
 
     let varchar_col = columns.iter().find(|c| c.name == "col_varchar").unwrap();
-    // The PG driver uses information_schema which reports character_maximum_length
-    // for character varying columns. If this returns None, the driver may use
-    // a different query path. Accept either behavior and document actual result.
-    if varchar_col.character_maximum_length.is_some() {
-        assert_eq!(
-            varchar_col.character_maximum_length,
-            Some(255),
-            "VARCHAR(255) should report max length 255"
-        );
-    }
-    // TEXT columns should never have a max length regardless
+    // KNOWN BEHAVIOR: The PG driver does NOT populate character_maximum_length.
+    // This is a driver limitation, not a PostgreSQL limitation (PG does expose this
+    // in information_schema). The plugin MUST match this exact behavior (return None).
+    // If the built-in driver is fixed later, this test will correctly fail — prompting
+    // an update to both the test and the plugin.
+    assert_eq!(
+        varchar_col.character_maximum_length, None,
+        "Built-in PG driver returns None for character_maximum_length (known limitation)"
+    );
+
     let text_col = columns.iter().find(|c| c.name == "col_text").unwrap();
     assert_eq!(text_col.character_maximum_length, None, "TEXT has no max length");
 }
