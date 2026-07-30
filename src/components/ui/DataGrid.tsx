@@ -221,9 +221,19 @@ export const DataGrid = React.memo(
       colIndex: number;
       kind: "json" | "text";
     } | null>(null);
+    // Cell range selection (DBeaver-style): normalized rectangle between the
+    // focused anchor cell and a Shift+clicked cell. Grid-local like column
+    // selection, and exclusive with row/column selection.
+    const [cellRange, setCellRange] = useState<{
+      minRow: number;
+      maxRow: number;
+      minCol: number;
+      maxCol: number;
+    } | null>(null);
 
     useEffect(() => {
       setExpandedCell(null);
+      setCellRange(null);
     }, [data]);
 
     const [internalSelectedRowIndices, setInternalSelectedRowIndices] =
@@ -466,9 +476,10 @@ export const DataGrid = React.memo(
         }
 
         updateSelection(newSelected);
-        // Row and column selection are mutually exclusive (keeps copy
-        // semantics unambiguous).
+        // Row, column and cell-range selection are mutually exclusive (keeps
+        // copy semantics unambiguous).
         setSelectedColIndices(new Set());
+        setCellRange(null);
       },
       [selectedRowIndices, lastSelectedRowIndex, updateSelection],
     );
@@ -478,6 +489,7 @@ export const DataGrid = React.memo(
     const handleColumnHeaderSelect = useCallback(
       (index: number, event: React.MouseEvent) => {
         setFocusedCell(null);
+        setCellRange(null);
         onForeignKeyHidePanel?.();
         // Row and column selection are mutually exclusive.
         updateSelection(new Set());
@@ -496,6 +508,28 @@ export const DataGrid = React.memo(
     const clearColSelection = useCallback(
       () => setSelectedColIndices(new Set()),
       [],
+    );
+
+    // Cell click: plain click focuses the cell (the anchor for a later range);
+    // Shift+click extends a rectangular range from the anchor. Row, column and
+    // cell-range selection are mutually exclusive.
+    const handleCellClick = useCallback(
+      (rowIndex: number, colIndex: number, event: React.MouseEvent) => {
+        if (event.shiftKey && focusedCell) {
+          setCellRange({
+            minRow: Math.min(focusedCell.rowIndex, rowIndex),
+            maxRow: Math.max(focusedCell.rowIndex, rowIndex),
+            minCol: Math.min(focusedCell.colIndex, colIndex),
+            maxCol: Math.max(focusedCell.colIndex, colIndex),
+          });
+        } else {
+          setFocusedCell({ rowIndex, colIndex });
+          setCellRange(null);
+        }
+        updateSelection(new Set());
+        setSelectedColIndices(new Set());
+      },
+      [focusedCell, updateSelection],
     );
 
     // tableColumns is memoized without selection deps (rebuilding column defs
@@ -529,6 +563,7 @@ export const DataGrid = React.memo(
 
     const handleSelectAll = useCallback(() => {
       setFocusedCell(null);
+      setCellRange(null);
       onForeignKeyHidePanel?.();
       if (selectedRowIndices.size === mergedRows.length) {
         updateSelection(new Set());
@@ -1516,6 +1551,41 @@ export const DataGrid = React.memo(
       rowsCopiedToast,
     ]);
 
+    // Copies the rectangular cell range (anchor..Shift+click target) in the
+    // active copy format.
+    const copyCellRange = useCallback(async () => {
+      if (!cellRange) return;
+      const rangeRows = mergedRows
+        .slice(cellRange.minRow, cellRange.maxRow + 1)
+        .map((r) => r.rowData);
+      const rangeColIndices = new Set<number>();
+      for (let c = cellRange.minCol; c <= cellRange.maxCol; c++) {
+        rangeColIndices.add(c);
+      }
+      const projected = projectColumns(rangeRows, columns, rangeColIndices);
+      await copyToClipboard(
+        formatRowsForCopy(projected.rows, projected.columns, copyFormat ?? "csv", {
+          withHeaders: true,
+          csvIncludeHeaders,
+          csvDelimiter,
+          tableName,
+        }),
+        t("dataGrid.copiedCells", {
+          count: rangeRows.length * projected.columns.length,
+        }),
+      );
+    }, [
+      cellRange,
+      mergedRows,
+      columns,
+      copyFormat,
+      csvIncludeHeaders,
+      csvDelimiter,
+      tableName,
+      copyToClipboard,
+      t,
+    ]);
+
     const copyColumnValues = useCallback(
       async (colIndex: number) => {        if (colIndex < 0) return;
         const rows =
@@ -1593,7 +1663,10 @@ export const DataGrid = React.memo(
         if ((e.metaKey || e.ctrlKey) && e.key === "c") {
           // Only handle if not editing a cell
           if (!editingCell) {
-            if (focusedCell) {
+            if (cellRange) {
+              e.preventDefault();
+              copyCellRange();
+            } else if (focusedCell) {
               e.preventDefault();
               copyCellValue(focusedCell.rowIndex, focusedCell.colIndex);
             } else if (selectedColIndices.size > 0) {
@@ -1631,7 +1704,7 @@ export const DataGrid = React.memo(
 
       document.addEventListener("keydown", handleKeyDown);
       return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [editingCell, selectedRowIndices, selectedColIndices, focusedCell, copyCellValue, copySelectedCells, copySelectedColumns, readonlyProp, deleteRowsByIndices, handleSelectAll]);
+    }, [editingCell, selectedRowIndices, selectedColIndices, cellRange, focusedCell, copyCellValue, copySelectedCells, copySelectedColumns, copyCellRange, readonlyProp, deleteRowsByIndices, handleSelectAll]);
 
     // Stable per-row dependency bundle. Memoizing it lets React.memo on MemoRow
     // skip re-rendering rows that didn't change during scroll.
@@ -1656,6 +1729,8 @@ export const DataGrid = React.memo(
         updateSelection,
         selectedColIndices,
         clearColSelection,
+        cellRange,
+        handleCellClick,
         setFocusedCell,
         setExpandedCell,
         setEditingCell,
@@ -1694,6 +1769,8 @@ export const DataGrid = React.memo(
         updateSelection,
         selectedColIndices,
         clearColSelection,
+        cellRange,
+        handleCellClick,
         setFocusedCell,
         setExpandedCell,
         setEditingCell,
@@ -1988,6 +2065,20 @@ export const DataGrid = React.memo(
                 action: copyCellFromContext,
               });
 
+              if (cellRange) {
+                menuItems.push({
+                  label: t("dataGrid.copyRangeN", {
+                    rows: cellRange.maxRow - cellRange.minRow + 1,
+                    cols: cellRange.maxCol - cellRange.minCol + 1,
+                  }),
+                  icon: Copy,
+                  action: async () => {
+                    await copyCellRange();
+                    setContextMenu(null);
+                  },
+                });
+              }
+
               menuItems.push({
                 label: t("dataGrid.copySelectedN", {
                   count:
@@ -2118,8 +2209,11 @@ export const DataGrid = React.memo(
                       headerContextMenu.colIndex,
                     );
                     setSelectedColIndices(next);
-                    // Row and column selection are mutually exclusive.
-                    if (next.size > 0) updateSelection(new Set());
+                    // Row, column and cell-range selection are mutually exclusive.
+                    if (next.size > 0) {
+                      updateSelection(new Set());
+                      setCellRange(null);
+                    }
                     setHeaderContextMenu(null);
                   },
                 },

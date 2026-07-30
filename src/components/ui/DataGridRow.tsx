@@ -67,6 +67,19 @@ export interface RowCtx {
   selectedColIndices: Set<number>;
   /** Clears the column selection (row/column selection are exclusive). */
   clearColSelection: () => void;
+  /** Active cell range (Shift+click rectangle), normalized bounds. */
+  cellRange: {
+    minRow: number;
+    maxRow: number;
+    minCol: number;
+    maxCol: number;
+  } | null;
+  /** Cell click: focuses the anchor, or Shift+click extends the range. */
+  handleCellClick: (
+    rowIndex: number,
+    colIndex: number,
+    e: React.MouseEvent,
+  ) => void;
   setFocusedCell: React.Dispatch<
     React.SetStateAction<{ rowIndex: number; colIndex: number } | null>
   >;
@@ -172,9 +185,9 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
     pkIndexMaps,
     parentViewportWidth,
     readonly: readonlyProp,
-    updateSelection,
     selectedColIndices,
-    clearColSelection,
+    cellRange,
+    handleCellClick,
     setFocusedCell,
     setExpandedCell,
     setEditingCell,
@@ -213,6 +226,13 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
         }
       : null;
   const expansionMatchesRow = expandedColIndex !== null;
+
+  // Column bounds of the active cell range when this row falls inside it —
+  // those cells get the range highlight.
+  const rangeColBounds =
+    cellRange && rowIndex >= cellRange.minRow && rowIndex <= cellRange.maxRow
+      ? cellRange
+      : null;
 
   return (
     <>
@@ -345,17 +365,23 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
           return (
             <td
               key={colName}
+              onMouseDown={(e) => {
+                // Shift+click extends the cell range — suppress the browser's
+                // text selection that a Shift+click would otherwise start.
+                if (e.shiftKey) e.preventDefault();
+              }}
               onClick={(e) => {
                 // Don't handle row click if clicking on a button
                 const target = e.target as HTMLElement;
                 if (target.closest("button")) {
                   return;
                 }
-                setFocusedCell({ rowIndex, colIndex });
-                updateSelection(new Set());
-                clearColSelection();
+                handleCellClick(rowIndex, colIndex, e);
 
-                if (fkForPreview && onForeignKeyShowPanel) {
+                if (e.shiftKey) {
+                  // Range extension click — don't pivot the FK panel.
+                  onForeignKeyHidePanel?.();
+                } else if (fkForPreview && onForeignKeyShowPanel) {
                   onForeignKeyShowPanel(fkForPreview, rawCellValue);
                 } else {
                   onForeignKeyHidePanel?.();
@@ -374,7 +400,7 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
               onContextMenu={(e) =>
                 handleContextMenu(e, rowOriginal, rowIndex, colIndex, colName)
               }
-              className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 font-mono ${isEditing ? "relative" : "whitespace-nowrap truncate max-w-[300px]"} ${fkForPreview ? "cursor-pointer" : "cursor-text"} ${stateClass} ${selectedColIndices.has(colIndex) ? "bg-blue-500/15" : ""} ${isFocused ? "ring-2 ring-inset ring-blue-400" : ""}`}
+              className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 font-mono ${isEditing ? "relative" : "whitespace-nowrap truncate max-w-[300px]"} ${fkForPreview ? "cursor-pointer" : "cursor-text"} ${stateClass} ${selectedColIndices.has(colIndex) || (rangeColBounds !== null && colIndex >= rangeColBounds.minCol && colIndex <= rangeColBounds.maxCol) ? "bg-blue-500/15" : ""} ${isFocused ? "ring-2 ring-inset ring-blue-400" : ""}`}
               title={
                 !isEditing ? truncateCellPreview(formattedDisplay).text : ""
               }

@@ -461,3 +461,132 @@ describe("DataGrid column selection", () => {
     expect(screen.queryByText("dataGrid.copyColumnName")).toBeNull();
   });
 });
+
+describe("DataGrid cell range selection", () => {
+  const columns = ["id", "name", "city"];
+  const data: unknown[][] = [
+    [1, "Alice", "Portland"],
+    [2, "Bob", "Seattle"],
+    [3, "Cara", "Denver"],
+  ];
+
+  const writeText = vi.fn().mockResolvedValue(undefined);
+
+  beforeEach(() => {
+    writeText.mockClear();
+    showToastMock.mockClear();
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+  });
+
+  const renderGrid = (tableName?: string) =>
+    render(
+      <DataGrid
+        columns={columns}
+        data={data}
+        tableName={tableName}
+        selectedRows={new Set()}
+        onSelectionChange={vi.fn()}
+        readonly
+      />,
+    );
+
+  it("Shift+click extends a rectangular range from the focused cell", () => {
+    renderGrid();
+
+    fireEvent.click(screen.getByText("Alice"));
+    fireEvent.click(screen.getByText("Seattle"), { shiftKey: true });
+
+    // Range rows 0-1 × cols 1-2 highlighted; outside cells are not.
+    expect(screen.getByText("Alice").closest("td")).toHaveClass(
+      "bg-blue-500/15",
+    );
+    expect(screen.getByText("Seattle").closest("td")).toHaveClass(
+      "bg-blue-500/15",
+    );
+    expect(screen.getByText("Cara").closest("td")).not.toHaveClass(
+      "bg-blue-500/15",
+    );
+    expect(screen.getByText("Denver").closest("td")).not.toHaveClass(
+      "bg-blue-500/15",
+    );
+  });
+
+  it("copies only the range with Cmd/Ctrl+C", async () => {
+    renderGrid();
+
+    fireEvent.click(screen.getByText("Alice"));
+    fireEvent.click(screen.getByText("Seattle"), { shiftKey: true });
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied.startsWith("name,city")).toBe(true);
+    expect(copied).toContain("Alice,Portland");
+    expect(copied).toContain("Bob,Seattle");
+    expect(copied).not.toContain("Cara");
+    await waitFor(() =>
+      expect(showToastMock).toHaveBeenCalledWith("dataGrid.copiedCells", {
+        kind: "success",
+      }),
+    );
+  });
+
+  it("is mutually exclusive with column selection", () => {
+    const { container } = renderGrid();
+
+    fireEvent.click(screen.getByText("id"), { metaKey: true });
+    expect(container.querySelectorAll("th")[1]).toHaveClass("bg-blue-500/20");
+
+    fireEvent.click(screen.getByText("Alice"));
+    fireEvent.click(screen.getByText("Seattle"), { shiftKey: true });
+
+    expect(container.querySelectorAll("th")[1]).not.toHaveClass(
+      "bg-blue-500/20",
+    );
+    expect(screen.getByText("Seattle").closest("td")).toHaveClass(
+      "bg-blue-500/15",
+    );
+  });
+
+  it("plain click clears the range and moves the anchor", async () => {
+    renderGrid();
+
+    fireEvent.click(screen.getByText("Alice"));
+    fireEvent.click(screen.getByText("Seattle"), { shiftKey: true });
+    expect(screen.getByText("Seattle").closest("td")).toHaveClass(
+      "bg-blue-500/15",
+    );
+
+    fireEvent.click(screen.getByText("Cara"));
+    expect(screen.getByText("Seattle").closest("td")).not.toHaveClass(
+      "bg-blue-500/15",
+    );
+
+    // New anchor: Shift+click now ranges from Cara's row only.
+    fireEvent.click(screen.getByText("Denver"), { shiftKey: true });
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("Cara,Denver");
+    expect(copied).not.toContain("Alice");
+  });
+
+  it("offers Copy Range in the row context menu", async () => {
+    renderGrid("users");
+
+    fireEvent.click(screen.getByText("Alice"));
+    fireEvent.click(screen.getByText("Seattle"), { shiftKey: true });
+
+    fireEvent.contextMenu(screen.getByText("Portland"));
+    fireEvent.click(await screen.findByText("dataGrid.copyRangeN"));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("Alice,Portland");
+    expect(copied).not.toContain("Cara");
+  });
+});
