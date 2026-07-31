@@ -14,6 +14,7 @@ use rustls_platform_verifier::BuilderVerifierExt;
 use sha2::{Digest, Sha256};
 use sqlx::{sqlite::SqliteConnectOptions, ConnectOptions, Connection, Executor, MySql, Pool, Sqlite};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -646,7 +647,27 @@ impl ServerCertVerifier for VerifyCaCertVerifier {
 }
 
 fn build_sqlite_connectoptions(params: &ConnectionParams) -> SqliteConnectOptions {
-    SqliteConnectOptions::new().filename(params.database.to_string())
+    SqliteConnectOptions::new().filename(expand_sqlite_filename(params.database.primary()))
+}
+
+fn expand_sqlite_filename(value: &str) -> PathBuf {
+    let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+    expand_sqlite_filename_with_home(value, home.as_deref())
+}
+
+fn expand_sqlite_filename_with_home(value: &str, home: Option<&Path>) -> PathBuf {
+    let home_relative = if value == "~" {
+        Some("")
+    } else {
+        value
+            .strip_prefix("~/")
+            .or_else(|| value.strip_prefix("~\\"))
+    };
+
+    match (home_relative, home) {
+        (Some(relative), Some(home)) => home.join(relative),
+        _ => PathBuf::from(value),
+    }
 }
 
 /// Return the connection's startup script if it is set and not blank.
@@ -1112,5 +1133,37 @@ pub async fn close_all_pools() {
         for (_, pool) in pools.drain() {
             pool.close().await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expands_sqlite_home_prefixes() {
+        let home = PathBuf::from("/home/dev");
+
+        assert_eq!(
+            expand_sqlite_filename_with_home("~/db.sqlite", Some(&home)),
+            home.join("db.sqlite")
+        );
+        assert_eq!(
+            expand_sqlite_filename_with_home("~\\db.sqlite", Some(&home)),
+            home.join("db.sqlite")
+        );
+        assert_eq!(expand_sqlite_filename_with_home("~", Some(&home)), home);
+    }
+
+    #[test]
+    fn leaves_non_home_sqlite_paths_unchanged() {
+        assert_eq!(
+            expand_sqlite_filename_with_home("relative/db.sqlite", None),
+            PathBuf::from("relative/db.sqlite")
+        );
+        assert_eq!(
+            expand_sqlite_filename_with_home("~user/db.sqlite", Some(Path::new("/home/dev"))),
+            PathBuf::from("~user/db.sqlite")
+        );
     }
 }
