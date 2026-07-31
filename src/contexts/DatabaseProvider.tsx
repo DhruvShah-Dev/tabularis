@@ -72,6 +72,9 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
   openConnectionIdsRef.current = openConnectionIds;
   const connectionDataMapRef = useRef(connectionDataMap);
   connectionDataMapRef.current = connectionDataMap;
+  
+  // Track whether we've ever had connections open (to avoid wiping on fresh launch before auto-connect)
+  const hasEverHadConnectionsRef = useRef(false);
   const prevActiveExtRef = useRef<string[] | undefined>(undefined);
 
   const getActiveConnectionData = useCallback((): ConnectionData | undefined => {
@@ -964,11 +967,20 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
     invoke('set_last_active_connection', { connectionId: activeConnectionId }).catch(() => {});
   }, [activeConnectionId]);
 
+  // Track when we've had connections (to distinguish startup from user closing all)
+  useEffect(() => {
+    if (openConnectionIds.length > 0) {
+      hasEverHadConnectionsRef.current = true;
+    }
+  }, [openConnectionIds]);
+
   // Persist the full set of open connections so the app can reopen all of them
   // on next launch. Skip the empty startup state so the saved list isn't wiped
   // before the startup auto-connect gets a chance to read it.
   useEffect(() => {
-    if (openConnectionIds.length === 0) return;
+    // Don't persist empty state until we've actually had connections open
+    // (prevents wiping during startup before auto-connect runs)
+    if (openConnectionIds.length === 0 && !hasEverHadConnectionsRef.current) return;
     invoke('set_last_open_connections', { connectionIds: openConnectionIds }).catch(() => {});
   }, [openConnectionIds]);
 
