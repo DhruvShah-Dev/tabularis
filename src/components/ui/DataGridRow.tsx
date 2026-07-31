@@ -8,6 +8,7 @@ import {
   getResultValueType,
   buildPkMap,
   serializePkKey,
+  DATA_GRID_ROW_HEIGHT,
   type ColumnDisplayInfo,
   type MergedRow,
 } from "../../utils/dataGrid";
@@ -211,7 +212,8 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
   return (
     <>
       <tr
-        style={{ height: 35 }}
+        data-row-index={rowIndex}
+        style={{ height: DATA_GRID_ROW_HEIGHT }}
         className={`transition-colors group ${
           isSelected
             ? "bg-blue-900/20 border-l-4 border-blue-400"
@@ -339,6 +341,7 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
           return (
             <td
               key={colName}
+              data-col-index={colIndex}
               onClick={(e) => {
                 // Don't handle row click if clicking on a button
                 const target = e.target as HTMLElement;
