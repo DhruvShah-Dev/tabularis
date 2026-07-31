@@ -2003,5 +2003,35 @@
   "miniGrid": {
     "runningQuery": "Выполнение запроса...",
     "copyAll": "Копировать всё"
+  },
+  "userManagement": {
+    "tabTitle": "Пользователи и привилегии",
+    "filterPlaceholder": "Фильтр пользователей...",
+    "newUser": "Новый пользователь",
+    "create": "Создать пользователя",
+    "userPlaceholder": "имя пользователя",
+    "passwordPlaceholder": "Пароль",
+    "newPasswordPlaceholder": "Новый пароль",
+    "changePassword": "Изменить пароль",
+    "dropUser": "Удалить пользователя",
+    "dropTitle": "Удалить пользователя",
+    "dropConfirm": "Удалить пользователя {{account}}? Это действие необратимо.",
+    "locked": "Заблокирован",
+    "loadError": "Не удалось загрузить пользователей:",
+    "noUsers": "Пользователи не найдены",
+    "selectPrompt": "Выберите пользователя, чтобы посмотреть его привилегии",
+    "currentGrants": "Текущие права",
+    "scope": "База данных",
+    "scopePlaceholder": "Пусто = глобально (*.*)",
+    "revokeTitle": "Отозвать привилегии",
+    "revokeConfirm": "Отозвать {{privileges}} у {{account}} на {{scope}}?",
+    "add": "Добавить",
+    "apply": "Применить",
+    "privileges": "Привилегии",
+    "globalScope": "Глобально (*.*)",
+    "addScope": "Добавить базу данных / таблицу",
+    "databasePlaceholder": "база данных",
+    "tablePlaceholder": "таблица (необязательно)",
+    "initialPrivilegesHint": "Необязательно: начальные привилегии, выдаваемые сразу после создания. Выберите базу данных или оставьте поле пустым, чтобы выдать их глобально."
   }
 }

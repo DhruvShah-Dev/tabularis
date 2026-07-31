@@ -2002,5 +2002,35 @@
   "miniGrid": {
     "runningQuery": "Tumatakbo ang query...",
     "copyAll": "Kopyahin lahat"
+  },
+  "userManagement": {
+    "tabTitle": "Mga user at pribilehiyo",
+    "filterPlaceholder": "I-filter ang mga user...",
+    "newUser": "Bagong user",
+    "create": "Gumawa ng user",
+    "userPlaceholder": "username",
+    "passwordPlaceholder": "Password",
+    "newPasswordPlaceholder": "Bagong password",
+    "changePassword": "Palitan ang password",
+    "dropUser": "Burahin ang user",
+    "dropTitle": "Burahin ang user",
+    "dropConfirm": "Burahin ang user na {{account}}? Hindi na ito maibabalik.",
+    "locked": "Naka-lock",
+    "loadError": "Nabigong i-load ang mga user:",
+    "noUsers": "Walang nahanap na user",
+    "selectPrompt": "Pumili ng user para makita ang mga pribilehiyo nito",
+    "currentGrants": "Kasalukuyang mga grant",
+    "scope": "Database",
+    "scopePlaceholder": "Walang laman = global (*.*)",
+    "revokeTitle": "Bawiin ang mga pribilehiyo",
+    "revokeConfirm": "Bawiin ang {{privileges}} mula kay {{account}} sa {{scope}}?",
+    "add": "Idagdag",
+    "apply": "Ilapat",
+    "privileges": "Mga pribilehiyo",
+    "globalScope": "Global (*.*)",
+    "addScope": "Magdagdag ng database / talahanayan",
+    "databasePlaceholder": "database",
+    "tablePlaceholder": "talahanayan (opsyonal)",
+    "initialPrivilegesHint": "Opsyonal: mga paunang pribilehiyong ibibigay agad pagkatapos gumawa. Pumili ng database, o iwanang walang laman para ibigay ito nang global."
   }
 }

@@ -45,6 +45,7 @@ import {
   Trash2,
   Check,
   BookOpen,
+  UsersRound,
   Pencil,
   Hash,
   Loader2,
@@ -107,6 +108,7 @@ import {
 } from "../utils/resultsWindowSync";
 import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
 import { NotebookView } from "../components/notebook/NotebookView";
+import { UserManagementView } from "../components/users/UserManagementView";
 import { useSqlAutocompleteRegistration } from "../hooks/useSqlAutocompleteRegistration";
 import { createNotebook, renameNotebook } from "../utils/notebookStore";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
@@ -447,6 +449,8 @@ export const Editor = () => {
   const activeTabQuery = activeTab?.query;
   const isTableTab = activeTab?.type === "table";
   const isNotebookTab = activeTab?.type === "notebook";
+  // Users tabs render full-height like notebooks: no SQL toolbar, no results panel.
+  const isUsersTab = activeTab?.type === "users";
   const isMultiDb =
     isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
   const isEditorOpen =
@@ -2923,7 +2927,7 @@ export const Editor = () => {
   useSqlAutocompleteRegistration(activeConnectionId, {
     monaco: monacoInstance,
     schema: activeSchema,
-    enabled: !isNotebookTab,
+    enabled: !isNotebookTab && !isUsersTab,
   });
 
   useEffect(() => {
@@ -3367,6 +3371,8 @@ export const Editor = () => {
                 <Network size={12} className="text-accent-secondary shrink-0" />
               ) : tab.type === "notebook" ? (
                 <BookOpen size={12} className="text-orange-400 shrink-0" />
+              ) : tab.type === "users" ? (
+                <UsersRound size={12} className="text-emerald-400 shrink-0" />
               ) : (
                 <FileCode size={12} className="text-accent-secondary shrink-0" />
               )}
@@ -3476,12 +3482,12 @@ export const Editor = () => {
         </button>
       </div>
 
-      {/* Toolbar — hidden for notebook tabs. A size container so buttons can
+      {/* Toolbar — hidden for notebook and users tabs. A size container so buttons can
           collapse to icon-only in narrow split panes; the explicit z-index
           keeps its dropdowns above the editor and the table toolbar (z-30):
           the container creates a stacking context that would otherwise paint
           below later siblings. */}
-      {!isNotebookTab && <div className="@container relative z-40 flex items-center py-2 pl-2 pr-3 border-b border-default bg-elevated gap-1.5 @[560px]:gap-2 h-[50px]">
+      {!isNotebookTab && !isUsersTab && <div className="@container relative z-40 flex items-center py-2 pl-2 pr-3 border-b border-default bg-elevated gap-1.5 @[560px]:gap-2 h-[50px]">
         {!activeTab.readOnly && activeTab.isLoading ? (
           <button
             onClick={stopQuery}
@@ -3716,6 +3722,22 @@ export const Editor = () => {
 
         const isActive = tab.id === activeTabId;
 
+        // Users tabs get full-height rendering (no SQL editor / results panel)
+        if (tab.type === "users") {
+          return (
+            <div
+              key={tab.id}
+              style={{ display: isActive ? "flex" : "none" }}
+              className="flex-1 flex flex-col min-h-0 overflow-hidden"
+            >
+              <UserManagementView
+                connectionId={tab.connectionId}
+                isActive={isActive}
+              />
+            </div>
+          );
+        }
+
         // Notebook tabs get full-height rendering
         if (tab.type === "notebook") {
           return (
@@ -3806,7 +3828,7 @@ export const Editor = () => {
       })}
 
       {/* Resize Bar & Results Panel */}
-      {!isNotebookTab && (isTableTab || !isResultsCollapsed) ? (
+      {!isNotebookTab && !isUsersTab && (isTableTab || !isResultsCollapsed) ? (
         <>
           {isTableTab ? (
             <TableToolbar
@@ -4542,7 +4564,7 @@ export const Editor = () => {
                   },
                 ]
               : []),
-            ...(!["console", "notebook", "query_builder"].includes(
+            ...(!["console", "notebook", "query_builder", "users"].includes(
               tabs.find((t) => t.id === tabContextMenu.tabId)?.type ?? "",
             )
               ? [
