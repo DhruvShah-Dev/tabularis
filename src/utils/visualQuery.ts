@@ -3,10 +3,11 @@
  * Pure functions for generating SQL from visual query state
  */
 
-import { formatSqlIdentifier } from "./identifiers";
+import { formatSqlIdentifier, quoteTableRef } from "./identifiers";
 
 export interface TableNodeData {
   label: string;
+  schema?: string | null;
   columns: { name: string; type: string }[];
   selectedColumns: Record<string, boolean>;
   columnAggregations?: Record<string, ColumnAggregation>;
@@ -77,9 +78,18 @@ export function collectTableAliases(nodes: QueryNode[]): Record<string, string> 
 /**
  * Generates table list with aliases
  */
-export function generateTableList(nodes: QueryNode[], aliases: Record<string, string>): string[] {
+function formatTableRef(data: TableNodeData, driver?: string | null): string {
+  if (!data.schema) return data.label;
+  return quoteTableRef(data.label, driver, data.schema);
+}
+
+export function generateTableList(
+  nodes: QueryNode[],
+  aliases: Record<string, string>,
+  driver?: string | null,
+): string[] {
   return nodes.map((node) => {
-    const tableName = node.data.label;
+    const tableName = formatTableRef(node.data, driver);
     const alias = aliases[node.id];
     return `${tableName} ${alias}`;
   });
@@ -166,11 +176,12 @@ export function generateSelectClause(columns: SelectedColumn[]): string {
 export function generateFromClause(
   nodes: QueryNode[],
   edges: QueryEdge[],
-  aliases: Record<string, string>
+  aliases: Record<string, string>,
+  driver?: string | null,
 ): string {
   if (nodes.length === 0) return '';
 
-  const tableList = generateTableList(nodes, aliases);
+  const tableList = generateTableList(nodes, aliases, driver);
 
   if (edges.length === 0) {
     return '\nFROM\n  ' + tableList.join(',\n  ');
@@ -180,7 +191,7 @@ export function generateFromClause(
   const firstData = firstNode.data;
   const processedNodes = new Set<string>([firstNode.id]);
 
-  let sql = `\nFROM\n  ${firstData.label} ${aliases[firstNode.id]}`;
+  let sql = `\nFROM\n  ${formatTableRef(firstData, driver)} ${aliases[firstNode.id]}`;
 
   const edgesToProcess = [...edges];
   let madeProgress = true;
@@ -201,7 +212,7 @@ export function generateFromClause(
           const sourceAlias = aliases[edge.source];
           const edgeData = edge.data;
           const joinType = edgeData?.joinType || 'INNER';
-          sql += `\n${joinType} JOIN ${targetData.label} ${targetAlias} ON ${sourceAlias}.${edge.sourceHandle} = ${targetAlias}.${edge.targetHandle}`;
+          sql += `\n${joinType} JOIN ${formatTableRef(targetData, driver)} ${targetAlias} ON ${sourceAlias}.${edge.sourceHandle} = ${targetAlias}.${edge.targetHandle}`;
           processedNodes.add(edge.target);
           edgesToProcess.splice(i, 1);
           madeProgress = true;
@@ -215,7 +226,7 @@ export function generateFromClause(
           const targetAlias = aliases[edge.target];
           const edgeData = edge.data;
           const joinType = edgeData?.joinType || 'INNER';
-          sql += `\n${joinType} JOIN ${sourceData.label} ${sourceAlias} ON ${sourceAlias}.${edge.sourceHandle} = ${targetAlias}.${edge.targetHandle}`;
+          sql += `\n${joinType} JOIN ${formatTableRef(sourceData, driver)} ${sourceAlias} ON ${sourceAlias}.${edge.sourceHandle} = ${targetAlias}.${edge.targetHandle}`;
           processedNodes.add(edge.source);
           edgesToProcess.splice(i, 1);
           madeProgress = true;
@@ -232,7 +243,7 @@ export function generateFromClause(
   nodes.forEach((node) => {
     if (!processedNodes.has(node.id)) {
       const data = node.data;
-      sql += `,\n  ${data.label} ${aliases[node.id]}`;
+      sql += `,\n  ${formatTableRef(data, driver)} ${aliases[node.id]}`;
     }
   });
 
@@ -333,7 +344,7 @@ export function generateVisualQuerySQL(
 
   let sql = 'SELECT\n';
   sql += generateSelectClause(columns);
-  sql += generateFromClause(nodes, edges, aliases);
+  sql += generateFromClause(nodes, edges, aliases, driver);
   sql += generateWhereClause(whereConditions);
   sql += generateGroupByClause(hasAggregation, nonAggregatedCols, groupBy);
   sql += generateHavingClause(whereConditions);
