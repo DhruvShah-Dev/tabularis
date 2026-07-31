@@ -838,7 +838,7 @@ pub async fn get_view_columns(
 ) -> Result<Vec<TableColumn>, String> {
     let pool = get_sqlite_pool(params).await?;
 
-    let query = format!("PRAGMA table_info('{}')", view_name);
+    let query = format!("PRAGMA table_xinfo('{}')", view_name);
 
     let rows = sqlx::query(&query)
         .fetch_all(&pool)

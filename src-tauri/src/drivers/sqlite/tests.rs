@@ -186,6 +186,47 @@ async fn test_view_lifecycle() {
     crate::pool_manager::close_pool(&params).await;
 }
 
+#[tokio::test]
+async fn test_get_view_columns_includes_generated_table_columns() {
+    let (params, _file) = setup_test_db().await;
+
+    let path = params.database.primary().to_string();
+    let options = SqliteConnectOptions::new().filename(&path);
+    let pool = SqlitePoolOptions::new()
+        .connect_with(options)
+        .await
+        .expect("connect to test DB");
+
+    sqlx::query(
+        "CREATE TABLE generated_dates (
+            udate INTEGER,
+            display_date TEXT GENERATED ALWAYS AS (date(udate, 'unixepoch', '+12:00')) STORED
+        )",
+    )
+    .execute(&pool)
+    .await
+    .expect("create generated column table");
+
+    sqlx::query("CREATE VIEW generated_dates_view AS SELECT * FROM generated_dates")
+        .execute(&pool)
+        .await
+        .expect("create generated column view");
+
+    pool.close().await;
+
+    let cols = get_view_columns(&params, "generated_dates_view")
+        .await
+        .expect("get view columns");
+
+    let generated = cols
+        .iter()
+        .find(|col| col.name == "display_date")
+        .expect("generated column should be visible through the view");
+    assert_eq!(generated.data_type, "TEXT");
+
+    crate::pool_manager::close_pool(&params).await;
+}
+
 mod sqlite_push_pk_where_tests {
     use super::*;
     use std::collections::HashMap;
