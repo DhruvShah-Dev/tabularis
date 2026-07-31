@@ -1959,5 +1959,35 @@
   "miniGrid": {
     "runningQuery": "쿼리를 실행하는 중...",
     "copyAll": "전체 복사"
+  },
+  "userManagement": {
+    "tabTitle": "사용자 및 권한",
+    "filterPlaceholder": "사용자 필터...",
+    "newUser": "새 사용자",
+    "create": "사용자 생성",
+    "userPlaceholder": "사용자 이름",
+    "passwordPlaceholder": "비밀번호",
+    "newPasswordPlaceholder": "새 비밀번호",
+    "changePassword": "비밀번호 변경",
+    "dropUser": "사용자 삭제",
+    "dropTitle": "사용자 삭제",
+    "dropConfirm": "사용자 {{account}}을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+    "locked": "잠김",
+    "loadError": "사용자를 불러오지 못했습니다:",
+    "noUsers": "사용자를 찾을 수 없습니다",
+    "selectPrompt": "권한을 보려면 사용자를 선택하세요",
+    "currentGrants": "현재 권한",
+    "scope": "데이터베이스",
+    "scopePlaceholder": "비워두면 전역 (*.*)",
+    "revokeTitle": "권한 취소",
+    "revokeConfirm": "{{scope}}에서 {{account}}의 {{privileges}} 권한을 취소하시겠습니까?",
+    "add": "추가",
+    "apply": "적용",
+    "privileges": "권한",
+    "globalScope": "전역 (*.*)",
+    "addScope": "데이터베이스 / 테이블 추가",
+    "databasePlaceholder": "데이터베이스",
+    "tablePlaceholder": "테이블 (선택 사항)",
+    "initialPrivilegesHint": "선택 사항: 생성 직후 부여할 초기 권한입니다. 데이터베이스를 선택하거나, 비워두면 전역으로 부여됩니다."
   }
 }
