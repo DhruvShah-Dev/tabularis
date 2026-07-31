@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
+import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import { getTableDataChangeScope, isMultiDatabaseCapable } from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
@@ -111,6 +112,7 @@ import { createNotebook, renameNotebook } from "../utils/notebookStore";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useAlert } from "../hooks/useAlert";
+import { useToast } from "../hooks/useToast";
 import { useDatabase } from "../hooks/useDatabase";
 import { useDrivers } from "../hooks/useDrivers";
 import { getConnectionAccent } from "../utils/driverUI";
@@ -213,6 +215,7 @@ export const Editor = () => {
   const location = useLocation();
   const { matchesShortcut, isMac } = useKeybindings();
   const { showAlert } = useAlert();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const driverReadonly = isReadonly(activeCapabilities);
@@ -3149,6 +3152,73 @@ export const Editor = () => {
   const handleExportJSON = () => handleExportCommon("json");
   const handleExportMarkdown = () => handleExportCommon("markdown");
 
+  // Re-runs the active tab's query without pagination and copies the full
+  // result set to the clipboard. Triggered from the grid's select-all flow
+  // when the result continues beyond the loaded page.
+  const handleCopyAllRows = useCallback(async () => {
+    if (!activeTab || !activeConnectionId) return;
+    const totalRows = activeTab.result?.pagination?.total_rows;
+    const columns = activeTab.result?.columns ?? [];
+    if (columns.length === 0) return;
+
+    const effectiveSchema =
+      activeCapabilities?.schemas === true ? activeTab.schema : undefined;
+    const tabForQuery = { ...activeTab, schema: effectiveSchema };
+    const query =
+      activeTab.type === "table" && activeTab.activeTable
+        ? // limitOverride: copy-all goes beyond the tab's "Total Limit" — the
+          // user explicitly asked for every row. Sort is kept so the copy
+          // matches the on-screen order.
+          reconstructTableQuery(tabForQuery, activeDriver ?? undefined, {
+            limitOverride: null,
+          })
+        : activeTab.query;
+    if (!query || !query.trim()) return;
+
+    // Mirror runQuery's schema resolution so the full fetch targets the same
+    // database/schema as the page the user is looking at.
+    const schema = activeTab?.schema ?? activeSchema;
+
+    try {
+      const res = await invoke<QueryResult>("execute_query", {
+        connectionId: activeConnectionId,
+        query,
+        // When the total is unknown (no row count requested yet), fall back to
+        // a large practical cap; the toast reports the actual rows fetched.
+        limit: totalRows ?? 1_000_000,
+        page: 1,
+        ...(schema ? { schema } : {}),
+      });
+      const text = formatRowsForCopy(res.rows, res.columns ?? columns, copyFormat, {
+        withHeaders: true,
+        csvIncludeHeaders,
+        csvDelimiter,
+        tableName: activeTab.activeTable,
+      });
+      await copyTextToClipboard(text);
+      showToast(t("dataGrid.copiedRows", { count: res.rows.length }), {
+        kind: "success",
+      });
+    } catch (e) {
+      showAlert(t("common.error") + ": " + e, {
+        title: t("common.error"),
+        kind: "error",
+      });
+    }
+  }, [
+    activeTab,
+    activeConnectionId,
+    activeCapabilities,
+    activeDriver,
+    activeSchema,
+    copyFormat,
+    csvDelimiter,
+    csvIncludeHeaders,
+    showAlert,
+    showToast,
+    t,
+  ]);
+
   const handleRunDropdownToggle = useCallback(() => {
     if (!isRunDropdownOpen) {
       // Monaco Editor: split queries from editor
@@ -4315,6 +4385,9 @@ export const Editor = () => {
                           : undefined
                       }
                       readonly={driverReadonly || !!activeTab.materialized}
+                      totalRows={activeTab.result?.pagination?.total_rows}
+                      hasMore={activeTab.result?.pagination?.has_more}
+                      onCopyAllRows={handleCopyAllRows}
                     />
                   </div>
                   {activeFkQuery && activeConnectionId && (
