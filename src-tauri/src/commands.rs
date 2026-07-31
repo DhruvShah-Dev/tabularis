@@ -11,7 +11,7 @@ use crate::credential_cache;
 use crate::keychain_utils;
 use crate::models::{
     BatchStatementResult, ColumnDefinition, ConnectionGroup, ConnectionParams, ConnectionsFile,
-    ExplainPlan, ExportPayload, ForeignKey, Index, K8sConnection, K8sConnectionInput, QueryResult,
+    ExplainQueryOutput, ExportPayload, ForeignKey, Index, K8sConnection, K8sConnectionInput, QueryResult,
     RoutineInfo, RoutineParameter, SavedConnection, SshConnection, SshConnectionInput, SshTestParams,
     TableColumn, TableInfo, TestConnectionRequest, TriggerInfo,
 };
@@ -208,6 +208,75 @@ fn is_empty_or_whitespace(s: &Option<String>) -> bool {
     s.as_ref().map(|p| p.trim().is_empty()).unwrap_or(true)
 }
 
+/// Reject a connection attempt under AWS IAM auth when neither the raw form
+/// payload nor the expanded params (after SSH/K8s expansion) carry an RDS
+/// auth token. Both `test_connection` and `list_databases` run this guard
+/// before any pool / driver work so the user gets an actionable message
+/// instead of the opaque "Access denied" the server returns on an empty
+/// password.
+fn require_iam_token(
+    iam_auth: bool,
+    request_password: Option<&str>,
+    expanded_password: Option<&str>,
+) -> Result<(), String> {
+    if iam_auth
+        && request_password.unwrap_or("").is_empty()
+        && expanded_password.unwrap_or("").is_empty()
+    {
+        return Err(
+            "AWS IAM authentication is enabled but the password field is empty. \
+             Paste the output of `aws rds generate-db-auth-token` into the \
+             password field and try again. Tokens expire every 15 minutes."
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod require_iam_token_tests {
+    use super::require_iam_token;
+
+    #[test]
+    fn rejects_iam_with_both_passwords_empty() {
+        // The primary case: ad-hoc connection, IAM enabled, nothing in the
+        // form and nothing from the keychain.
+        let err = require_iam_token(true, None, None).unwrap_err();
+        assert!(err.contains("AWS IAM authentication is enabled"));
+        assert!(err.contains("15 minutes"));
+    }
+
+    #[test]
+    fn rejects_iam_with_empty_string_passwords() {
+        // Empty strings (rather than None) must also fail — sqlx stamps
+        // "" as a deliberate "user pressed Enter" password.
+        let err = require_iam_token(true, Some(""), Some("")).unwrap_err();
+        assert!(err.contains("AWS IAM authentication is enabled"));
+    }
+
+    #[test]
+    fn allows_iam_when_request_password_present() {
+        // A freshly pasted RDS auth token in the form is enough; the
+        // expanded (post-SSH/K8s) value is irrelevant.
+        require_iam_token(true, Some("fake-token"), None).unwrap();
+    }
+
+    #[test]
+    fn allows_iam_when_expanded_password_present() {
+        // The expanded value can also satisfy the guard (e.g. an SSH tunnel
+        // wrapper injected it).
+        require_iam_token(true, None, Some("fake-token")).unwrap();
+    }
+
+    #[test]
+    fn non_iam_always_passes() {
+        // Without IAM, an empty password is the caller's problem; the
+        // helper must never reject on its own.
+        require_iam_token(false, None, None).unwrap();
+        require_iam_token(false, Some(""), Some("")).unwrap();
+    }
+}
+
 /// Build the SSH tunnel map key for caching tunnels.
 #[inline]
 fn build_tunnel_map_key(
@@ -240,8 +309,17 @@ fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, Str
         .ok_or("Missing K8s resource name")?;
     let port = params.k8s_port.ok_or("Missing K8s port")?;
 
+    let options = crate::k8s_tunnel::K8sCommandOptions::new(
+        params.k8s_kubectl_path.clone(),
+        params.k8s_kubeconfig_path.clone(),
+    );
     let map_key = crate::k8s_tunnel::build_tunnel_key(
-        context, namespace, resource_type, resource_name, port,
+        context,
+        namespace,
+        resource_type,
+        resource_name,
+        port,
+        &options,
     );
 
     // Check for existing tunnel
@@ -263,7 +341,12 @@ fn resolve_k8s_params(params: &ConnectionParams) -> Result<ConnectionParams, Str
     );
 
     let tunnel = crate::k8s_tunnel::K8sTunnel::new(
-        context, namespace, resource_type, resource_name, port,
+        context,
+        namespace,
+        resource_type,
+        resource_name,
+        port,
+        &options,
     )
     .map_err(|e| {
         eprintln!("[Connection Error] K8s Tunnel setup failed: {}", e);
@@ -386,6 +469,132 @@ pub fn get_ssh_config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, St
     Ok(config_dir.join("ssh_connections.json"))
 }
 
+fn runtime_connection_uri(params: &ConnectionParams) -> Option<&str> {
+    params
+        .connection_uri
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+}
+
+/// A connection URI embeds credentials, so it may only be persisted behind the
+/// OS keychain. Refuse the save rather than silently downgrading to plaintext.
+fn validate_connection_uri_persistence(params: &ConnectionParams) -> Result<(), String> {
+    if runtime_connection_uri(params).is_some() && !params.save_in_keychain.unwrap_or(false) {
+        return Err("Connection URIs must be stored in the OS keychain".to_string());
+    }
+    Ok(())
+}
+
+/// Write the secret first, then persist `connections.json`. If persistence
+/// fails the secret is restored to its previous value so the keychain never
+/// drifts from the file.
+fn persist_secret_change(
+    apply: impl FnOnce() -> Result<(), String>,
+    persist: impl FnOnce() -> Result<(), String>,
+    rollback: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    apply()?;
+    match persist() {
+        Ok(()) => Ok(()),
+        Err(error) => match rollback() {
+            Ok(()) => Err(error),
+            // Report both: the rollback error alone would hide why the save
+            // failed in the first place.
+            Err(rollback_error) => Err(format!("{error} ({rollback_error})")),
+        },
+    }
+}
+
+/// `change` is `None` to leave the stored URI untouched, `Some(Some(uri))` to
+/// write it, and `Some(None)` to clear it.
+fn persist_connection_uri_change(
+    cache: &credential_cache::CredentialCache,
+    connection_id: &str,
+    stored_in_keychain: bool,
+    change: Option<Option<&str>>,
+    persist: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let Some(value) = change else {
+        return persist();
+    };
+    let previous_keychain = stored_in_keychain
+        .then(|| keychain_utils::get_connection_uri(connection_id))
+        .transpose()
+        .map_err(|_| "Failed to read the stored connection URI from the OS keychain".to_string())?;
+    let previous_cache = cache
+        .connection_uris
+        .lock()
+        .unwrap()
+        .get(connection_id)
+        .cloned();
+
+    persist_secret_change(
+        || {
+            if let Some(value) = value {
+                keychain_utils::set_connection_uri(connection_id, value)?;
+                credential_cache::set_connection_uri_cached(cache, connection_id, value);
+            } else {
+                keychain_utils::delete_connection_uri(connection_id)?;
+                credential_cache::invalidate_connection_uri(cache, connection_id);
+            }
+            Ok(())
+        },
+        persist,
+        || {
+            let keychain_result = match previous_keychain.as_deref() {
+                Some(value) => keychain_utils::set_connection_uri(connection_id, value),
+                None => keychain_utils::delete_connection_uri(connection_id),
+            };
+            let mut entries = cache.connection_uris.lock().unwrap();
+            match (&keychain_result, previous_cache) {
+                // Only re-pin the old value once the keychain actually holds it
+                // again. If the restore failed, drop the entry so the next read
+                // consults the keychain instead of trusting a stale copy.
+                (Ok(()), Some(entry)) => _ = entries.insert(connection_id.to_string(), entry),
+                (Ok(()), None) | (Err(_), _) => _ = entries.remove(connection_id),
+            }
+            keychain_result.map_err(|_| "Failed to roll back the stored connection URI".to_string())
+        },
+    )
+}
+
+/// Strip the URI out of the params that go to `connections.json`, leaving only
+/// the marker that says a keychain entry exists.
+fn params_for_persistence(
+    params: &ConnectionParams,
+    connection_uri_in_keychain: bool,
+) -> ConnectionParams {
+    let mut persisted = params.clone();
+    persisted.connection_uri = None;
+    persisted.connection_uri_in_keychain = connection_uri_in_keychain.then_some(true);
+    persisted
+}
+
+/// Re-attach the URI a saved connection needs at runtime, from the session
+/// cache or the keychain.
+fn restore_runtime_connection_uri(
+    cache: &credential_cache::CredentialCache,
+    connection_id: &str,
+    params: &mut ConnectionParams,
+) -> Result<(), String> {
+    if runtime_connection_uri(params).is_some() {
+        return Ok(());
+    }
+
+    let stored_in_keychain = params.connection_uri_in_keychain.unwrap_or(false);
+    match credential_cache::get_connection_uri_cached(cache, connection_id, stored_in_keychain) {
+        Ok(Some(connection_uri)) => {
+            params.connection_uri = Some(connection_uri);
+            Ok(())
+        }
+        Ok(None) if stored_in_keychain => {
+            Err("Stored connection URI is unavailable in the OS keychain".to_string())
+        }
+        Ok(None) => Ok(()),
+        Err(_) => Err("Failed to read the stored connection URI from the OS keychain".to_string()),
+    }
+}
+
 pub fn find_connection_by_id<R: Runtime>(
     app: &AppHandle<R>,
     id: &str,
@@ -410,11 +619,16 @@ pub fn find_connection_by_id<R: Runtime>(
         }
     };
 
-    // Load passwords from keychain if needed, via the in-memory cache.
-    // On a warm cache hit this is a HashMap lookup (nanoseconds); on a cold miss
-    // it calls keychain once and caches the result for all subsequent reads.
-    if conn.params.save_in_keychain.unwrap_or(false) {
-        let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    restore_runtime_connection_uri(&cache, &conn.id, &mut conn.params)?;
+
+    // Load passwords from keychain via the in-memory cache (warm hit = lookup,
+    // cold miss = keychain call + cache). Skip IAM-auth connections: their
+    // 15-min tokens must come from the `password` field, never the keychain,
+    // so a stale token from an older release can't be surfaced in the modal.
+    if conn.params.save_in_keychain.unwrap_or(false)
+        && !conn.params.use_iam_auth.unwrap_or(false)
+    {
         match credential_cache::get_db_password_cached(&cache, &conn.id) {
             Ok(pwd) => conn.params.password = Some(pwd),
             Err(e) => eprintln!(
@@ -531,6 +745,43 @@ pub async fn get_available_databases<R: Runtime>(
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_databases(&params).await
+}
+
+#[tauri::command]
+pub async fn set_selected_databases<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    mut databases: Vec<String>,
+) -> Result<(), String> {
+    if databases.is_empty() {
+        return Err("Database selection cannot be empty".to_string());
+    }
+    if databases.iter().any(|db| db.trim().is_empty()) {
+        return Err("Database names cannot be empty".to_string());
+    }
+
+    log::info!(
+        "Persisting database selection for connection {}: {} database(s)",
+        connection_id,
+        databases.len()
+    );
+
+    let path = get_config_path(&app)?;
+    let mut conn_file = persistence::load_connections_file(&path)?;
+
+    let conn = conn_file
+        .connections
+        .iter_mut()
+        .find(|c| c.id == connection_id)
+        .ok_or("Connection not found")?;
+
+    conn.params.database = if databases.len() == 1 {
+        crate::models::DatabaseSelection::Single(databases.remove(0))
+    } else {
+        crate::models::DatabaseSelection::Multiple(databases)
+    };
+
+    save_connections_and_invalidate(&app, &path, &conn_file)
 }
 
 #[tauri::command]
@@ -694,6 +945,32 @@ pub async fn get_schema_snapshot<R: Runtime>(
 }
 
 #[tauri::command]
+pub async fn get_ai_schema_context<R: Runtime>(
+    app: AppHandle<R>,
+    connection_id: String,
+    schema: Option<String>,
+) -> Result<String, String> {
+    let saved_conn = find_connection_by_id(&app, &connection_id)?;
+    let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
+    let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
+    let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+    let driver = driver_for(&saved_conn.params.driver).await?;
+    let identifier_quote = driver.manifest().capabilities.identifier_quote.as_str();
+    let context = driver
+        .get_ai_schema_context(
+            &params,
+            schema.as_deref(),
+            crate::ai_schema_context::DEFAULT_MAX_TABLES,
+        )
+        .await?;
+
+    Ok(crate::ai_schema_context::format_for_prompt(
+        &context,
+        identifier_quote,
+    ))
+}
+
+#[tauri::command]
 pub async fn save_connection<R: Runtime>(
     app: AppHandle<R>,
     name: String,
@@ -701,16 +978,18 @@ pub async fn save_connection<R: Runtime>(
     detect_json_in_text_columns: Option<bool>,
 ) -> Result<SavedConnection, String> {
     log::info!("Saving new connection: {}", name);
+    validate_connection_uri_persistence(&params)?;
 
     let path = get_config_path(&app)?;
     let mut conn_file = persistence::load_connections_file(&path).unwrap_or_default();
 
     let id = Uuid::new_v4().to_string();
-    let mut params_to_save = params.clone();
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    let connection_uri = runtime_connection_uri(&params).map(str::to_owned);
+    let mut params_to_save = params_for_persistence(&params, connection_uri.is_some());
 
     if params.save_in_keychain.unwrap_or(false) {
         log::debug!("Storing passwords in keychain for connection: {}", name);
-        let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
         if let Some(pwd) = &params.password {
             keychain_utils::set_db_password(&id, pwd)?;
             credential_cache::set_db_password_cached(&cache, &id, pwd);
@@ -742,7 +1021,13 @@ pub async fn save_connection<R: Runtime>(
         appearance: None,
     };
     conn_file.connections.push(new_conn.clone());
-    save_connections_and_invalidate(&app, &path, &conn_file)?;
+    persist_connection_uri_change(
+        &cache,
+        &id,
+        false,
+        connection_uri.as_deref().map(Some),
+        || save_connections_and_invalidate(&app, &path, &conn_file),
+    )?;
 
     log::info!("Connection saved successfully: {} (ID: {})", name, id);
 
@@ -762,6 +1047,14 @@ pub async fn delete_connection<R: Runtime>(app: AppHandle<R>, id: String) -> Res
 
     let mut conn_file = persistence::load_connections_file(&path)?;
 
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    let uri_stored_in_keychain = conn_file
+        .connections
+        .iter()
+        .find(|c| c.id == id)
+        .and_then(|c| c.params.connection_uri_in_keychain)
+        .unwrap_or(false);
+
     // Capture the appearance before retain so we can cascade-delete the icon file.
     let appearance_to_delete = conn_file
         .connections
@@ -777,11 +1070,11 @@ pub async fn delete_connection<R: Runtime>(app: AppHandle<R>, id: String) -> Res
     keychain_utils::delete_db_password(&id).ok();
     keychain_utils::delete_ssh_password(&id).ok();
     keychain_utils::delete_ssh_key_passphrase(&id).ok();
+    persist_connection_uri_change(&cache, &id, uri_stored_in_keychain, Some(None), || {
+        save_connections_and_invalidate(&app, &path, &conn_file)
+    })?;
     // Invalidate the in-memory cache for this connection
-    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
     credential_cache::invalidate_all_for_connection(&cache, &id);
-
-    save_connections_and_invalidate(&app, &path, &conn_file)?;
 
     // Cascade-delete the custom icon file if the connection used one.
     if let Ok(app_data) = app.path().app_data_dir() {
@@ -813,6 +1106,7 @@ pub async fn update_connection<R: Runtime>(
     params: ConnectionParams,
     detect_json_in_text_columns: Option<bool>,
 ) -> Result<SavedConnection, String> {
+    validate_connection_uri_persistence(&params)?;
     let path = get_config_path(&app)?;
     let mut conn_file = persistence::load_connections_file(&path)?;
 
@@ -822,7 +1116,29 @@ pub async fn update_connection<R: Runtime>(
         .position(|c| c.id == id)
         .ok_or("Connection not found")?;
 
-    let mut params_to_save = params.clone();
+    let existing_uri_in_keychain = conn_file.connections[conn_idx]
+        .params
+        .connection_uri_in_keychain
+        .unwrap_or(false);
+    // A stored URI belongs to the driver that produced it. Switching drivers
+    // must drop it rather than hand one driver's credentials to another.
+    let same_driver = conn_file.connections[conn_idx].params.driver == params.driver;
+    let connection_uri = runtime_connection_uri(&params).map(str::to_owned);
+    // The frontend sends the URI back only when the user retyped it. An edit
+    // that leaves the field untouched must keep the stored secret; an edit that
+    // explicitly clears the marker must delete it.
+    let preserve_stored_uri = connection_uri.is_none()
+        && same_driver
+        && params.save_in_keychain.unwrap_or(false)
+        && existing_uri_in_keychain
+        && params.connection_uri_in_keychain != Some(false);
+    let uri_change = match connection_uri.as_deref() {
+        Some(value) => Some(Some(value)),
+        None if preserve_stored_uri => None,
+        None => Some(None),
+    };
+    let mut params_to_save =
+        params_for_persistence(&params, connection_uri.is_some() || preserve_stored_uri);
 
     let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
     if params.save_in_keychain.unwrap_or(false) {
@@ -854,7 +1170,11 @@ pub async fn update_connection<R: Runtime>(
         keychain_utils::delete_db_password(&id).ok();
         keychain_utils::delete_ssh_password(&id).ok();
         keychain_utils::delete_ssh_key_passphrase(&id).ok();
-        credential_cache::invalidate_all_for_connection(&cache, &id);
+        // The connection URI is cleared by its own transaction below, which
+        // needs the previous cache entry intact to roll back.
+        credential_cache::invalidate_db_password(&cache, &id);
+        credential_cache::invalidate_ssh_password(&cache, &id);
+        credential_cache::invalidate_ssh_key_passphrase(&cache, &id);
     }
 
     // Preserve existing group_id and sort_order from the original connection
@@ -876,7 +1196,9 @@ pub async fn update_connection<R: Runtime>(
 
     conn_file.connections[conn_idx] = updated.clone();
 
-    save_connections_and_invalidate(&app, &path, &conn_file)?;
+    persist_connection_uri_change(&cache, &id, existing_uri_in_keychain, uri_change, || {
+        save_connections_and_invalidate(&app, &path, &conn_file)
+    })?;
 
     // On single→multi transition, associate existing favorites/history (with no
     // database set) to the original single database name.
@@ -961,8 +1283,11 @@ pub async fn duplicate_connection<R: Runtime>(
 
     let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
 
-    // Recover passwords if in keychain (via cache for fast repeat access)
-    if original.params.save_in_keychain.unwrap_or(false) {
+    // Same IAM-auth guard as `find_connection_by_id`: never copy a stale RDS
+    // auth token into a duplicated connection.
+    if original.params.save_in_keychain.unwrap_or(false)
+        && !original.params.use_iam_auth.unwrap_or(false)
+    {
         if let Ok(pwd) = credential_cache::get_db_password_cached(&cache, &original.id) {
             original.params.password = Some(pwd);
         }
@@ -1107,7 +1432,7 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
         return Ok(()); // No migration needed
     }
 
-    println!("[Migration] Starting SSH connections migration...");
+    eprintln!("[Migration] Starting SSH connections migration...");
 
     let ssh_path = get_ssh_config_path(app)?;
     let mut ssh_connections: Vec<SshConnection> = if ssh_path.exists() {
@@ -1205,7 +1530,7 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
     conn_file.connections = migrated_connections;
     save_connections_and_invalidate(app, &conn_path, &conn_file)?;
 
-    println!(
+    eprintln!(
         "[Migration] Successfully migrated {} SSH connections",
         ssh_connections.len()
     );
@@ -1514,6 +1839,17 @@ pub async fn test_ssh_connection<R: Runtime>(
 // Kubernetes Connections
 // ---------------------------------------------------------------------------
 
+fn validate_k8s_connection_paths(k8s: &K8sConnectionInput) -> Result<(), String> {
+    crate::k8s_tunnel::validate_k8s_path(
+        k8s.kubectl_path.as_deref().unwrap_or_default(),
+        "kubectl",
+    )?;
+    crate::k8s_tunnel::validate_k8s_path(
+        k8s.kubeconfig_path.as_deref().unwrap_or_default(),
+        "kubeconfig",
+    )
+}
+
 /// Load K8s connections synchronously from the config file.
 fn load_k8s_connections_sync<R: Runtime>(
     app: &AppHandle<R>,
@@ -1557,6 +1893,7 @@ pub async fn save_k8s_connection<R: Runtime>(
     app: AppHandle<R>,
     k8s: K8sConnectionInput,
 ) -> Result<K8sConnection, String> {
+    validate_k8s_connection_paths(&k8s)?;
     let path = get_k8s_config_path(&app)?;
     let mut connections: Vec<K8sConnection> = if path.exists() {
         let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
@@ -1574,6 +1911,8 @@ pub async fn save_k8s_connection<R: Runtime>(
         resource_type: k8s.resource_type,
         resource_name: k8s.resource_name,
         port: k8s.port,
+        kubectl_path: k8s.kubectl_path,
+        kubeconfig_path: k8s.kubeconfig_path,
     };
 
     connections.push(connection.clone());
@@ -1590,6 +1929,7 @@ pub async fn update_k8s_connection<R: Runtime>(
     id: String,
     k8s: K8sConnectionInput,
 ) -> Result<K8sConnection, String> {
+    validate_k8s_connection_paths(&k8s)?;
     let path = get_k8s_config_path(&app)?;
     let mut connections: Vec<K8sConnection> = if path.exists() {
         let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
@@ -1611,6 +1951,8 @@ pub async fn update_k8s_connection<R: Runtime>(
         resource_type: k8s.resource_type,
         resource_name: k8s.resource_name,
         port: k8s.port,
+        kubectl_path: k8s.kubectl_path,
+        kubeconfig_path: k8s.kubeconfig_path,
     };
 
     connections[idx] = connection.clone();
@@ -1647,23 +1989,32 @@ pub async fn test_k8s_connection_cmd<R: Runtime>(
     _app: AppHandle<R>,
     context: String,
     namespace: String,
+    kubectl_path: Option<String>,
+    kubeconfig_path: Option<String>,
 ) -> Result<String, String> {
-    crate::k8s_tunnel::test_k8s_connection(&context, &namespace)
+    let options = crate::k8s_tunnel::K8sCommandOptions::new(kubectl_path, kubeconfig_path);
+    crate::k8s_tunnel::test_k8s_connection(&context, &namespace, &options)
 }
 
 #[tauri::command]
 pub async fn get_k8s_contexts_cmd<R: Runtime>(
     _app: AppHandle<R>,
+    kubectl_path: Option<String>,
+    kubeconfig_path: Option<String>,
 ) -> Result<Vec<String>, String> {
-    crate::k8s_tunnel::get_k8s_contexts()
+    let options = crate::k8s_tunnel::K8sCommandOptions::new(kubectl_path, kubeconfig_path);
+    crate::k8s_tunnel::get_k8s_contexts(&options)
 }
 
 #[tauri::command]
 pub async fn get_k8s_namespaces_cmd<R: Runtime>(
     _app: AppHandle<R>,
     context: String,
+    kubectl_path: Option<String>,
+    kubeconfig_path: Option<String>,
 ) -> Result<Vec<String>, String> {
-    crate::k8s_tunnel::get_k8s_namespaces(&context)
+    let options = crate::k8s_tunnel::K8sCommandOptions::new(kubectl_path, kubeconfig_path);
+    crate::k8s_tunnel::get_k8s_namespaces(&context, &options)
 }
 
 #[tauri::command]
@@ -1672,8 +2023,11 @@ pub async fn get_k8s_resources_cmd<R: Runtime>(
     context: String,
     namespace: String,
     resource_type: String,
+    kubectl_path: Option<String>,
+    kubeconfig_path: Option<String>,
 ) -> Result<Vec<String>, String> {
-    crate::k8s_tunnel::get_k8s_resources(&context, &namespace, &resource_type)
+    let options = crate::k8s_tunnel::K8sCommandOptions::new(kubectl_path, kubeconfig_path);
+    crate::k8s_tunnel::get_k8s_resources(&context, &namespace, &resource_type, &options)
 }
 
 #[tauri::command]
@@ -1683,13 +2037,26 @@ pub async fn get_k8s_resource_ports_cmd<R: Runtime>(
     namespace: String,
     resource_type: String,
     resource_name: String,
+    kubectl_path: Option<String>,
+    kubeconfig_path: Option<String>,
 ) -> Result<Vec<u16>, String> {
+    let options = crate::k8s_tunnel::K8sCommandOptions::new(kubectl_path, kubeconfig_path);
     crate::k8s_tunnel::get_k8s_resource_ports(
         &context,
         &namespace,
         &resource_type,
         &resource_name,
+        &options,
     )
+}
+
+#[tauri::command]
+pub async fn validate_k8s_path_cmd<R: Runtime>(
+    _app: AppHandle<R>,
+    path: String,
+    kind: String,
+) -> Result<(), String> {
+    crate::k8s_tunnel::validate_k8s_path(&path, &kind)
 }
 
 /// Expand K8s connection params by loading saved config and creating/reusing a tunnel.
@@ -1709,7 +2076,7 @@ pub async fn expand_k8s_connection_params<R: Runtime>(
     }
 
     // Resolve K8s params from saved connection if using connection_id
-    let (context, namespace, resource_type, resource_name, port) =
+    let (context, namespace, resource_type, resource_name, port, kubectl_path, kubeconfig_path) =
         if let Some(k8s_id) = &params.k8s_connection_id {
             let k8s_conn = get_k8s_connection_by_id(app, k8s_id).await?;
             (
@@ -1718,6 +2085,8 @@ pub async fn expand_k8s_connection_params<R: Runtime>(
                 k8s_conn.resource_type,
                 k8s_conn.resource_name,
                 k8s_conn.port,
+                k8s_conn.kubectl_path,
+                k8s_conn.kubeconfig_path,
             )
         } else {
             let ctx = params
@@ -1741,18 +2110,28 @@ pub async fn expand_k8s_connection_params<R: Runtime>(
                 .ok_or("Missing K8s resource name")?
                 .to_string();
             let p = params.k8s_port.ok_or("Missing K8s port")?;
-            (ctx, ns, rt, rn, p)
+            (
+                ctx,
+                ns,
+                rt,
+                rn,
+                p,
+                params.k8s_kubectl_path.clone(),
+                params.k8s_kubeconfig_path.clone(),
+            )
         };
 
     let _remote_host = params.host.as_deref().unwrap_or("localhost");
     let _remote_port = params.port.unwrap_or(DEFAULT_MYSQL_PORT);
 
+    let options = crate::k8s_tunnel::K8sCommandOptions::new(kubectl_path, kubeconfig_path);
     let map_key = crate::k8s_tunnel::build_tunnel_key(
         &context,
         &namespace,
         &resource_type,
         &resource_name,
         port,
+        &options,
     );
 
     // Check for existing tunnel
@@ -1787,6 +2166,7 @@ pub async fn expand_k8s_connection_params<R: Runtime>(
         &resource_type,
         &resource_name,
         port,
+        &options,
     )
     .map_err(|e| {
         eprintln!("[Connection Error] K8s Tunnel setup failed: {}", e);
@@ -1839,7 +2219,22 @@ pub async fn test_connection<R: Runtime>(
     let mut expanded_params = expand_ssh_connection_params(&app, &request.params).await?;
     expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
 
-    if request.params.password.is_none() && expanded_params.password.is_none() {
+    // AWS RDS IAM auth tokens are short-lived (15 min) and must come from the
+    // password field on every test/connect, never from the keychain. Skip the
+    // keychain fallback so a stale token can't be reused.
+    let iam_auth = expanded_params.use_iam_auth.unwrap_or(false);
+
+    // IAM auth needs an RDS auth token right now. Without this guard the
+    // builder accepts an empty password, the server replies with the opaque
+    // "Access denied (using password: YES)", and the user can't tell whether
+    // the token is missing, wrong, or expired.
+    require_iam_token(
+        iam_auth,
+        request.params.password.as_deref(),
+        expanded_params.password.as_deref(),
+    )?;
+
+    if !iam_auth && request.params.password.is_none() && expanded_params.password.is_none() {
         let saved_conn = match &request.connection_id {
             Some(id) => find_connection_by_id(&app, id).ok(),
             None => None,
@@ -1848,6 +2243,16 @@ pub async fn test_connection<R: Runtime>(
             resolve_test_connection_password(&request.params, saved_conn.as_ref(), |conn_id| {
                 keychain_utils::get_db_password(conn_id, "")
             });
+    }
+
+    // Reconnecting to a saved connection sends the on-disk params, which never
+    // carry the URI — restore it the same way the password is restored above.
+    // An inline URI (the ephemeral Test Connection flow) always wins.
+    if runtime_connection_uri(&expanded_params).is_none() {
+        if let Some(conn_id) = &request.connection_id {
+            let cache = app.state::<std::sync::Arc<credential_cache::CredentialCache>>();
+            restore_runtime_connection_uri(&cache, conn_id, &mut expanded_params)?;
+        }
     }
 
     let resolved_params = if let Some(conn_id) = &request.connection_id {
@@ -1874,7 +2279,13 @@ pub async fn test_connection<R: Runtime>(
         }
     }
 
-    drv.test_connection(&resolved_params).await?;
+    drv.test_connection(&resolved_params).await.map_err(|e| {
+        log::warn!(
+            "Connection test failed for database {}: {e}",
+            request.params.database
+        );
+        e
+    })?;
 
     log::info!(
         "Connection test successful for database: {}",
@@ -1897,6 +2308,109 @@ mod tests {
             database: DatabaseSelection::Single("testdb".to_string()),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn persisted_params_never_contain_the_connection_uri() {
+        let sentinel = "mongodb+srv://fixture-user:fixture-password@cluster.example.invalid/app";
+        let params = ConnectionParams {
+            connection_uri: Some(sentinel.to_string()),
+            save_in_keychain: Some(true),
+            ..base_params()
+        };
+
+        let persisted = params_for_persistence(&params, true);
+        let json = serde_json::to_string(&persisted).expect("serialize persisted params");
+
+        assert_eq!(persisted.connection_uri, None);
+        assert_eq!(persisted.connection_uri_in_keychain, Some(true));
+        assert!(!json.contains(sentinel));
+        assert!(!json.contains("fixture-password"));
+    }
+
+    #[test]
+    fn a_connection_uri_cannot_be_saved_outside_the_keychain() {
+        let params = ConnectionParams {
+            connection_uri: Some("mongodb+srv://cluster.example.invalid/app".to_string()),
+            save_in_keychain: Some(false),
+            ..base_params()
+        };
+
+        assert!(validate_connection_uri_persistence(&params).is_err());
+        assert!(validate_connection_uri_persistence(&base_params()).is_ok());
+    }
+
+    #[test]
+    fn a_blank_connection_uri_is_treated_as_absent() {
+        let params = ConnectionParams {
+            connection_uri: Some("   ".to_string()),
+            save_in_keychain: Some(false),
+            ..base_params()
+        };
+
+        assert_eq!(runtime_connection_uri(&params), None);
+        assert!(validate_connection_uri_persistence(&params).is_ok());
+    }
+
+    #[test]
+    fn restores_the_exact_connection_uri_from_the_session_cache() {
+        let cache = credential_cache::CredentialCache::default();
+        let sentinel =
+            "mongodb+srv://fixture-user:fixture-password@cluster.example.invalid/app?x=a%2Fb";
+        credential_cache::set_connection_uri_cached(&cache, "conn-1", sentinel);
+        let mut params = base_params();
+
+        restore_runtime_connection_uri(&cache, "conn-1", &mut params)
+            .expect("restore cached connection URI");
+
+        assert_eq!(params.connection_uri.as_deref(), Some(sentinel));
+    }
+
+    #[test]
+    fn params_saved_before_the_uri_field_existed_remain_usable() {
+        let cache = credential_cache::CredentialCache::default();
+        let mut params = base_params();
+
+        restore_runtime_connection_uri(&cache, "legacy-conn", &mut params)
+            .expect("legacy params remain usable");
+
+        assert_eq!(params.connection_uri, None);
+        assert_eq!(params.host.as_deref(), Some("localhost"));
+    }
+
+    #[test]
+    fn deleting_a_connection_clears_its_cached_uri() {
+        let cache = credential_cache::CredentialCache::default();
+        credential_cache::set_connection_uri_cached(
+            &cache,
+            "conn-1",
+            "mongodb+srv://cluster.example.invalid/app",
+        );
+
+        credential_cache::invalidate_all_for_connection(&cache, "conn-1");
+
+        assert_eq!(
+            credential_cache::get_connection_uri_cached(&cache, "conn-1", false).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_failed_persist_rolls_the_stored_uri_back() {
+        let rolled_back = std::cell::Cell::new(false);
+
+        let error = persist_secret_change(
+            || Ok(()),
+            || Err("fictional connections.json failure".to_string()),
+            || {
+                rolled_back.set(true);
+                Ok(())
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "fictional connections.json failure");
+        assert!(rolled_back.get());
     }
 
     fn saved_conn(id: &str, password: Option<&str>, save_in_keychain: bool) -> SavedConnection {
@@ -2865,7 +3379,18 @@ pub async fn list_databases<R: Runtime>(
     let mut expanded_params = expand_ssh_connection_params(&app, &request.params).await?;
     expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
 
-    if request.params.password.is_none() && expanded_params.password.is_none() {
+    let iam_auth = expanded_params.use_iam_auth.unwrap_or(false);
+
+    // IAM auth needs an RDS auth token right now; skip the keychain fallback
+    // so a stale token can't be reused, and fail fast with an actionable
+    // message if none was supplied.
+    require_iam_token(
+        iam_auth,
+        request.params.password.as_deref(),
+        expanded_params.password.as_deref(),
+    )?;
+
+    if !iam_auth && request.params.password.is_none() && expanded_params.password.is_none() {
         let saved_conn = match &request.connection_id {
             Some(id) => find_connection_by_id(&app, id).ok(),
             None => None,
@@ -2874,6 +3399,16 @@ pub async fn list_databases<R: Runtime>(
             resolve_test_connection_password(&request.params, saved_conn.as_ref(), |conn_id| {
                 keychain_utils::get_db_password(conn_id, "")
             });
+    }
+
+    // Reconnecting to a saved connection sends the on-disk params, which never
+    // carry the URI — restore it the same way the password is restored above.
+    // An inline URI (the ephemeral Test Connection flow) always wins.
+    if runtime_connection_uri(&expanded_params).is_none() {
+        if let Some(conn_id) = &request.connection_id {
+            let cache = app.state::<std::sync::Arc<credential_cache::CredentialCache>>();
+            restore_runtime_connection_uri(&cache, conn_id, &mut expanded_params)?;
+        }
     }
 
     let resolved_params = if let Some(conn_id) = &request.connection_id {
@@ -3309,6 +3844,40 @@ pub async fn cancel_query(
     cancel_query_impl(&state, &connection_id)
 }
 
+/// Payload for the `database-dropped` event, emitted after a `DROP DATABASE`
+/// statement succeeds so a listener can reconcile the connection's database
+/// selection instead of leaving the dropped database in the sidebar until the
+/// next reconnect (#525).
+// `connectionId` rather than `connection_id`: the `connection-health-failed`
+// event already carries this same field in camelCase, and matching the field
+// name for the same concept matters more than matching the neighbouring
+// `batch-statement-complete` payload, which happens to use snake_case.
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct DatabaseDroppedEvent<'a> {
+    connection_id: &'a str,
+    database: &'a str,
+}
+
+/// Announces that `database` no longer exists on the server behind
+/// `connection_id`. Emitting is best-effort: a listener that missed the event
+/// only means the sidebar stays stale until the next manual refresh, which is
+/// the pre-#525 behaviour, so a failed emit must not fail the query.
+fn emit_database_dropped<R: Runtime>(app: &AppHandle<R>, connection_id: &str, database: &str) {
+    log::info!(
+        "DROP DATABASE detected on connection {}: '{}'",
+        connection_id,
+        database
+    );
+    let _ = app.emit(
+        "database-dropped",
+        DatabaseDroppedEvent {
+            connection_id,
+            database,
+        },
+    );
+}
+
 #[tauri::command]
 pub async fn execute_query<R: Runtime>(
     app: AppHandle<R>,
@@ -3331,6 +3900,10 @@ pub async fn execute_query<R: Runtime>(
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
+
+    // Detected before the spawn, which takes ownership of `sanitized_query`.
+    // Cheap: only allocates when the statement really is a DROP DATABASE.
+    let dropped = crate::sql_database_statements::dropped_database(&sanitized_query);
 
     let drv = driver_for(&saved_conn.params.driver).await?;
     let task = tokio::spawn(async move {
@@ -3357,6 +3930,9 @@ pub async fn execute_query<R: Runtime>(
                 "Query executed successfully, returned {} rows",
                 query_result.rows.len()
             );
+            if let Some(database) = &dropped {
+                emit_database_dropped(&app, &connection_id, database);
+            }
             Ok(query_result)
         }
         Ok(Err(e)) => {
@@ -3414,6 +3990,14 @@ pub async fn execute_query_batch<R: Runtime>(
 
     let sanitized_queries: Vec<String> = queries.iter().map(|q| sanitize_user_query(q)).collect();
 
+    // One entry per statement, computed before the spawn takes ownership of
+    // `sanitized_queries`. Index-aligned with the results returned below, the
+    // same assumption the `batch-statement-complete` event already relies on.
+    let dropped_per_statement: Vec<Option<String>> = sanitized_queries
+        .iter()
+        .map(|q| crate::sql_database_statements::dropped_database(q))
+        .collect();
+
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let expanded_params = expand_ssh_connection_params(&app, &saved_conn.params).await?;
     let expanded_params = expand_k8s_connection_params(&app, &expanded_params).await?;
@@ -3468,6 +4052,16 @@ pub async fn execute_query_batch<R: Runtime>(
                 batch_results.len() - success_count,
                 batch_results.len()
             );
+            // A batch reports per-statement outcomes, so only announce drops
+            // whose own statement succeeded; a failed DROP leaves the database
+            // in place.
+            for (dropped, statement) in dropped_per_statement.iter().zip(&batch_results) {
+                if let Some(database) = dropped {
+                    if statement.result.is_some() {
+                        emit_database_dropped(&app, &connection_id, database);
+                    }
+                }
+            }
             Ok(batch_results)
         }
         Ok(Err(e)) => {
@@ -3491,7 +4085,7 @@ pub async fn explain_query_plan<R: Runtime>(
     query: String,
     analyze: bool,
     schema: Option<String>,
-) -> Result<ExplainPlan, String> {
+) -> Result<ExplainQueryOutput, String> {
     log::info!(
         "Explaining query on connection: {} | analyze: {} | Query: {}",
         connection_id,
@@ -5050,9 +5644,17 @@ pub async fn export_connections_payload<R: Runtime>(
             conn.params.password = None;
             conn.params.ssh_password = None;
             conn.params.ssh_key_passphrase = None;
+            conn.params.connection_uri = None;
             continue;
         }
         if conn.params.save_in_keychain.unwrap_or(false) {
+            // Without this the export carries the marker but not the URI, and
+            // restoring elsewhere yields a connection that cannot resolve it.
+            if let Ok(Some(uri)) =
+                credential_cache::get_connection_uri_cached(&cache, &conn.id, true)
+            {
+                conn.params.connection_uri = Some(uri);
+            }
             if let Ok(pwd) = credential_cache::get_db_password_cached(&cache, &conn.id) {
                 conn.params.password = Some(pwd);
             }
@@ -5150,8 +5752,17 @@ pub async fn apply_export_payload<R: Runtime>(
 
     // Merge connections and handle passwords
     for mut new_conn in payload.connections {
+        // An imported payload is untrusted input and may carry an inline URI.
+        // Hold it to the same rule as a save: keychain or nothing.
+        validate_connection_uri_persistence(&new_conn.params)?;
+
         // Handle passwords in keychain
         if new_conn.params.save_in_keychain.unwrap_or(false) {
+            if let Some(uri) = runtime_connection_uri(&new_conn.params) {
+                let uri = uri.to_string();
+                keychain_utils::set_connection_uri(&new_conn.id, &uri)?;
+                credential_cache::set_connection_uri_cached(&cache, &new_conn.id, &uri);
+            }
             if let Some(pwd) = &new_conn.params.password {
                 keychain_utils::set_db_password(&new_conn.id, pwd)?;
                 credential_cache::set_db_password_cached(&cache, &new_conn.id, pwd);
@@ -5175,6 +5786,11 @@ pub async fn apply_export_payload<R: Runtime>(
             new_conn.params.ssh_password = None;
             new_conn.params.ssh_key_passphrase = None;
         }
+
+        // The URI never reaches disk: it is either in the keychain by now, or
+        // `validate_connection_uri_persistence` rejected the payload above.
+        let imported_uri_in_keychain = runtime_connection_uri(&new_conn.params).is_some();
+        new_conn.params = params_for_persistence(&new_conn.params, imported_uri_in_keychain);
 
         if let Some(existing) = current_file
             .connections

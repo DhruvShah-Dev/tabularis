@@ -4,6 +4,7 @@ pub mod types;
 
 mod explain;
 mod helpers;
+mod multi_result;
 mod routines;
 mod stmt_classify;
 mod users;
@@ -256,7 +257,10 @@ pub async fn get_tables(
     let rows = fetch_all_rows(
         &pool,
         text,
-        "SELECT table_name as name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE' ORDER BY table_name ASC",
+        // MariaDB reports tables created WITH SYSTEM VERSIONING as table_type
+        // 'SYSTEM VERSIONED' rather than 'BASE TABLE', so they must be included
+        // explicitly or they silently vanish from the table list.
+        "SELECT table_name as name FROM information_schema.tables WHERE table_schema = ? AND table_type IN ('BASE TABLE', 'SYSTEM VERSIONED') ORDER BY table_name ASC",
         &[db_name],
     )
     .await?;
@@ -509,7 +513,37 @@ pub async fn get_indexes(
     let pool = get_mysql_pool(params).await?;
     let text = resolve_text_proto(&pool, params).await?;
 
-    let query = r#"
+    // MySQL 8.0.13+ exposes functional-index text in STATISTICS.EXPRESSION;
+    // older MySQL and MariaDB lack the column, so probe before selecting it.
+    let has_expression = {
+        let probe = r#"
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = 'information_schema'
+            AND TABLE_NAME = 'STATISTICS'
+            AND COLUMN_NAME = 'EXPRESSION'
+        "#;
+        match fetch_one_row(&pool, text, probe, &[]).await {
+            Ok(row) => r_count(&row) > 0,
+            Err(_) => false,
+        }
+    };
+
+    let query = if has_expression {
+        r#"
+        SELECT
+            INDEX_NAME,
+            COLUMN_NAME,
+            NON_UNIQUE,
+            SEQ_IN_INDEX,
+            EXPRESSION
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = ?
+        AND TABLE_NAME = ?
+        ORDER BY INDEX_NAME, SEQ_IN_INDEX
+    "#
+    } else {
+        r#"
         SELECT
             INDEX_NAME,
             COLUMN_NAME,
@@ -519,7 +553,8 @@ pub async fn get_indexes(
         WHERE TABLE_SCHEMA = ?
         AND TABLE_NAME = ?
         ORDER BY INDEX_NAME, SEQ_IN_INDEX
-    "#;
+    "#
+    };
 
     let rows = fetch_all_rows(&pool, text, query, &[db_name, table_name]).await?;
 
@@ -527,16 +562,34 @@ pub async fn get_indexes(
         .iter()
         .map(|r| {
             let index_name = mysql_row_str(r, 0);
+            let column_name = mysql_row_str_opt(r, 1);
             let non_unique: i64 = r.try_get(2).unwrap_or(1);
+            let expression = if has_expression {
+                mysql_row_str_opt(r, 4)
+            } else {
+                None
+            };
+            let is_expression = column_name.is_none() && expression.is_some();
             Index {
                 name: index_name.clone(),
-                column_name: mysql_row_str(r, 1),
+                column_name: if is_expression {
+                    expression.unwrap_or_default()
+                } else {
+                    column_name.unwrap_or_default()
+                },
                 is_unique: non_unique == 0,
                 is_primary: index_name == "PRIMARY",
                 seq_in_index: r.try_get::<i64, _>(3).unwrap_or(0) as i32,
+                is_expression,
             }
         })
         .collect())
+}
+
+/// Read a `COUNT(*)` scalar, tolerating text-protocol (byte string) decoding.
+fn r_count(row: &sqlx::mysql::MySqlRow) -> i64 {
+    row.try_get::<i64, _>(0)
+        .unwrap_or_else(|_| mysql_row_str(row, 0).trim().parse::<i64>().unwrap_or(0))
 }
 
 /// Sort the pk_map into a deterministic (col, val) vec for use with QueryBuilder.
@@ -1214,6 +1267,7 @@ async fn exec_on_mysql_conn(
             affected_rows: exec_result.rows_affected(),
             truncated: false,
             pagination: None,
+            additional_results: None,
         });
     }
 
@@ -1234,6 +1288,7 @@ async fn exec_on_mysql_conn(
             affected_rows: exec_result.rows_affected(),
             truncated: false,
             pagination: None,
+            additional_results: None,
         });
     }
 
@@ -1260,33 +1315,38 @@ async fn exec_on_mysql_conn(
         final_query = query.to_string();
     }
 
-    let mut columns: Vec<String> = Vec::new();
-    let mut json_rows = Vec::new();
+    // A single statement may stream back several result sets (e.g. a `CALL`
+    // whose procedure body holds multiple `SELECT`s), so `fetch_many` is used
+    // instead of `fetch`: it interleaves rows with one `Either::Left`
+    // terminator per result set, which the collector folds into discrete sets.
+    let mut collector = multi_result::ResultSetCollector::new(manual_limit);
 
     // Scope the stream so `conn` borrow is released before returning
     {
         use futures::stream::StreamExt;
-        let mut rows_stream = if text.enabled {
-            use sqlx::Executor;
-            (&mut *conn).fetch(sqlx::raw_sql(&final_query))
+        use sqlx::Executor;
+        let mut event_stream = if text.enabled {
+            (&mut *conn).fetch_many(sqlx::raw_sql(&final_query))
         } else {
-            sqlx::query(&final_query).fetch(&mut *conn)
+            (&mut *conn).fetch_many(sqlx::query(&final_query))
         };
 
-        while let Some(result) = rows_stream.next().await {
+        while let Some(result) = event_stream.next().await {
             match result {
-                Ok(row) => {
-                    // Initialize columns from the first row
-                    if columns.is_empty() {
-                        columns = row.columns().iter().map(|c| c.name().to_string()).collect();
+                Ok(sqlx::Either::Left(_)) => collector.end_result_set(),
+                Ok(sqlx::Either::Right(row)) => {
+                    // Initialize columns from the first row of each result set
+                    if collector.needs_columns() {
+                        collector.set_columns(
+                            row.columns().iter().map(|c| c.name().to_string()).collect(),
+                        );
                     }
 
-                    // Check limit (only if manual_limit is set)
-                    if let Some(l) = manual_limit {
-                        if json_rows.len() >= l as usize {
-                            truncated = true;
-                            break;
-                        }
+                    // Past the row cap the row is still consumed (the stream
+                    // must drain to reach later result sets) but not decoded.
+                    if collector.at_limit() {
+                        collector.note_overflow_row();
+                        continue;
                     }
 
                     // Map row using type extraction function
@@ -1295,12 +1355,41 @@ async fn exec_on_mysql_conn(
                         let val = extract_value(&row, i, None);
                         json_row.push(val);
                     }
-                    json_rows.push(json_row);
+                    collector.push_row(json_row);
                 }
                 Err(e) => return Err(e.to_string()),
             }
         }
-    } // rows_stream dropped here — conn borrow released
+    } // event_stream dropped here — conn borrow released
+
+    let mut result_sets = collector.finish();
+    let primary = if result_sets.is_empty() {
+        multi_result::ResultSetData::default()
+    } else {
+        result_sets.remove(0)
+    };
+    let columns = primary.columns;
+    let mut json_rows = primary.rows;
+    if primary.truncated {
+        truncated = true;
+    }
+    let additional_results = if result_sets.is_empty() {
+        None
+    } else {
+        Some(
+            result_sets
+                .into_iter()
+                .map(|set| QueryResult {
+                    columns: set.columns,
+                    rows: set.rows,
+                    affected_rows: 0,
+                    truncated: set.truncated,
+                    pagination: None,
+                    additional_results: None,
+                })
+                .collect(),
+        )
+    };
 
     // Apply LIMIT +1 result: if we got page_size+1 rows, has_more=true
     if let Some(ref mut p) = pagination {
@@ -1318,6 +1407,7 @@ async fn exec_on_mysql_conn(
         affected_rows: 0,
         truncated,
         pagination,
+        additional_results,
     })
 }
 
@@ -1650,6 +1740,7 @@ impl MysqlDriver {
                 default_port: Some(3306),
                 capabilities: DriverCapabilities {
                     schemas: false,
+                    single_database: false,
                     views: true,
                     materialized_views: false,
                     routines: true,
@@ -1658,6 +1749,8 @@ impl MysqlDriver {
                     folder_based: false,
                     connection_string: true,
                     connection_string_example: "mysql://user:pass@localhost:3306/db".into(),
+                    connection_uri: false,
+                    connection_uri_schemes: Vec::new(),
                     identifier_quote: "`".into(),
                     alter_primary_key: true,
                     auto_increment_keyword: "AUTO_INCREMENT".into(),
@@ -1667,6 +1760,7 @@ impl MysqlDriver {
                     create_foreign_keys: true,
                     no_connection_required: false,
                     manage_tables: true,
+                    explain: true,
                     readonly: false,
                     triggers: true,
                     user_management: true,
@@ -1674,6 +1768,8 @@ impl MysqlDriver {
                     sql_dialect: SqlDialect::Mysql,
                 },
                 is_builtin: true,
+                engine: Some("mysql".to_string()),
+                paradigms: vec!["sql".to_string()],
                 default_username: "root".to_string(),
                 color: "#f97316".to_string(),
                 icon: "mysql".to_string(),
@@ -2156,7 +2252,7 @@ impl DatabaseDriver for MysqlDriver {
         query: &str,
         analyze: bool,
         schema: Option<&str>,
-    ) -> Result<crate::models::ExplainPlan, String> {
+    ) -> Result<crate::models::ExplainQueryOutput, String> {
         explain_query(params, query, analyze, schema).await
     }
 
