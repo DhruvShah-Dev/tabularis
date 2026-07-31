@@ -218,6 +218,14 @@ export const Editor = () => {
   const driverSupportsExplain = supportsExplain(activeCapabilities);
   const activeDialect = activeCapabilities?.sql_dialect;
 
+  // Editor panes stay mounted (hidden with display:none) so Monaco never
+  // remounts. Render them sorted by id, decoupled from the tab-strip order:
+  // reordering tabs must not make React move live Monaco DOM nodes.
+  const paneTabs = useMemo(
+    () => [...tabs].sort((a, b) => a.id.localeCompare(b.id)),
+    [tabs],
+  );
+
   const [tabContextMenu, setTabContextMenu] = useState<{
     x: number;
     y: number;
@@ -3572,7 +3580,7 @@ export const Editor = () => {
       </div>}
 
       {/* Render all non-table tabs to prevent Monaco remounting */}
-      {tabs.map((tab) => {
+      {paneTabs.map((tab) => {
         if (tab.type === "table") return null;
 
         const isActive = tab.id === activeTabId;
