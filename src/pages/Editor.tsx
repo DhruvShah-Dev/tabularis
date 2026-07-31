@@ -592,6 +592,8 @@ export const Editor = () => {
   const handleTabDragStart = useCallback(
     (e: React.DragEvent<HTMLDivElement>, tabId: string) => {
       e.dataTransfer.effectAllowed = "move";
+      // WebKitGTK (and Firefox) won't start a drag with an empty data store.
+      e.dataTransfer.setData("text/plain", tabId);
       setDragTabId(tabId);
     },
     [],
