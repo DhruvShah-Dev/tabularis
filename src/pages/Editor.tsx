@@ -342,7 +342,7 @@ export const Editor = () => {
     parameters: string[];
     pendingPageNum: number;
     pendingTabId?: string;
-    mode: "run" | "save";
+    mode: "run" | "save" | "explain";
     pendingMultiQueries?: string[];
   }>({
     isOpen: false,
@@ -1790,10 +1790,41 @@ export const Editor = () => {
     }
   }, [activeTab, activeDialect, runQuery, runMultipleQueries, settings.runStatementUnderCursor]);
 
-  const openExplainForQuery = useCallback((query: string) => {
-    setVisualExplainQuery(query);
+  const openExplainForQuery = useCallback((query: string, tabId?: string) => {
+    let queryToExplain = query;
+    const params = extractQueryParams(queryToExplain, activeDialect);
+    const targetTabId = tabId ?? activeTabIdRef.current;
+
+    if (params.length > 0 && targetTabId) {
+      const targetTab = tabsRef.current.find((tab) => tab.id === targetTabId);
+      const storedParams = targetTab?.queryParams || {};
+      const missingParams = params.filter(
+        (param) =>
+          storedParams[param] === undefined || storedParams[param].trim() === "",
+      );
+
+      if (missingParams.length > 0) {
+        setQueryParamsModal({
+          isOpen: true,
+          sql: queryToExplain,
+          parameters: params,
+          pendingPageNum: 1,
+          pendingTabId: targetTabId,
+          mode: "explain",
+        });
+        return;
+      }
+
+      queryToExplain = interpolateQueryParams(
+        queryToExplain,
+        storedParams,
+        activeDialect,
+      );
+    }
+
+    setVisualExplainQuery(queryToExplain);
     setIsVisualExplainOpen(true);
-  }, []);
+  }, [activeDialect]);
 
   const handleExplainButton = useCallback(() => {
     if (!activeTab || !activeConnectionId) return;
@@ -2754,9 +2785,18 @@ export const Editor = () => {
         } else {
           runQuery(sql, pendingPageNum, pendingTabId, newParams);
         }
+      } else if (mode === "explain") {
+        setVisualExplainQuery(interpolateQueryParams(sql, newParams, activeDialect));
+        setIsVisualExplainOpen(true);
       }
     },
-    [queryParamsModal, updateTab, runQuery, runMultipleQueries],
+    [
+      activeDialect,
+      queryParamsModal,
+      updateTab,
+      runQuery,
+      runMultipleQueries,
+    ],
   );
 
   const handleEditParams = useCallback(() => {
