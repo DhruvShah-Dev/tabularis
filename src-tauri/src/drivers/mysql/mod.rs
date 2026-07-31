@@ -256,7 +256,10 @@ pub async fn get_tables(
     let rows = fetch_all_rows(
         &pool,
         text,
-        "SELECT table_name as name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE' ORDER BY table_name ASC",
+        // MariaDB reports tables created WITH SYSTEM VERSIONING as table_type
+        // 'SYSTEM VERSIONED' rather than 'BASE TABLE', so they must be included
+        // explicitly or they silently vanish from the table list.
+        "SELECT table_name as name FROM information_schema.tables WHERE table_schema = ? AND table_type IN ('BASE TABLE', 'SYSTEM VERSIONED') ORDER BY table_name ASC",
         &[db_name],
     )
     .await?;
@@ -1616,6 +1619,8 @@ impl MysqlDriver {
                     folder_based: false,
                     connection_string: true,
                     connection_string_example: "mysql://user:pass@localhost:3306/db".into(),
+                    connection_uri: false,
+                    connection_uri_schemes: Vec::new(),
                     identifier_quote: "`".into(),
                     alter_primary_key: true,
                     auto_increment_keyword: "AUTO_INCREMENT".into(),
