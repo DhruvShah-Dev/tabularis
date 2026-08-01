@@ -40,11 +40,14 @@ jobs:
     runs-on: ${{ matrix.platform }}
     container: ${{ matrix.container }}
     steps:
+      # libatomic1 is required by the standalone pnpm binary (@pnpm/exe), which
+      # pnpm/action-setup bootstraps here because it runs before setup-node and
+      # finds no Node in the container.
       - name: Install container prerequisites (ubuntu container only)
         if: matrix.container
         run: |
           apt-get update
-          apt-get install -y git ca-certificates curl
+          apt-get install -y git ca-certificates curl libatomic1
       - name: Resolve build ref + tag
         id: meta
         shell: bash
