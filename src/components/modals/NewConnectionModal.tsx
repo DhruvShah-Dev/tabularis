@@ -2271,9 +2271,16 @@ export const NewConnectionModal = ({
         parsedFields.password = parsed.password || "";
       }
 
-      if (parsedIsMultiDb && parsed.database) {
-        setSelectedDatabasesState([parsed.database]);
-        setLoadAllDatabases(false);
+      if (parsedIsMultiDb) {
+        // A URI without a database means "browse everything": switch to
+        // all-databases mode instead of keeping whatever the form held before.
+        if (parsed.database) {
+          setSelectedDatabasesState([parsed.database]);
+          setLoadAllDatabases(false);
+        } else {
+          setSelectedDatabasesState([]);
+          setLoadAllDatabases(true);
+        }
       }
 
       if (newDriver !== driver) {
@@ -2285,7 +2292,11 @@ export const NewConnectionModal = ({
         ...parsedFields,
       }));
 
-      void loadDatabases(parsedFields);
+      // In all-databases mode there is no picker to fill, and the fetch can
+      // spawn SSH/K8s tunnels — same reasoning as the edit-dialog init above.
+      if (!parsedIsMultiDb || parsed.database) {
+        void loadDatabases(parsedFields);
+      }
     } else {
       setConnectionStringError(result.error);
     }
