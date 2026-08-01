@@ -4,7 +4,11 @@ import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
 import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
-import { getTableDataChangeScope, isMultiDatabaseCapable } from "../utils/database";
+import {
+  getTableDataChangeScope,
+  isMultiDatabaseCapable,
+  usesMultiDatabaseLayout,
+} from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
@@ -451,8 +455,7 @@ export const Editor = () => {
   const isNotebookTab = activeTab?.type === "notebook";
   // Users tabs render full-height like notebooks: no SQL toolbar, no results panel.
   const isUsersTab = activeTab?.type === "users";
-  const isMultiDb =
-    isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
+  const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
   const isEditorOpen =
     !isTableTab && (activeTab?.isEditorOpen ?? activeTab?.type !== "table");
 
