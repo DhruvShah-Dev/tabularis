@@ -794,6 +794,24 @@ describe('visualQuery utils', () => {
       expect(result).toContain('FROM\n  "user" t1');
     });
 
+    it('should quote postgres SQL when the driver id is postgresql', () => {
+      const nodes: QueryNode[] = [
+        {
+          id: 'n1',
+          data: {
+            label: 'AccountEventLog',
+            columns: [{ name: 'AccountId', type: 'INT' }],
+            selectedColumns: { AccountId: true },
+          },
+        },
+      ];
+
+      const result = generateVisualQuerySQL(nodes, [], [], [], [], '', 'postgresql');
+
+      expect(result).toContain('t1."AccountId"');
+      expect(result).toContain('FROM\n  "AccountEventLog" t1');
+    });
+
     it('should generate postgres SQL with quoted HAVING refs and aliases', () => {
       const nodes: QueryNode[] = [
         {
