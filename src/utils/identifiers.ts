@@ -62,7 +62,7 @@ export function formatSqlIdentifier(
 
 export function quoteIdentifier(
   identifier: string,
-  driver: string | null | undefined,
+  driver: string | PluginManifest | null | undefined,
 ): string {
   const quote = getQuoteChar(driver);
   const escaped =
@@ -79,7 +79,7 @@ export function quoteIdentifier(
  */
 export function quoteTableRef(
   table: string,
-  driver: string | null | undefined,
+  driver: string | PluginManifest | null | undefined,
   schema?: string | null,
 ): string {
   if (schema) {
