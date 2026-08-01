@@ -13,10 +13,12 @@ import {
   Shield,
   Cable,
   Archive,
+  EyeOff,
 } from "lucide-react";
 import clsx from "clsx";
 import { ConfigJsonModal } from "../components/modals/ConfigJsonModal";
 import { GeneralTab } from "../components/settings/GeneralTab";
+import { PrivacyTab } from "../components/settings/PrivacyTab";
 import { AppearanceTab } from "../components/settings/AppearanceTab";
 import { LocalizationTab } from "../components/settings/LocalizationTab";
 import { AiTab } from "../components/settings/AiTab";
@@ -33,6 +35,7 @@ import { useSettings } from "../hooks/useSettings";
 
 type SettingsTab =
   | "general"
+  | "privacy"
   | "ssh"
   | "backup"
   | "appearance"
@@ -57,6 +60,7 @@ const TAB_ITEMS: Array<{
   labelKey: string;
 }> = [
   { id: "general", icon: SettingsIcon, labelKey: "settings.general" },
+  { id: "privacy", icon: EyeOff, labelKey: "settings.privacy" },
   { id: "ssh", icon: Cable, labelKey: "sshConnections.title" },
   { id: "backup", icon: Archive, labelKey: "settings.backup.title" },
   { id: "plugins", icon: Plug, labelKey: "settings.plugins.title" },
@@ -71,6 +75,7 @@ const TAB_ITEMS: Array<{
 
 const TAB_COMPONENTS: Partial<Record<SettingsTab, React.ComponentType>> = {
   general: GeneralTab,
+  privacy: PrivacyTab,
   ssh: SshTab,
   backup: BackupTab,
   appearance: AppearanceTab,
