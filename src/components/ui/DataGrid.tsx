@@ -875,6 +875,11 @@ export const DataGrid = React.memo(
         value !== undefined
       ) {
         editValue = formatGeometricValue(value);
+      } else if (
+        value !== null &&
+        typeof value === "object"
+      ) {
+        editValue = JSON.stringify(value);
       }
 
       const doubleClickAction = settings.cellDoubleClickAction ?? "inline";
