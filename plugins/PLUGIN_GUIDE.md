@@ -1,6 +1,8 @@
 # Writing a Custom Database Driver Plugin for Tabularis
 
 > **New to plugins?** Start with [`PLUGIN_TUTORIAL.md`](./PLUGIN_TUTORIAL.md) — a 20-minute walkthrough that ends with a working Google Sheets driver. This document is a **reference**, not a tutorial.
+>
+> 📚 The canonical, browsable version of the plugin docs lives at [tabularis.dev/wiki/plugins](https://tabularis.dev/wiki/plugins).
 
 Tabularis supports extending its capabilities via a JSON-RPC based external plugin system. By building a standalone executable that implements the JSON-RPC interface, you can add support for virtually any SQL or NoSQL database (such as DuckDB, MongoDB, etc.) using the programming language of your choice.
 
