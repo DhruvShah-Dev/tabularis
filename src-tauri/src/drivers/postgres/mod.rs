@@ -1789,6 +1789,7 @@ impl PostgresDriver {
                 icon: "postgres".to_string(),
                 settings: vec![],
                 ui_extensions: None,
+                type_mappings: std::collections::HashMap::new(),
             },
         }
     }
