@@ -11,8 +11,7 @@ export const PINNED_PALETTE_RELEVANCE = 100;
 
 /**
  * Indexing is the expensive part and depends only on `items`, so callers build
- * the search once per item list and reuse it across keystrokes. The index
- * itself is deferred until a query actually needs it.
+ * the search once per item list and reuse it across keystrokes.
  */
 export function createPaletteSearch(
   items: PaletteItem[],

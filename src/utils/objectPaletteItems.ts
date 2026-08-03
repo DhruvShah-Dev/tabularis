@@ -114,7 +114,7 @@ function createActions(
     label: labels.query,
     icon: "query",
     // Opening a table also selects it in the explorer, matching a double-click
-    // there. Only tables — views never did.
+    // there.
     execute: () => {
       if (object.type === "table" && object.schema) {
         runtime.setActiveTable(object.name, object.schema);
