@@ -125,6 +125,12 @@ export const SpotlightPalette = ({
           ) : (
             <Search size={18} className="shrink-0 text-secondary" />
           )}
+          <span
+            aria-hidden="true"
+            className="shrink-0 rounded bg-surface-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-secondary"
+          >
+            {ariaLabel}
+          </span>
           <input
             role="combobox"
             aria-label={searchLabel}

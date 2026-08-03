@@ -46,6 +46,15 @@ describe("SpotlightPalette", () => {
     expect(screen.getByRole("combobox", { name: "Search" })).toHaveFocus();
   });
 
+  it("should show which palette is open without repeating it to screen readers", () => {
+    renderPalette();
+
+    const modeLabel = screen.getByText("Palette");
+
+    expect(modeLabel).toBeInTheDocument();
+    expect(modeLabel).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("should reset selection when the query changes", () => {
     const { onQueryChange, onSelectedIndexChange } = renderPalette();
 
