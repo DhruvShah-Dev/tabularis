@@ -55,7 +55,7 @@ What you got:
 ```
 google-sheets/
 ├── Cargo.toml
-├── manifest.json          ← plugin metadata (id, capabilities, UI extensions…)
+├── .tabularium            ← plugin manifest (identity, capabilities, UI extensions…)
 ├── justfile               ← build / install / test recipes
 ├── README.md
 ├── rust-toolchain.toml
@@ -90,13 +90,15 @@ Should print `Finished` in a few seconds. If it doesn't, stop and open an issue 
 
 ## 2. Declare the driver (3 minutes)
 
-Edit `manifest.json`. The scaffold gives you this:
+Edit `.tabularium`. The scaffold gives you this:
 
 ```json
 {
-  "$schema": "https://tabularis.dev/schemas/plugin-manifest.json",
-  "id": "google-sheets",
-  "name": "Google Sheets",
+  "$schema": "https://registry.tabularis.dev/manifest.schema.json?kind=driver",
+  "name": "google-sheets",
+  "kind": "driver",
+  "engine": "google-sheets",
+  "paradigms": ["relational"],
   "capabilities": {
     "schemas": false, "views": false, "routines": false,
     "file_based": false, "folder_based": false,
@@ -155,7 +157,7 @@ Replace the default with the three types Sheets actually uses:
 ]
 ```
 
-**Checkpoint:** `cargo check` still passes — `manifest.json` isn't touched by rustc.
+**Checkpoint:** `cargo check` still passes — `.tabularium` isn't touched by rustc.
 
 ---
 
@@ -561,7 +563,7 @@ pnpm --dir ui build
 PLUGIN_DIR="$HOME/.local/share/tabularis/plugins/google-sheets"
 mkdir -p "$PLUGIN_DIR/ui/dist"
 cp target/release/google-sheets-plugin "$PLUGIN_DIR/"
-cp manifest.json "$PLUGIN_DIR/"
+cp .tabularium "$PLUGIN_DIR/"
 cp ui/dist/*.js "$PLUGIN_DIR/ui/dist/"
 chmod +x "$PLUGIN_DIR/google-sheets-plugin"
 ```
