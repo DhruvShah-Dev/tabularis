@@ -13,8 +13,8 @@ use tokio::sync::{mpsc, oneshot};
 use crate::drivers::driver_trait::{BatchProgressFn, DatabaseDriver, PluginManifest};
 use crate::models::{
     AiSchemaContext, BatchStatementResult, ColumnDefinition, ConnectionParams, DataTypeInfo,
-    ExplainQueryOutput, ForeignKey, Index, QueryResult, RoutineInfo, RoutineParameter, TableColumn,
-    TableInfo, TableSchema, TriggerInfo, ViewInfo,
+    DbPrivilegeCatalog, DbUserInfo, ExplainQueryOutput, ForeignKey, Index, QueryResult, RoutineInfo,
+    RoutineParameter, TableColumn, TableInfo, TableSchema, TriggerInfo, ViewInfo,
 };
 use crate::plugins::rpc::{JsonRpcRequest, JsonRpcResponse};
 
@@ -875,6 +875,130 @@ impl DatabaseDriver for RpcDriver {
             )
             .await?;
         serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    // --- User management (plugins opt in via `capabilities.userManagement`) --
+
+    async fn get_db_privilege_catalog(&self) -> Result<DbPrivilegeCatalog, String> {
+        let res = self
+            .process
+            .call("get_db_privilege_catalog", json!({}))
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn get_db_users(&self, params: &ConnectionParams) -> Result<Vec<DbUserInfo>, String> {
+        let res = self
+            .process
+            .call("get_db_users", json!({ "params": params }))
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn get_db_user_grants(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+    ) -> Result<Vec<String>, String> {
+        let res = self
+            .process
+            .call(
+                "get_db_user_grants",
+                json!({ "params": params, "user": user, "host": host }),
+            )
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn create_db_user(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+        password: &str,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "create_db_user",
+                json!({ "params": params, "user": user, "host": host, "password": password }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn drop_db_user(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "drop_db_user",
+                json!({ "params": params, "user": user, "host": host }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn set_db_user_password(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+        password: &str,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "set_db_user_password",
+                json!({ "params": params, "user": user, "host": host, "password": password }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn get_db_user_privileges(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+    ) -> Result<Vec<crate::models::DbUserGrantSet>, String> {
+        let res = self
+            .process
+            .call(
+                "get_db_user_privileges",
+                json!({ "params": params, "user": user, "host": host }),
+            )
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn apply_db_user_privileges(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+        database: Option<&str>,
+        table: Option<&str>,
+        privileges: &[String],
+        grant: bool,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "apply_db_user_privileges",
+                json!({
+                    "params": params,
+                    "user": user,
+                    "host": host,
+                    "database": database,
+                    "table": table,
+                    "privileges": privileges,
+                    "grant": grant
+                }),
+            )
+            .await?;
+        Ok(())
     }
 
     async fn get_trigger_definition(

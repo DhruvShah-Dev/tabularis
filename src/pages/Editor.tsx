@@ -2,8 +2,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
+import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
-import { getTableDataChangeScope, isMultiDatabaseCapable } from "../utils/database";
+import {
+  getTableDataChangeScope,
+  isMultiDatabaseCapable,
+  usesMultiDatabaseLayout,
+} from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
@@ -44,6 +49,7 @@ import {
   Trash2,
   Check,
   BookOpen,
+  UsersRound,
   Pencil,
   Hash,
   Loader2,
@@ -106,11 +112,13 @@ import {
 } from "../utils/resultsWindowSync";
 import { SqlEditorWrapper } from "../components/ui/SqlEditorWrapper";
 import { NotebookView } from "../components/notebook/NotebookView";
+import { UserManagementView } from "../components/users/UserManagementView";
 import { useSqlAutocompleteRegistration } from "../hooks/useSqlAutocompleteRegistration";
 import { createNotebook, renameNotebook } from "../utils/notebookStore";
 import { type OnMount, type Monaco } from "@monaco-editor/react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useAlert } from "../hooks/useAlert";
+import { useToast } from "../hooks/useToast";
 import { useDatabase } from "../hooks/useDatabase";
 import { useDrivers } from "../hooks/useDrivers";
 import { getConnectionAccent } from "../utils/driverUI";
@@ -213,6 +221,7 @@ export const Editor = () => {
   const location = useLocation();
   const { matchesShortcut, isMac } = useKeybindings();
   const { showAlert } = useAlert();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const driverReadonly = isReadonly(activeCapabilities);
@@ -444,8 +453,9 @@ export const Editor = () => {
   const activeTabQuery = activeTab?.query;
   const isTableTab = activeTab?.type === "table";
   const isNotebookTab = activeTab?.type === "notebook";
-  const isMultiDb =
-    isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
+  // Users tabs render full-height like notebooks: no SQL toolbar, no results panel.
+  const isUsersTab = activeTab?.type === "users";
+  const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
   const isEditorOpen =
     !isTableTab && (activeTab?.isEditorOpen ?? activeTab?.type !== "table");
 
@@ -2920,7 +2930,7 @@ export const Editor = () => {
   useSqlAutocompleteRegistration(activeConnectionId, {
     monaco: monacoInstance,
     schema: activeSchema,
-    enabled: !isNotebookTab,
+    enabled: !isNotebookTab && !isUsersTab,
   });
 
   useEffect(() => {
@@ -3149,6 +3159,73 @@ export const Editor = () => {
   const handleExportJSON = () => handleExportCommon("json");
   const handleExportMarkdown = () => handleExportCommon("markdown");
 
+  // Re-runs the active tab's query without pagination and copies the full
+  // result set to the clipboard. Triggered from the grid's select-all flow
+  // when the result continues beyond the loaded page.
+  const handleCopyAllRows = useCallback(async () => {
+    if (!activeTab || !activeConnectionId) return;
+    const totalRows = activeTab.result?.pagination?.total_rows;
+    const columns = activeTab.result?.columns ?? [];
+    if (columns.length === 0) return;
+
+    const effectiveSchema =
+      activeCapabilities?.schemas === true ? activeTab.schema : undefined;
+    const tabForQuery = { ...activeTab, schema: effectiveSchema };
+    const query =
+      activeTab.type === "table" && activeTab.activeTable
+        ? // limitOverride: copy-all goes beyond the tab's "Total Limit" — the
+          // user explicitly asked for every row. Sort is kept so the copy
+          // matches the on-screen order.
+          reconstructTableQuery(tabForQuery, activeDriver ?? undefined, {
+            limitOverride: null,
+          })
+        : activeTab.query;
+    if (!query || !query.trim()) return;
+
+    // Mirror runQuery's schema resolution so the full fetch targets the same
+    // database/schema as the page the user is looking at.
+    const schema = activeTab?.schema ?? activeSchema;
+
+    try {
+      const res = await invoke<QueryResult>("execute_query", {
+        connectionId: activeConnectionId,
+        query,
+        // When the total is unknown (no row count requested yet), fall back to
+        // a large practical cap; the toast reports the actual rows fetched.
+        limit: totalRows ?? 1_000_000,
+        page: 1,
+        ...(schema ? { schema } : {}),
+      });
+      const text = formatRowsForCopy(res.rows, res.columns ?? columns, copyFormat, {
+        withHeaders: true,
+        csvIncludeHeaders,
+        csvDelimiter,
+        tableName: activeTab.activeTable,
+      });
+      await copyTextToClipboard(text);
+      showToast(t("dataGrid.copiedRows", { count: res.rows.length }), {
+        kind: "success",
+      });
+    } catch (e) {
+      showAlert(t("common.error") + ": " + e, {
+        title: t("common.error"),
+        kind: "error",
+      });
+    }
+  }, [
+    activeTab,
+    activeConnectionId,
+    activeCapabilities,
+    activeDriver,
+    activeSchema,
+    copyFormat,
+    csvDelimiter,
+    csvIncludeHeaders,
+    showAlert,
+    showToast,
+    t,
+  ]);
+
   const handleRunDropdownToggle = useCallback(() => {
     if (!isRunDropdownOpen) {
       // Monaco Editor: split queries from editor
@@ -3297,6 +3374,8 @@ export const Editor = () => {
                 <Network size={12} className="text-accent-secondary shrink-0" />
               ) : tab.type === "notebook" ? (
                 <BookOpen size={12} className="text-orange-400 shrink-0" />
+              ) : tab.type === "users" ? (
+                <UsersRound size={12} className="text-emerald-400 shrink-0" />
               ) : (
                 <FileCode size={12} className="text-accent-secondary shrink-0" />
               )}
@@ -3406,12 +3485,12 @@ export const Editor = () => {
         </button>
       </div>
 
-      {/* Toolbar — hidden for notebook tabs. A size container so buttons can
+      {/* Toolbar — hidden for notebook and users tabs. A size container so buttons can
           collapse to icon-only in narrow split panes; the explicit z-index
           keeps its dropdowns above the editor and the table toolbar (z-30):
           the container creates a stacking context that would otherwise paint
           below later siblings. */}
-      {!isNotebookTab && <div className="@container relative z-40 flex items-center py-2 pl-2 pr-3 border-b border-default bg-elevated gap-1.5 @[560px]:gap-2 h-[50px]">
+      {!isNotebookTab && !isUsersTab && <div className="@container relative z-40 flex items-center py-2 pl-2 pr-3 border-b border-default bg-elevated gap-1.5 @[560px]:gap-2 h-[50px]">
         {!activeTab.readOnly && activeTab.isLoading ? (
           <button
             onClick={stopQuery}
@@ -3646,6 +3725,22 @@ export const Editor = () => {
 
         const isActive = tab.id === activeTabId;
 
+        // Users tabs get full-height rendering (no SQL editor / results panel)
+        if (tab.type === "users") {
+          return (
+            <div
+              key={tab.id}
+              style={{ display: isActive ? "flex" : "none" }}
+              className="flex-1 flex flex-col min-h-0 overflow-hidden"
+            >
+              <UserManagementView
+                connectionId={tab.connectionId}
+                isActive={isActive}
+              />
+            </div>
+          );
+        }
+
         // Notebook tabs get full-height rendering
         if (tab.type === "notebook") {
           return (
@@ -3736,7 +3831,7 @@ export const Editor = () => {
       })}
 
       {/* Resize Bar & Results Panel */}
-      {!isNotebookTab && (isTableTab || !isResultsCollapsed) ? (
+      {!isNotebookTab && !isUsersTab && (isTableTab || !isResultsCollapsed) ? (
         <>
           {isTableTab ? (
             <TableToolbar
@@ -4315,6 +4410,9 @@ export const Editor = () => {
                           : undefined
                       }
                       readonly={driverReadonly || !!activeTab.materialized}
+                      totalRows={activeTab.result?.pagination?.total_rows}
+                      hasMore={activeTab.result?.pagination?.has_more}
+                      onCopyAllRows={handleCopyAllRows}
                     />
                   </div>
                   {activeFkQuery && activeConnectionId && (
@@ -4469,7 +4567,7 @@ export const Editor = () => {
                   },
                 ]
               : []),
-            ...(!["console", "notebook", "query_builder"].includes(
+            ...(!["console", "notebook", "query_builder", "users"].includes(
               tabs.find((t) => t.id === tabContextMenu.tabId)?.type ?? "",
             )
               ? [
