@@ -2003,10 +2003,12 @@
     "escapeHint": "Chiudi",
     "categories": {
       "navigation": "Navigazione",
+      "connection": "Connessione",
       "table": "Tabella"
     },
     "commands": {
       "openSettings": "Apri impostazioni",
+      "openConnections": "Apri gestore connessioni",
       "openTableInConsole": "Apri la tabella corrente nella console SQL"
     }
   },

@@ -2090,10 +2090,12 @@
     "escapeHint": "Close",
     "categories": {
       "navigation": "Navigation",
+      "connection": "Connection",
       "table": "Table"
     },
     "commands": {
       "openSettings": "Open settings",
+      "openConnections": "Open connection manager",
       "openTableInConsole": "Open current table in SQL console"
     }
   },

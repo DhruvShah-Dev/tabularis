@@ -185,7 +185,7 @@ describe("CommandPaletteModal", () => {
     renderPalette();
     const input = screen.getByRole("combobox");
 
-    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.change(input, { target: { value: "openSettings" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() =>
@@ -263,11 +263,10 @@ describe("CommandPaletteModal", () => {
       new Error("Connection failed"),
     );
     renderPalette();
+    const input = screen.getByRole("combobox");
 
-    fireEvent.keyDown(screen.getByRole("combobox"), {
-      key: "ArrowDown",
-    });
-    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
+    fireEvent.change(input, { target: { value: "openSettings" } });
+    fireEvent.keyDown(input, { key: "Enter" });
 
     expect(
       await screen.findByText(
@@ -287,6 +286,20 @@ describe("CommandPaletteModal", () => {
       "aria-busy",
       "false",
     );
+  });
+
+  it("should open the inspect modal for the table in scope", async () => {
+    renderPalette();
+    const input = screen.getByRole("combobox");
+
+    fireEvent.change(input, {
+      target: { value: "quickNavigator.actions.inspect" },
+    });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(
+      await screen.findByText("Inspect connection-1/public/users"),
+    ).toBeInTheDocument();
   });
 
   it("should render database objects through the same palette", () => {

@@ -2052,10 +2052,12 @@
     "escapeHint": "Fechar",
     "categories": {
       "navigation": "Navegação",
+      "connection": "Conexão",
       "table": "Tabela"
     },
     "commands": {
       "openSettings": "Abrir configurações",
+      "openConnections": "Abrir gerenciador de conexões",
       "openTableInConsole": "Abrir a tabela atual no console SQL"
     }
   },

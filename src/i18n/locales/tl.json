@@ -2071,10 +2071,12 @@
     "escapeHint": "Isara",
     "categories": {
       "navigation": "Navigation",
+      "connection": "Koneksyon",
       "table": "Talahanayan"
     },
     "commands": {
       "openSettings": "Buksan ang settings",
+      "openConnections": "Buksan ang connection manager",
       "openTableInConsole": "Buksan ang kasalukuyang talahanayan sa SQL console"
     }
   },

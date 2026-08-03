@@ -16,9 +16,17 @@ import type { TableTarget } from "../../types/databaseObjects";
  * Each palette mounts only while it is the active one: the object palette
  * eagerly loads every schema, which must not happen for the action palette.
  */
-const ActionPalette = () => {
+interface ActionPaletteProps {
+  onGenerateSql: (target: TableTarget) => void;
+  onInspect: (target: TableTarget) => void;
+}
+
+const ActionPalette = ({
+  onGenerateSql,
+  onInspect,
+}: ActionPaletteProps) => {
   const { t } = useTranslation();
-  const items = useCommandPaletteActionItems();
+  const items = useCommandPaletteActionItems(onGenerateSql, onInspect);
   const labels: PaletteLabels = {
     ariaLabel: t("commandPalette.title"),
     searchLabel: t("commandPalette.searchLabel"),
@@ -67,7 +75,12 @@ export const CommandPaletteModal = () => {
 
   return (
     <>
-      {activePalette === "actions" && <ActionPalette />}
+      {activePalette === "actions" && (
+        <ActionPalette
+          onGenerateSql={setGenerateSQLTarget}
+          onInspect={setInspectTarget}
+        />
+      )}
       {activePalette === "objects" && (
         <ObjectPalette
           onGenerateSql={setGenerateSQLTarget}

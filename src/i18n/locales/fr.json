@@ -2079,10 +2079,12 @@
     "escapeHint": "Fermer",
     "categories": {
       "navigation": "Navigation",
+      "connection": "Connexion",
       "table": "Table"
     },
     "commands": {
       "openSettings": "Ouvrir les paramètres",
+      "openConnections": "Ouvrir le gestionnaire de connexions",
       "openTableInConsole": "Ouvrir la table actuelle dans la console SQL"
     }
   },

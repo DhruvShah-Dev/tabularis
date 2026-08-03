@@ -1941,10 +1941,12 @@
     "escapeHint": "关闭",
     "categories": {
       "navigation": "导航",
+      "connection": "连接",
       "table": "表"
     },
     "commands": {
       "openSettings": "打开设置",
+      "openConnections": "打开连接管理器",
       "openTableInConsole": "在 SQL 控制台中打开当前表"
     }
   },

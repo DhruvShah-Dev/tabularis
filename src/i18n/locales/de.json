@@ -2001,10 +2001,12 @@
     "escapeHint": "Schließen",
     "categories": {
       "navigation": "Navigation",
+      "connection": "Verbindung",
       "table": "Tabelle"
     },
     "commands": {
       "openSettings": "Einstellungen öffnen",
+      "openConnections": "Verbindungsverwaltung öffnen",
       "openTableInConsole": "Aktuelle Tabelle in SQL-Konsole öffnen"
     }
   },

@@ -1923,10 +1923,12 @@
     "escapeHint": "Cerrar",
     "categories": {
       "navigation": "Navegación",
+      "connection": "Conexión",
       "table": "Tabla"
     },
     "commands": {
       "openSettings": "Abrir configuración",
+      "openConnections": "Abrir gestor de conexiones",
       "openTableInConsole": "Abrir la tabla actual en la consola SQL"
     }
   },

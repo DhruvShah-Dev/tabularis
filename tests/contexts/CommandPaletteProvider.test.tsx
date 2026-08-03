@@ -79,7 +79,7 @@ function ContextConsumer({
 }: {
   onContexts: (contexts: PaletteContexts) => void;
 }) {
-  const items = useCommandPaletteActionItems();
+  const items = useCommandPaletteActionItems(vi.fn(), vi.fn());
   const dispatch = useCommandPaletteDispatch();
   const state = useCommandPaletteState();
   onContexts({ items, dispatch, state });
@@ -158,7 +158,12 @@ describe("CommandPaletteProvider", () => {
       ),
     ).toEqual([
       "table.open-in-console",
+      "table.inspect",
+      "table.generate-sql",
+      "table.count-rows",
       "app.open-settings",
+      "app.open-connections",
+      "connection.new-console",
     ]);
   });
 

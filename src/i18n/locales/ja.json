@@ -2019,10 +2019,12 @@
     "escapeHint": "閉じる",
     "categories": {
       "navigation": "ナビゲーション",
+      "connection": "接続",
       "table": "テーブル"
     },
     "commands": {
       "openSettings": "設定を開く",
+      "openConnections": "接続マネージャーを開く",
       "openTableInConsole": "現在のテーブルをSQLコンソールで開く"
     }
   },

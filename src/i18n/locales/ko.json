@@ -2005,10 +2005,12 @@
     "escapeHint": "닫기",
     "categories": {
       "navigation": "탐색",
+      "connection": "연결",
       "table": "테이블"
     },
     "commands": {
       "openSettings": "설정 열기",
+      "openConnections": "연결 관리자 열기",
       "openTableInConsole": "현재 테이블을 SQL 콘솔에서 열기"
     }
   },
