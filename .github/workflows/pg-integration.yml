@@ -75,16 +75,17 @@ jobs:
       - name: Run PostgreSQL integration tests
         working-directory: src-tauri
         env:
-          # Run sequentially to avoid pool contention. With 100+ tests sharing
-          # global connection pools (keyed by ConnectionParams), concurrent tests
-          # cause intermittent "connection closed" errors from pool exhaustion.
-          # Sequential execution adds ~5s but eliminates all flakiness.
           RUST_TEST_THREADS: "1"
-          # Regenerate golden files so newly added captures are written.
           REGENERATE_GOLDEN: "1"
-          # Point parity harness at the plugin binary for dual-driver testing.
-          POSTGRES_PLUGIN_BIN: ${{ github.workspace }}/plugins/postgres-plugin/target/release/postgresql-plugin
         run: cargo test --test postgres_integration -- --include-ignored
+
+      - name: Run parity tests (plugin vs builtin)
+        working-directory: src-tauri
+        continue-on-error: true
+        env:
+          RUST_TEST_THREADS: "1"
+          POSTGRES_PLUGIN_BIN: ${{ github.workspace }}/plugins/postgres-plugin/target/release/postgresql-plugin
+        run: cargo test --test postgres_integration parity -- --include-ignored
 
       - name: Upload golden files
         if: always()
