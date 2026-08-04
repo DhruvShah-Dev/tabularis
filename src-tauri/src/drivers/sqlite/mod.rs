@@ -1006,6 +1006,7 @@ impl SqliteDriver {
                     readonly: false,
                     triggers: true,
                     supports_ssl: false,
+                    user_management: false,
                     sql_dialect: SqlDialect::Sqlite,
                 },
                 is_builtin: true,
@@ -1016,6 +1017,7 @@ impl SqliteDriver {
                 icon: "sqlite".to_string(),
                 settings: vec![],
                 ui_extensions: None,
+                type_mappings: std::collections::HashMap::new(),
             },
         }
     }
