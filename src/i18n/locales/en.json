@@ -999,6 +999,8 @@
     "waiting": "Waiting for your security key — touch it to confirm."
   },
   "dataGrid": {
+    "noRowIdentity": "Rows can't be edited: \"{{table}}\" has no primary key, so editing requires the result to include all table columns. Select all columns (e.g. SELECT *) or add a primary key.",
+    "keylessRowNotFound": "No row matched the original values while updating \"{{column}}\". The table has no primary key and its data may have changed — refresh and retry.",
     "newRow": "NEW",
     "noData": "No data to display",
     "editRow": "Edit Row",

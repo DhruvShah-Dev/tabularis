@@ -5,6 +5,10 @@ import { reconstructTableQuery } from "../utils/editor";
 import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import {
+  buildKeylessUpdatePlan,
+  resolveRowIdentity,
+} from "../utils/rowIdentity";
+import {
   getTableDataChangeScope,
   isMultiDatabaseCapable,
   usesMultiDatabaseLayout,
@@ -703,6 +707,19 @@ export const Editor = () => {
     Record<string, { sql: string; page: number }>
   >({});
 
+  // Identity used to address rows in UPDATE/DELETE statements: the primary
+  // key when the table has one, otherwise a fallback on all comparable
+  // columns (keyless tables, see resolveRowIdentity).
+  const rowIdentity = useMemo(
+    () =>
+      resolveRowIdentity(
+        activeTab?.pkColumns,
+        activeTab?.columnMetadata,
+        activeTab?.result?.columns,
+      ),
+    [activeTab?.pkColumns, activeTab?.columnMetadata, activeTab?.result?.columns],
+  );
+
   const selectionHasPending = useMemo(() => {
     if (!activeTab) return false;
     const {
@@ -711,8 +728,8 @@ export const Editor = () => {
       pendingInsertions,
       selectedRows,
       result,
-      pkColumns,
     } = activeTab;
+    const pkColumns = rowIdentity?.columns ?? null;
     const hasGlobalPending =
       (pendingChanges && Object.keys(pendingChanges).length > 0) ||
       (pendingDeletions && Object.keys(pendingDeletions).length > 0) ||
@@ -742,7 +759,7 @@ export const Editor = () => {
         (pendingDeletions && pendingDeletions[pkKey])
       );
     });
-  }, [activeTab]);
+  }, [activeTab, rowIdentity]);
 
   const hasPendingChanges = useMemo(() => {
     return (
@@ -2181,8 +2198,8 @@ export const Editor = () => {
     activeTab.selectedRows.forEach((rowIndex) => {
       if (rowIndex < existingRowCount) {
         // Existing row - add to pending deletions
-        if (activeTab.result && activeTab.pkColumns && activeTab.pkColumns.length > 0) {
-          const pkCols = activeTab.pkColumns;
+        if (activeTab.result && rowIdentity && rowIdentity.columns.length > 0) {
+          const pkCols = rowIdentity.columns;
           const pkIndices = pkCols.map((c) => activeTab.result!.columns.indexOf(c));
           if (pkIndices.every((i) => i !== -1)) {
             const row = activeTab.result.rows[rowIndex];
@@ -2211,7 +2228,7 @@ export const Editor = () => {
       pendingInsertions: newPendingInsertions,
       selectedRows: [],
     });
-  }, [activeTab, updateActiveTab]);
+  }, [activeTab, updateActiveTab, rowIdentity]);
 
   const handlePendingInsertionChange = useCallback(
     (tempId: string, colName: string, value: unknown) => {
@@ -2477,17 +2494,19 @@ export const Editor = () => {
   const handleSubmitChanges = useCallback(async () => {
     if (!activeTab || !activeTab.activeTable || !activeConnectionId) return;
 
-    // pkColumns is required for updates/deletions but not for insertions-only
-    const hasPkColumns = !!(activeTab.pkColumns && activeTab.pkColumns.length > 0);
-
     const {
       pendingChanges,
       pendingDeletions,
       pendingInsertions,
       activeTable,
-      pkColumns,
       selectedRows,
     } = activeTab;
+
+    // A row identity is required for updates/deletions but not for
+    // insertions-only. Keyless tables fall back to all-columns identity.
+    const pkColumns = rowIdentity?.columns ?? null;
+    const hasPkColumns = !!(pkColumns && pkColumns.length > 0);
+    const isKeyless = rowIdentity?.isKeyless ?? false;
     const updates: { pkVal: Record<string, unknown>; colName: string; newVal: unknown }[] = [];
     const deletions: Record<string, unknown>[] = [];
     const insertions: { tempId: string; data: Record<string, unknown> }[] = [];
@@ -2620,18 +2639,63 @@ export const Editor = () => {
 
       // Updates
       if (updates.length > 0) {
-        promises.push(
-          ...updates.map((u) =>
-            invoke("update_record", {
-              connectionId: activeConnectionId,
-              table: activeTable,
-              pkMap: u.pkVal,
-              colName: u.colName,
-              newVal: u.newVal,
-              ...dataChangeScope,
+        if (isKeyless) {
+          // Without a primary key the WHERE clause matches every identity
+          // column, so each UPDATE invalidates the previous values used to
+          // address the row. Group changes per row and run them in order,
+          // threading the already-applied values into each WHERE map.
+          const updatesByRow = new Map<
+            string,
+            { pkVal: Record<string, unknown>; changes: Record<string, unknown> }
+          >();
+          for (const u of updates) {
+            const rowKey = serializePkKey(u.pkVal);
+            const entry = updatesByRow.get(rowKey) ?? {
+              pkVal: u.pkVal,
+              changes: {},
+            };
+            entry.changes[u.colName] = u.newVal;
+            updatesByRow.set(rowKey, entry);
+          }
+
+          promises.push(
+            ...Array.from(updatesByRow.values()).map(async (row) => {
+              const plan = buildKeylessUpdatePlan(row.pkVal, row.changes);
+              for (const step of plan) {
+                const affected = await invoke<number>("update_record", {
+                  connectionId: activeConnectionId,
+                  table: activeTable,
+                  pkMap: step.pkMap,
+                  colName: step.colName,
+                  newVal: step.newVal,
+                  ...dataChangeScope,
+                });
+                if (affected === 0) {
+                  throw new Error(
+                    t("dataGrid.keylessRowNotFound", {
+                      column: step.colName,
+                      defaultValue:
+                        'No row matched the original values while updating "{{column}}". The table has no primary key and its data may have changed — refresh and retry.',
+                    }),
+                  );
+                }
+              }
             }),
-          ),
-        );
+          );
+        } else {
+          promises.push(
+            ...updates.map((u) =>
+              invoke("update_record", {
+                connectionId: activeConnectionId,
+                table: activeTable,
+                pkMap: u.pkVal,
+                colName: u.colName,
+                newVal: u.newVal,
+                ...dataChangeScope,
+              }),
+            ),
+          );
+        }
       }
 
       // Insertions
@@ -2717,6 +2781,7 @@ export const Editor = () => {
     activeSchema,
     activeCapabilities,
     showAlert,
+    rowIdentity,
   ]);
 
   // Cmd/Ctrl+S: commit the active tab's pending grid changes (like TablePlus).
@@ -2797,11 +2862,11 @@ export const Editor = () => {
     const {
       selectedRows,
       result,
-      pkColumns,
       pendingChanges,
       pendingDeletions,
       pendingInsertions,
     } = activeTab;
+    const pkColumns = rowIdentity?.columns ?? null;
 
     // If applyToAll is true OR no selection, rollback everything
     if (applyToAll || !selectedRows || selectedRows.length === 0) {
@@ -2869,7 +2934,7 @@ export const Editor = () => {
           ? newPendingInsertions
           : undefined,
     });
-  }, [activeTab, updateActiveTab, applyToAll]);
+  }, [activeTab, updateActiveTab, applyToAll, rowIdentity]);
 
   const handleEditorMount = (
     editor: Parameters<OnMount>[0],
@@ -4376,7 +4441,7 @@ export const Editor = () => {
                       columns={activeTab.result?.columns || []}
                       data={activeTab.result?.rows || []}
                       tableName={activeTab.activeTable}
-                      pkColumns={activeTab.pkColumns}
+                      pkColumns={rowIdentity?.columns ?? null}
                       autoIncrementColumns={activeTab.autoIncrementColumns}
                       defaultValueColumns={activeTab.defaultValueColumns}
                       nullableColumns={activeTab.nullableColumns}

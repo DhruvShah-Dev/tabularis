@@ -877,13 +877,14 @@ mod build_pk_predicate_tests {
     #[test]
     fn uuid_string_pk_binds_as_text_for_varchar_column() {
         let uuid = "550e8400-e29b-41d4-a716-446655440000";
-        let (sql, (param, pg_type)) = build_pk_predicate(
+        let (sql, param) = build_pk_predicate(
             "guid",
             serde_json::json!(uuid),
             1,
             Some("character varying"),
         )
         .unwrap();
+        let (param, pg_type) = param.unwrap();
         assert_eq!(sql, "\"guid\" = $1");
         assert_eq!(pg_type, tokio_postgres::types::Type::TEXT);
         assert_eq!(format!("{:?}", param), format!("{:?}", uuid.to_string()));
@@ -892,8 +893,9 @@ mod build_pk_predicate_tests {
     #[test]
     fn uuid_string_pk_binds_as_uuid_for_uuid_column() {
         let uuid = "550e8400-e29b-41d4-a716-446655440000";
-        let (sql, (param, pg_type)) =
+        let (sql, param) =
             build_pk_predicate("id", serde_json::json!(uuid), 1, Some("uuid")).unwrap();
+        let (param, pg_type) = param.unwrap();
         assert_eq!(sql, "\"id\" = $1");
         assert_eq!(pg_type, tokio_postgres::types::Type::UUID);
         let expected: uuid::Uuid = uuid.parse().unwrap();
@@ -912,14 +914,22 @@ mod build_pk_predicate_tests {
         assert_eq!(sql, "\"a\"\"b\" = CAST($1 AS bigint)");
     }
 
+    // Keyless tables (#598) identify rows by all comparable columns, so a
+    // pk_map entry may legitimately be NULL and must render as IS NULL.
     #[test]
-    fn null_pk_is_rejected() {
-        assert!(build_pk_predicate("id", serde_json::Value::Null, 1, None).is_err());
+    fn null_pk_renders_is_null_without_binding() {
+        let (sql, param) =
+            build_pk_predicate("id", serde_json::Value::Null, 1, None).unwrap();
+        assert_eq!(sql, "\"id\" IS NULL");
+        assert!(param.is_none());
     }
 
     #[test]
-    fn bool_pk_is_rejected() {
-        assert!(build_pk_predicate("id", serde_json::json!(true), 1, None).is_err());
+    fn bool_pk_binds_as_bool() {
+        let (sql, param) = build_pk_predicate("flag", serde_json::json!(true), 1, None).unwrap();
+        let (_, pg_type) = param.unwrap();
+        assert_eq!(sql, "\"flag\" = $1");
+        assert_eq!(pg_type, tokio_postgres::types::Type::BOOL);
     }
 }
 
@@ -999,6 +1009,20 @@ mod build_pk_map_predicate_tests {
         let pk_map: HashMap<String, serde_json::Value> = HashMap::new();
         let pk_types = HashMap::new();
         assert!(build_pk_map_predicate(&pk_map, &pk_types, 1).is_err());
+    }
+
+    // Keyless tables (#598): NULL entries render as IS NULL and must not
+    // consume a placeholder index, so following columns stay consecutive.
+    #[test]
+    fn null_entry_uses_is_null_and_keeps_placeholders_consecutive() {
+        let mut pk_map = HashMap::new();
+        pk_map.insert("a_col".to_string(), serde_json::Value::Null);
+        pk_map.insert("b_col".to_string(), serde_json::json!("alice"));
+        pk_map.insert("c_col".to_string(), serde_json::json!("bob"));
+        let pk_types = HashMap::new();
+        let (sql, params) = build_pk_map_predicate(&pk_map, &pk_types, 1).unwrap();
+        assert_eq!(sql, "\"a_col\" IS NULL AND \"b_col\" = $1 AND \"c_col\" = $2");
+        assert_eq!(params.len(), 2);
     }
 }
 
