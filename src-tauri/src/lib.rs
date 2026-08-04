@@ -27,6 +27,7 @@ pub mod config;
 pub mod connection_cache;
 #[cfg(test)]
 pub mod connection_cache_tests;
+pub mod connection_tags;
 pub mod connection_window;
 #[cfg(test)]
 pub mod connection_window_tests;
@@ -416,6 +417,11 @@ pub fn run() {
             commands::move_connection_to_group,
             commands::reorder_groups,
             commands::reorder_connections_in_group,
+            connection_tags::list_connection_tags,
+            connection_tags::create_connection_tag,
+            connection_tags::update_connection_tag,
+            connection_tags::delete_connection_tag,
+            connection_tags::set_connection_tags,
             commands::export_connections_payload,
             commands::encrypt_export_payload,
             backup::get_connections_backup_status,
@@ -543,6 +549,15 @@ pub fn run() {
             commands::get_trigger_definition,
             commands::create_trigger,
             commands::drop_trigger,
+            // User management
+            commands::get_db_privilege_catalog,
+            commands::get_db_users,
+            commands::get_db_user_grants,
+            commands::get_db_user_privileges,
+            commands::create_db_user,
+            commands::drop_db_user,
+            commands::set_db_user_password,
+            commands::apply_db_user_privileges,
             // MCP
             mcp::install::get_mcp_status,
             mcp::install::install_mcp_config,

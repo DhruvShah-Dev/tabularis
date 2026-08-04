@@ -48,6 +48,8 @@ export interface DriverCapabilities {
   explain?: boolean;
   /** Supports listing and managing database triggers. Defaults to false. */
   triggers?: boolean;
+  /** Supports listing and managing server accounts (users, grants). Defaults to false. */
+  user_management?: boolean;
   /** Supports managing stored routines (run with parameters, create from template, edit, drop). Defaults to false. */
   routine_management?: boolean;
   /** Supports materialized views (e.g. PostgreSQL). When false, the frontend skips fetching materialized views entirely. Defaults to false. */
@@ -98,6 +100,9 @@ export interface PluginManifest {
   icon?: string;
   /** Plugin-declared setting definitions. Empty/absent for built-in drivers. */
   settings?: PluginSettingDefinition[];
+  /** Optional map of generic inferred type names to driver-specific types.
+   * Used during paste/import to resolve map_inferred_type() locally. */
+  type_mappings?: Record<string, string>;
   /** UI extension declarations for slot-based rendering (Phase 2). */
   ui_extensions?: UIExtensionManifestEntry[];
 }
