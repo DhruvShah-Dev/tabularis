@@ -73,9 +73,6 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
   openConnectionIdsRef.current = openConnectionIds;
   const connectionDataMapRef = useRef(connectionDataMap);
   connectionDataMapRef.current = connectionDataMap;
-  
-  // Track whether we've ever had connections open (to avoid wiping on fresh launch before auto-connect)
-  const hasEverHadConnectionsRef = useRef(false);
   const prevActiveExtRef = useRef<string[] | undefined>(undefined);
 
   const getActiveConnectionData = useCallback((): ConnectionData | undefined => {
@@ -1032,20 +1029,20 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
     invoke('set_last_active_connection', { connectionId: activeConnectionId }).catch(() => {});
   }, [activeConnectionId]);
 
-  // Track when we've had connections (to distinguish startup from user closing all)
-  useEffect(() => {
-    if (openConnectionIds.length > 0) {
-      hasEverHadConnectionsRef.current = true;
-    }
-  }, [openConnectionIds]);
-
   // Persist the full set of open connections so the app can reopen all of them
   // on next launch. Skip the empty startup state so the saved list isn't wiped
   // before the startup auto-connect gets a chance to read it.
+  //
+  // Disconnecting the *last* connection is covered by the explicit persist
+  // call inside `disconnect()` — the reactive effect below skips the empty
+  // list, so we persist the cleared state directly from the user action.
+  // (#467 — the Rust `save_config` merge treats any `Some` as authoritative,
+  // which used to let `SettingsProvider` clobber the session list on the next
+  // settings change. The clobber chain is now severed by stripping the
+  // session fields in `SettingsProvider.updateSetting`, so this effect no
+  // longer needs to chase the empty state for correctness.)
   useEffect(() => {
-    // Don't persist empty state until we've actually had connections open
-    // (prevents wiping during startup before auto-connect runs)
-    if (openConnectionIds.length === 0 && !hasEverHadConnectionsRef.current) return;
+    if (openConnectionIds.length === 0) return;
     invoke('set_last_open_connections', { connectionIds: openConnectionIds }).catch(() => {});
   }, [openConnectionIds]);
 
