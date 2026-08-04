@@ -1,10 +1,49 @@
 # Phase 1 — Plugin Build (TDD)
 
-**Goal:** Build the `postgres-plugin` executable that passes all Phase 0 tests,
+**Goal:** Build the `postgres-plugin` executable that passes all 80 parity tests,
 proving byte-for-byte parity with the built-in driver. Implementation follows
-strict TDD: tests exist first (from Phase 0), code is written to make them pass.
+strict TDD: tests exist first (written RED), code is written to make them pass.
 
-**Mantra:** _55/55 green or it's not done. No exceptions, no "close enough."_
+**Mantra:** _80/80 green or it's not done. No exceptions, no "close enough."_
+
+---
+
+## Test Architecture
+
+The test suite has three layers, each serving a distinct purpose:
+
+| Layer | Count | What it proves | Runs against |
+|-------|-------|----------------|--------------|
+| **Parity tests** | 80 | Plugin output == builtin output (byte-perfect JSON comparison) | Both drivers via `ParityHarness` |
+| **Baseline tests** | 72 | Builtin driver behavior hasn't regressed | Builtin only (direct `postgres::*` calls) |
+| **Golden tests** | 26 | Builtin output matches committed snapshots (drift detection) | Builtin only |
+
+### Why 80 parity tests (not 102)
+
+The "102 tests" figure included all three layers. Parity tests only cover the
+first layer because:
+
+1. **Golden tests (26) don't need parity equivalents.** Golden files compare
+   builtin output against static JSON files. `assert_parity()` is strictly
+   stronger — it's a live comparison of two running drivers. If the plugin
+   matches the builtin, it implicitly matches the golden files too.
+
+2. **Baseline tests (72) are the safety net, not the specification.** They
+   call the builtin directly via `postgres::get_tables(...)` — they cannot run
+   against the plugin (it speaks JSON-RPC, not Rust function calls). The parity
+   tests cover every scenario from the baseline by calling the same methods
+   through the `DatabaseDriver` trait.
+
+3. **Parity tests are MORE thorough.** They test additional edge cases beyond
+   the baseline (composite PKs, cross-schema FKs, NULL updates, batch session
+   state, etc.) — 80 scenarios covering all 72 baseline behaviors plus extras.
+
+### CP-4 Gate
+
+All three layers must pass:
+- 80/80 parity tests GREEN → plugin matches builtin byte-perfectly
+- 72/72 baseline tests GREEN → builtin hasn't regressed
+- 26/26 golden tests GREEN → no snapshot drift
 
 ---
 
@@ -377,7 +416,7 @@ Before declaring Phase 1 complete, verify:
 
 ## Checkpoint: CP-4 (Phase 1 Complete — Beta Release Gate)
 
-**When:** 55/55 tests GREEN + golden file comparison passes + manual smoke test complete.
+**When:** 80/80 parity tests GREEN + baseline tests pass + manual smoke test complete.
 
 **This IS a release gate.** After CP-4:
 
@@ -387,8 +426,9 @@ Before declaring Phase 1 complete, verify:
 
 **Verify at CP-4:**
 
-- [ ] 55/55 parity tests GREEN
-- [ ] Golden file comparison: zero differences
+- [ ] 80/80 parity tests GREEN (byte-perfect dual-driver comparison)
+- [ ] 72 baseline tests pass (builtin-only safety net)
+- [ ] 26 golden snapshot tests pass (no drift)
 - [ ] Manual smoke test: all 24 items pass
 - [ ] `pnpm test` (frontend): no regressions
 - [ ] Security audit checklist: all items verified
@@ -419,8 +459,9 @@ Before declaring Phase 1 complete, verify:
 
 ## Definition of Done
 
-- [ ] 55/55 parity tests GREEN (or all tests if count exceeded 55)
-- [ ] Golden file comparison passes (zero unexpected differences)
+- [ ] 80/80 parity tests GREEN
+- [ ] 72 baseline tests pass (builtin-only safety net)
+- [ ] 26 golden snapshot tests pass
 - [ ] Manual smoke test: 24/24 items pass
 - [ ] Security audit checklist: complete
 - [ ] Plugin builds on macOS, Linux, Windows
