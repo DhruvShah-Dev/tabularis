@@ -50,3 +50,5 @@ mod ddl_generation;
 mod explain;
 mod blob;
 mod golden;
+mod parity;
+mod parity_tests;
