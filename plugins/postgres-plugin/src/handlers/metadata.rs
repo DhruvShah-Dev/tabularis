@@ -316,17 +316,167 @@ pub async fn get_indexes(id: Value, params: &Value) -> Value {
         Err(e) => error_response(id, -32603, &e),
     }
 }
-pub async fn get_views(id: Value, _params: &Value) -> Value { not_implemented(id, "get_views") }
-pub async fn get_view_definition(id: Value, _params: &Value) -> Value { not_implemented(id, "get_view_definition") }
+pub async fn get_views(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    match client::query_strings(
+        &conn_params,
+        "SELECT viewname as name FROM pg_views WHERE schemaname = $1 ORDER BY viewname ASC",
+        &[&schema],
+        "name",
+    )
+    .await
+    {
+        Ok(names) => {
+            let views: Vec<Value> = names
+                .into_iter()
+                .map(|n| json!({"name": n, "definition": null}))
+                .collect();
+            ok_response(id, json!(views))
+        }
+        Err(e) => error_response(id, -32603, &e),
+    }
+}
+
+pub async fn get_view_definition(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let view_name = params.get("view_name").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let qualified = crate::utils::identifiers::qualified(schema, view_name);
+
+    match client::query_rows(
+        &conn_params,
+        "SELECT pg_get_viewdef(($1::text)::regclass, true) as definition",
+        &[&qualified],
+    )
+    .await
+    {
+        Ok(rows) => {
+            if let Some(row) = rows.first() {
+                let definition: String = row.try_get("definition").unwrap_or_default();
+                let full = format!("CREATE OR REPLACE VIEW {} AS\n{}", qualified, definition);
+                ok_response(id, json!(full))
+            } else {
+                error_response(id, -32603, "View not found")
+            }
+        }
+        Err(e) => error_response(id, -32603, &e),
+    }
+}
+
 pub async fn get_view_columns(id: Value, _params: &Value) -> Value { not_implemented(id, "get_view_columns") }
-pub async fn get_materialized_views(id: Value, _params: &Value) -> Value { not_implemented(id, "get_materialized_views") }
+
+pub async fn get_materialized_views(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    match client::query_strings(
+        &conn_params,
+        "SELECT matviewname as name FROM pg_matviews WHERE schemaname = $1 ORDER BY matviewname ASC",
+        &[&schema],
+        "name",
+    )
+    .await
+    {
+        Ok(names) => {
+            let views: Vec<Value> = names
+                .into_iter()
+                .map(|n| json!({"name": n, "definition": null}))
+                .collect();
+            ok_response(id, json!(views))
+        }
+        Err(e) => error_response(id, -32603, &e),
+    }
+}
+
 pub async fn get_materialized_view_columns(id: Value, _params: &Value) -> Value { not_implemented(id, "get_materialized_view_columns") }
 pub async fn get_materialized_view_definition(id: Value, _params: &Value) -> Value { not_implemented(id, "get_materialized_view_definition") }
 pub async fn refresh_materialized_view(id: Value, _params: &Value) -> Value { not_implemented(id, "refresh_materialized_view") }
-pub async fn get_routines(id: Value, _params: &Value) -> Value { not_implemented(id, "get_routines") }
+
+pub async fn get_routines(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    // PG 11+ uses prokind; older versions use proisagg/proiswindow flags.
+    // CI runs PG 16, so we use the modern query.
+    let query = r#"
+        SELECT proname, prokind
+        FROM pg_proc
+        WHERE pronamespace = (SELECT oid FROM pg_namespace WHERE nspname = $1)
+        AND prokind IN ('f', 'p')
+        ORDER BY proname
+    "#;
+
+    match client::query_rows(&conn_params, query, &[&schema]).await {
+        Ok(rows) => {
+            let routines: Vec<Value> = rows
+                .iter()
+                .map(|r| {
+                    let name: String = r.try_get("proname").unwrap_or_default();
+                    let prokind: i8 = r.try_get("prokind").unwrap_or(b'f' as i8);
+                    let routine_type = if prokind as u8 as char == 'p' {
+                        "PROCEDURE"
+                    } else {
+                        "FUNCTION"
+                    };
+                    json!({
+                        "name": name,
+                        "routine_type": routine_type,
+                        "definition": null,
+                    })
+                })
+                .collect();
+            ok_response(id, json!(routines))
+        }
+        Err(e) => error_response(id, -32603, &e),
+    }
+}
+
 pub async fn get_routine_parameters(id: Value, _params: &Value) -> Value { not_implemented(id, "get_routine_parameters") }
 pub async fn get_routine_definition(id: Value, _params: &Value) -> Value { not_implemented(id, "get_routine_definition") }
-pub async fn get_triggers(id: Value, _params: &Value) -> Value { not_implemented(id, "get_triggers") }
+
+pub async fn get_triggers(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let query = r#"
+        SELECT
+            t.trigger_name AS name,
+            t.event_object_table AS table_name,
+            string_agg(t.event_manipulation, ' OR ' ORDER BY t.event_manipulation) AS event,
+            t.action_timing AS timing
+        FROM information_schema.triggers t
+        WHERE t.trigger_schema = $1
+        GROUP BY t.trigger_name, t.event_object_table, t.action_timing
+        ORDER BY t.trigger_name
+    "#;
+
+    match client::query_rows(&conn_params, query, &[&schema]).await {
+        Ok(rows) => {
+            let triggers: Vec<Value> = rows
+                .iter()
+                .map(|r| {
+                    let name: String = r.try_get("name").unwrap_or_default();
+                    let table_name: String = r.try_get("table_name").unwrap_or_default();
+                    let event: String = r.try_get("event").unwrap_or_default();
+                    let timing: String = r.try_get("timing").unwrap_or_default();
+                    json!({
+                        "name": name,
+                        "table_name": table_name,
+                        "event": event,
+                        "timing": timing,
+                        "definition": null,
+                    })
+                })
+                .collect();
+            ok_response(id, json!(triggers))
+        }
+        Err(e) => error_response(id, -32603, &e),
+    }
+}
+
 pub async fn get_trigger_definition(id: Value, _params: &Value) -> Value { not_implemented(id, "get_trigger_definition") }
 pub async fn get_schema_snapshot(id: Value, _params: &Value) -> Value { not_implemented(id, "get_schema_snapshot") }
 pub async fn get_all_columns_batch(id: Value, _params: &Value) -> Value { not_implemented(id, "get_all_columns_batch") }
