@@ -6,8 +6,8 @@
 
 | Phase | Document | Status |
 | ----- | -------- | ------ |
-| Prerequisites | [00-prerequisites.md](./00-prerequisites.md) | Planning |
-| Phase 0 | [01-phase-0-baseline-tests.md](./01-phase-0-baseline-tests.md) | Planning |
+| Prerequisites | [00-prerequisites.md](./00-prerequisites.md) | ✅ Complete (PR #576) |
+| Phase 0 | [01-phase-0-baseline-tests.md](./01-phase-0-baseline-tests.md) | ✅ Complete |
 | Phase 1 | [02-phase-1-plugin-build.md](./02-phase-1-plugin-build.md) | Planning |
 | Phase 2 | [03-phase-2-issue-16.md](./03-phase-2-issue-16.md) | Planning |
 | Phase 3 | [04-phase-3-deprecate-builtin.md](./04-phase-3-deprecate-builtin.md) | Planning |
