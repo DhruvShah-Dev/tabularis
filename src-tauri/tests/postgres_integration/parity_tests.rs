@@ -99,7 +99,7 @@ async fn parity_get_foreign_keys() {
     let arr = result.as_array().expect("foreign keys should be an array");
     assert!(!arr.is_empty());
     let fk = &arr[0];
-    assert_eq!(fk.get("column").and_then(|v| v.as_str()), Some("user_id"));
+    assert_eq!(fk.get("column_name").and_then(|v| v.as_str()), Some("user_id"));
 }
 
 #[tokio::test]
