@@ -19,15 +19,18 @@
 //! differences in field ordering or null handling that direct struct comparison
 //! might miss.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
+use tabularis_lib::drivers::driver_trait::{DatabaseDriver, DriverCapabilities, PluginManifest, SqlDialect};
 use tabularis_lib::drivers::postgres::PostgresDriver;
-use tabularis_lib::models::ConnectionParams;
+use tabularis_lib::models::{ConnectionParams, DataTypeInfo};
+use tabularis_lib::plugins::driver::RpcDriver;
 
 use crate::helpers::{pg_params, pg_params_secondary, retry_transient};
 
@@ -38,7 +41,6 @@ pub enum DriverTarget {
     Builtin,
     /// A plugin driver communicating over JSON-RPC stdio.
     /// The string is the plugin id (e.g. "postgres-plugin").
-    #[allow(dead_code)]
     Plugin(String),
 }
 
@@ -59,7 +61,7 @@ pub struct ParityHarness {
 }
 
 impl ParityHarness {
-    /// Create a harness with only the built-in driver (Phase 0).
+    /// Create a harness with only the built-in driver (Phase 0 fallback).
     pub fn builtin_only() -> Self {
         let driver = Arc::new(PostgresDriver::new()) as Arc<dyn DatabaseDriver>;
         Self {
@@ -69,8 +71,18 @@ impl ParityHarness {
         }
     }
 
-    /// Add a plugin driver target. Used in Phase 1 when the plugin is ready.
-    #[allow(dead_code)]
+    /// Create a harness, optionally including the plugin driver if
+    /// `POSTGRES_PLUGIN_BIN` is set. This is the primary constructor for
+    /// Phase 1+ parity tests.
+    pub async fn new() -> Self {
+        let mut harness = Self::builtin_only();
+        if let Some(plugin_driver) = try_plugin_driver().await {
+            harness = harness.with_plugin("postgres-plugin", plugin_driver);
+        }
+        harness
+    }
+
+    /// Add a plugin driver target.
     pub fn with_plugin(mut self, id: &str, driver: Arc<dyn DatabaseDriver>) -> Self {
         self.targets.push((DriverTarget::Plugin(id.to_string()), driver));
         self
@@ -211,4 +223,92 @@ impl ParityHarness {
             }
         }
     }
+}
+
+/// Attempt to construct a plugin driver from the `POSTGRES_PLUGIN_BIN` env var.
+/// Returns `None` if the env var is unset (Phase 0 / no plugin available).
+/// Panics if the env var is set but the plugin fails to start (broken binary).
+async fn try_plugin_driver() -> Option<Arc<dyn DatabaseDriver>> {
+    let bin_path = std::env::var("POSTGRES_PLUGIN_BIN").ok()?;
+    let path = PathBuf::from(&bin_path);
+
+    if !path.exists() {
+        eprintln!(
+            "  [parity] POSTGRES_PLUGIN_BIN set to '{}' but file does not exist — skipping plugin",
+            bin_path
+        );
+        return None;
+    }
+
+    eprintln!("  [parity] Spawning plugin driver from: {}", bin_path);
+
+    let manifest = plugin_manifest();
+    let data_types = plugin_data_types();
+
+    let driver = RpcDriver::new(manifest, path, None, data_types, HashMap::new())
+        .await
+        .unwrap_or_else(|e| panic!("Failed to start plugin driver: {}", e));
+
+    Some(Arc::new(driver) as Arc<dyn DatabaseDriver>)
+}
+
+/// Build the PluginManifest matching the plugin's .tabularium file.
+fn plugin_manifest() -> PluginManifest {
+    PluginManifest {
+        id: "postgres-plugin".to_string(),
+        name: "PostgreSQL Plugin".to_string(),
+        version: "0.1.0".to_string(),
+        description: "PostgreSQL plugin driver for Tabularis".to_string(),
+        default_port: Some(5432),
+        capabilities: DriverCapabilities {
+            schemas: true,
+            single_database: false,
+            views: true,
+            materialized_views: true,
+            routines: true,
+            routine_management: true,
+            file_based: false,
+            folder_based: false,
+            connection_string: true,
+            connection_string_example: "postgres://user:pass@localhost:5432/db".into(),
+            connection_uri: false,
+            connection_uri_schemes: Vec::new(),
+            identifier_quote: "\"".into(),
+            alter_primary_key: true,
+            auto_increment_keyword: String::new(),
+            serial_type: "SERIAL".into(),
+            inline_pk: false,
+            alter_column: true,
+            create_foreign_keys: true,
+            no_connection_required: false,
+            manage_tables: true,
+            explain: true,
+            readonly: false,
+            triggers: true,
+            supports_ssl: true,
+            user_management: false,
+            sql_dialect: SqlDialect::Postgres,
+        },
+        is_builtin: false,
+        engine: Some("postgresql".to_string()),
+        paradigms: vec!["relational".to_string()],
+        default_username: "postgres".to_string(),
+        color: "#3b82f6".to_string(),
+        icon: "postgres".to_string(),
+        settings: vec![],
+        ui_extensions: None,
+        type_mappings: {
+            let mut m = HashMap::new();
+            m.insert("DATETIME".to_string(), "TIMESTAMP".to_string());
+            m.insert("JSON".to_string(), "JSONB".to_string());
+            m
+        },
+    }
+}
+
+/// Data types the plugin supports (matches .tabularium data_types array).
+fn plugin_data_types() -> Vec<DataTypeInfo> {
+    // For the parity harness, data types are used for display only.
+    // Return an empty vec — the RpcDriver doesn't use these for query execution.
+    Vec::new()
 }

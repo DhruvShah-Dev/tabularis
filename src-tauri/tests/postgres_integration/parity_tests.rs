@@ -15,7 +15,7 @@ use crate::parity::ParityHarness;
 #[ignore]
 async fn parity_get_schemas() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_schemas", |driver, params| async move {
@@ -32,7 +32,7 @@ async fn parity_get_schemas() {
 #[ignore]
 async fn parity_get_databases() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_databases", |driver, params| async move {
@@ -48,7 +48,7 @@ async fn parity_get_databases() {
 #[ignore]
 async fn parity_get_tables() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_tables", |driver, params| async move {
@@ -69,7 +69,7 @@ async fn parity_get_tables() {
 #[ignore]
 async fn parity_get_columns() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_columns:all_types", |driver, params| async move {
@@ -88,7 +88,7 @@ async fn parity_get_columns() {
 #[ignore]
 async fn parity_get_foreign_keys() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_foreign_keys:orders", |driver, params| async move {
@@ -106,7 +106,7 @@ async fn parity_get_foreign_keys() {
 #[ignore]
 async fn parity_get_indexes() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_indexes:all_types", |driver, params| async move {
@@ -122,7 +122,7 @@ async fn parity_get_indexes() {
 #[ignore]
 async fn parity_get_views() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_views", |driver, params| async move {
@@ -139,7 +139,7 @@ async fn parity_get_views() {
 #[ignore]
 async fn parity_get_view_definition() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_view_definition:active_users", |driver, params| async move {
@@ -155,7 +155,7 @@ async fn parity_get_view_definition() {
 #[ignore]
 async fn parity_get_materialized_views() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_materialized_views", |driver, params| async move {
@@ -172,7 +172,7 @@ async fn parity_get_materialized_views() {
 #[ignore]
 async fn parity_get_routines() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_routines", |driver, params| async move {
@@ -189,7 +189,7 @@ async fn parity_get_routines() {
 #[ignore]
 async fn parity_get_triggers() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity("get_triggers", |driver, params| async move {
@@ -206,7 +206,7 @@ async fn parity_get_triggers() {
 #[ignore]
 async fn parity_get_tables_secondary() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     let result = harness
         .assert_parity_secondary(
@@ -226,7 +226,7 @@ async fn parity_get_tables_secondary() {
 #[ignore]
 async fn parity_map_inferred_type() {
     require_pg!();
-    let harness = ParityHarness::builtin_only();
+    let harness = ParityHarness::new().await;
 
     // map_inferred_type is synchronous — test it directly on each target
     for (target, driver) in harness.targets() {
