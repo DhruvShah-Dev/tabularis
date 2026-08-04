@@ -9,12 +9,14 @@ on:
     branches: [main]
     paths:
       - 'src-tauri/**'
+      - 'plugins/postgres-plugin/**'
       - '.github/workflows/pg-integration.yml'
       - 'tests/fixtures/**'
   pull_request:
     branches: [main]
     paths:
       - 'src-tauri/**'
+      - 'plugins/postgres-plugin/**'
       - '.github/workflows/pg-integration.yml'
       - 'tests/fixtures/**'
 
@@ -57,7 +59,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-          key: ${{ runner.os }}-cargo-pg-${{ hashFiles('src-tauri/Cargo.lock') }}
+            plugins/postgres-plugin/target
+          key: ${{ runner.os }}-cargo-pg-${{ hashFiles('src-tauri/Cargo.lock', 'plugins/postgres-plugin/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-pg-
 
@@ -65,6 +68,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libsoup-3.0-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Build PostgreSQL plugin
+        run: cargo build --release --manifest-path plugins/postgres-plugin/Cargo.toml
 
       - name: Run PostgreSQL integration tests
         working-directory: src-tauri
@@ -76,6 +82,8 @@ jobs:
           RUST_TEST_THREADS: "1"
           # Regenerate golden files so newly added captures are written.
           REGENERATE_GOLDEN: "1"
+          # Point parity harness at the plugin binary for dual-driver testing.
+          POSTGRES_PLUGIN_BIN: ${{ github.workspace }}/plugins/postgres-plugin/target/release/postgresql-plugin
         run: cargo test --test postgres_integration -- --include-ignored
 
       - name: Upload golden files
