@@ -108,7 +108,7 @@ const QueryParamsForm = ({ parameters, initialValues, onSubmit, onClose, mode }:
                 <Save size={16} fill="currentColor" />
               )}
               {mode === "explain"
-                ? t("editor.explain")
+                ? t("editor.visualExplain.buttonShort")
                 : mode === "run"
                   ? t("editor.run")
                   : t("common.save")}
