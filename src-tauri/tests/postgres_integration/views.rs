@@ -107,20 +107,29 @@ async fn test_alter_view() {
 
     // Create initial view
     let def1 = "SELECT id FROM test_schema.all_types";
-    postgres::create_view(&params, view_name, def1, schema)
-        .await
-        .expect("create_view should succeed");
+    crate::helpers::retry(|| {
+        let p = params.clone();
+        async move { postgres::create_view(&p, view_name, def1, schema).await }
+    })
+    .await
+    .expect("create_view should succeed");
 
     // Alter (replace) with new definition
     let def2 = "SELECT id, col_text FROM test_schema.all_types";
-    postgres::alter_view(&params, view_name, def2, schema)
-        .await
-        .expect("alter_view should succeed");
+    crate::helpers::retry(|| {
+        let p = params.clone();
+        async move { postgres::alter_view(&p, view_name, def2, schema).await }
+    })
+    .await
+    .expect("alter_view should succeed");
 
     // Verify new definition has both columns
-    let columns = postgres::get_view_columns(&params, view_name, schema)
-        .await
-        .unwrap();
+    let columns = crate::helpers::retry(|| {
+        let p = params.clone();
+        async move { postgres::get_view_columns(&p, view_name, schema).await }
+    })
+    .await
+    .unwrap();
     assert_eq!(columns.len(), 2, "Altered view should have 2 columns");
 
     // Cleanup

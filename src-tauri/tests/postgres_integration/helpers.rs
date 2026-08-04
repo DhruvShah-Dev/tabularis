@@ -1,5 +1,6 @@
 //! Shared helpers for PostgreSQL parity tests.
 
+use std::future::Future;
 use std::time::Duration;
 use tabularis_lib::drivers::postgres;
 use tabularis_lib::models::{ConnectionParams, DatabaseSelection};
@@ -37,4 +38,43 @@ pub async fn wait_for_pg() -> bool {
         sleep(Duration::from_millis(500)).await;
     }
     false
+}
+
+/// Retry a fallible async operation up to `attempts` times when the error looks
+/// like a transient pool/connection issue ("connection closed", "pool timed out",
+/// "broken pipe"). Non-transient errors are returned immediately.
+pub async fn retry_transient<T, E, F, Fut>(attempts: u32, mut f: F) -> Result<T, E>
+where
+    E: AsRef<str>,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+{
+    let mut last_err = None;
+    for attempt in 0..attempts {
+        match f().await {
+            Ok(val) => return Ok(val),
+            Err(e) => {
+                let msg = e.as_ref();
+                let transient = msg.contains("connection closed")
+                    || msg.contains("pool timed out")
+                    || msg.contains("broken pipe")
+                    || msg.contains("Connection reset");
+                if !transient || attempt + 1 == attempts {
+                    return Err(e);
+                }
+                last_err = Some(e);
+                sleep(Duration::from_millis(100 * (attempt as u64 + 1))).await;
+            }
+        }
+    }
+    Err(last_err.unwrap())
+}
+
+/// Convenience wrapper: retry up to 3 times on transient pool errors.
+pub async fn retry<T, F, Fut>(f: F) -> Result<T, String>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, String>>,
+{
+    retry_transient(3, f).await
 }

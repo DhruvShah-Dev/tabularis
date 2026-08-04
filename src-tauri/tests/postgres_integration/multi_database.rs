@@ -80,15 +80,21 @@ async fn test_pool_isolation_between_databases() {
     let secondary = pg_params_secondary();
 
     // Query primary — should see test_schema tables
-    let primary_tables = postgres::get_tables(&primary, "test_schema")
-        .await
-        .expect("primary tables");
+    let primary_tables = crate::helpers::retry(|| {
+        let p = primary.clone();
+        async move { postgres::get_tables(&p, "test_schema").await }
+    })
+    .await
+    .expect("primary tables");
     assert!(!primary_tables.is_empty());
 
     // Query secondary — should NOT see test_schema (it doesn't exist there)
-    let secondary_schemas = postgres::get_schemas(&secondary)
-        .await
-        .expect("secondary schemas");
+    let secondary_schemas = crate::helpers::retry(|| {
+        let s = secondary.clone();
+        async move { postgres::get_schemas(&s).await }
+    })
+    .await
+    .expect("secondary schemas");
     assert!(
         !secondary_schemas.contains(&"test_schema".to_string()),
         "test_schema should not exist in secondary database"
