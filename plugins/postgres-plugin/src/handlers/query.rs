@@ -139,6 +139,8 @@ async fn exec_query_on_client(
     limit: Option<u32>,
     page: u32,
 ) -> Result<Value, String> {
+    // Check if the statement returns a result set
+    if !returns_result_set(query) {
         let affected = pg_client
             .execute(query, &[])
             .await

@@ -84,7 +84,7 @@ pub fn extract_value(row: &Row, index: usize) -> JsonValue {
         ref t if *t == Type::INT8_ARRAY => try_extract::<Vec<i64>>(row, index, |v| {
             JsonValue::Array(v.into_iter().map(i64_to_json).collect())
         }),
-        ref t if *t == Type::TEXT_ARRAY | *t == Type::VARCHAR_ARRAY => {
+        ref t if *t == Type::TEXT_ARRAY || *t == Type::VARCHAR_ARRAY => {
             try_extract::<Vec<String>>(row, index, |v| {
                 JsonValue::Array(v.into_iter().map(JsonValue::String).collect())
             })
