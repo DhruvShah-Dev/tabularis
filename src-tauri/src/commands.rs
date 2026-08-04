@@ -6018,7 +6018,7 @@ pub async fn apply_export_payload<R: Runtime>(
     }
 
     // Merge connections and handle passwords
-    for mut new_conn in payload.connections {
+    for mut new_conn in payload_connections {
         // An imported payload is untrusted input and may carry an inline URI.
         // Hold it to the same rule as a save: keychain or nothing.
         validate_connection_uri_persistence(&new_conn.params)?;

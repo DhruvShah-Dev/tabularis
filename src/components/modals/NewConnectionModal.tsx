@@ -25,7 +25,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { ConnectionAppearance } from "../../contexts/DatabaseContext";
 import { AppearanceSection } from "./NewConnectionModal/AppearanceSection";
 import { TagSelector } from "./NewConnectionModal/TagSelector";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
 import { SshConnectionsModal } from "./SshConnectionsModal";
 import { K8sConnectionsModal } from "./K8sConnectionsModal";
