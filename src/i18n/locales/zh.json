@@ -23,6 +23,29 @@
     "fromPlaceholder": "从",
     "toPlaceholder": "到"
   },
+  "tags": {
+    "label": "标签",
+    "new": "新建标签",
+    "add": "添加",
+    "namePlaceholder": "标签名称…",
+    "manage": "管理标签",
+    "done": "完成",
+    "deleteTitle": "删除标签",
+    "deleteConfirm": "删除标签“{{name}}”？它将从所有连接中移除。"
+  },
+  "environment": {
+    "label": "环境",
+    "none": "无环境",
+    "development": "开发",
+    "staging": "预发布",
+    "production": "生产",
+    "short": { "development": "DEV", "staging": "STAGING", "production": "PROD" },
+    "banner": "生产 — {{name}}",
+    "warnTitle": "生产数据库",
+    "warnMessage": "您即将修改“{{name}}”上的生产数据。确定要继续吗？",
+    "warnConfirm": "仍然执行",
+    "warnSnooze": "此连接不再询问（本次会话）"
+  },
   "common": {
     "save": "保存",
     "close": "关闭",

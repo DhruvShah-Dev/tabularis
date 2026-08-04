@@ -15,6 +15,7 @@ import {
   useDangerousQueryGuard,
   DANGEROUS_QUERY_I18N,
 } from "../hooks/useDangerousQueryGuard";
+import { useProductionGuard } from "../hooks/useProductionGuard";
 import {
   generateTempId,
   initializeNewRow,
@@ -405,6 +406,7 @@ export const Editor = () => {
     guardQuery: guardDangerousQuery,
     resolve: resolveDangerousQuery,
   } = useDangerousQueryGuard();
+  const guardProductionWrite = useProductionGuard();
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
   const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
@@ -907,6 +909,7 @@ export const Editor = () => {
       if (!textToRun || !textToRun.trim()) return;
 
       if (!(await guardDangerousQuery(textToRun))) return;
+      if (!(await guardProductionWrite(activeConnectionId, textToRun))) return;
 
       // Check for parameters
       const params = extractQueryParams(textToRun, activeDialect);
@@ -1134,6 +1137,7 @@ export const Editor = () => {
       activeDatabaseName,
       addHistoryEntry,
       guardDangerousQuery,
+      guardProductionWrite,
       activeDialect,
     ],
   );
@@ -1147,6 +1151,9 @@ export const Editor = () => {
       if (!targetTab) return;
 
       if (!(await guardDangerousQuery(queries))) return;
+      if (!(await guardProductionWrite(activeConnectionId, queries.join(";\n")))) {
+        return;
+      }
 
       // Collect all unique parameters across all queries
       const allParams = [
@@ -1320,7 +1327,20 @@ export const Editor = () => {
       });
       updateTab(targetTabId, { isLoading: false });
     },
-    [activeConnectionId, updateTab, patchResultEntry, settings.resultPageSize, activeSchema, t, isMultiDb, activeDatabaseName, addHistoryEntry, guardDangerousQuery, activeDialect],
+    [
+      activeConnectionId,
+      updateTab,
+      patchResultEntry,
+      settings.resultPageSize,
+      activeSchema,
+      t,
+      isMultiDb,
+      activeDatabaseName,
+      addHistoryEntry,
+      guardDangerousQuery,
+      guardProductionWrite,
+      activeDialect,
+    ],
   );
 
   // Auto-run entry point for navigation-initiated executions (sidebar "open
@@ -2624,6 +2644,9 @@ export const Editor = () => {
     )
       return;
 
+    // Production safety: grid edits are writes, confirm before committing.
+    if (!(await guardProductionWrite(activeConnectionId))) return;
+
     updateActiveTab({ isLoading: true });
 
     try {
@@ -2748,6 +2771,7 @@ export const Editor = () => {
     activeSchema,
     activeCapabilities,
     showAlert,
+    guardProductionWrite,
   ]);
 
   // Cmd/Ctrl+S: commit the active tab's pending grid changes (like TablePlus).
