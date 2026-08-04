@@ -1,10 +1,10 @@
 //! PostgreSQL connection pool management via deadpool-postgres.
 //!
-//! Provides pool construction with optional TLS (via rustls) and a simple
-//! per-request pool strategy. Pool caching by connection key will be added
-//! in Sprint 2 when metadata queries need persistent connections.
+//! Provides pool construction with optional TLS (via rustls) and query helpers
+//! for common patterns (single-column string queries, parameterized queries).
 
 use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
+use tokio_postgres::types::ToSql;
 use tokio_postgres::NoTls;
 use tokio_postgres_rustls::MakeRustlsConnect;
 
@@ -23,6 +23,31 @@ pub async fn test_connection(params: &ConnectionParams) -> Result<(), String> {
         .await
         .map_err(|e| format!("Query failed: {e}"))?;
     Ok(())
+}
+
+/// Run a query and extract a single text column from each row.
+/// Used for schema discovery methods that return `Vec<String>`.
+pub async fn query_strings(
+    params: &ConnectionParams,
+    query: &str,
+    query_params: &[&(dyn ToSql + Sync)],
+    column: &str,
+) -> Result<Vec<String>, String> {
+    let pool = build_pool(params)?;
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| format!("Connection failed: {e}"))?;
+    let rows = client
+        .query(query, query_params)
+        .await
+        .map_err(|e| format!("Query failed: {e}"))?;
+
+    let results = rows
+        .iter()
+        .map(|r| r.try_get::<_, String>(column).unwrap_or_default())
+        .collect();
+    Ok(results)
 }
 
 /// Build a deadpool-postgres pool for the given connection parameters.
