@@ -18,9 +18,9 @@
 //! bash tests/fixtures/seed_postgres.sh
 //! ```
 //!
-//! Run the tests:
+//! Run the tests (limit threads to avoid pool exhaustion):
 //! ```bash
-//! cd src-tauri && cargo test --test postgres_integration -- --include-ignored
+//! cd src-tauri && cargo test --test postgres_integration -- --include-ignored --test-threads=4
 //! ```
 
 /// Skip the test gracefully if PostgreSQL is unavailable.
