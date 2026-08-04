@@ -68,6 +68,12 @@ pub async fn query_rows(
 }
 
 /// Build a deadpool-postgres pool for the given connection parameters.
+/// Public for use by query handlers that need direct pool access.
+pub fn build_pool_pub(params: &ConnectionParams) -> Result<Pool, String> {
+    build_pool(params)
+}
+
+/// Build a deadpool-postgres pool for the given connection parameters.
 fn build_pool(params: &ConnectionParams) -> Result<Pool, String> {
     let mut cfg = Config::new();
     cfg.host = params.host.clone();

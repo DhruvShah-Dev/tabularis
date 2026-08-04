@@ -11,6 +11,7 @@ use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 mod client;
 mod error;
+mod extract;
 mod handlers;
 mod models;
 mod rpc;
