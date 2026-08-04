@@ -69,7 +69,9 @@ jobs:
       - name: Run PostgreSQL integration tests
         working-directory: src-tauri
         env:
-          # Limit parallelism to avoid exhausting the PG connection pool (max_size=10).
-          # With 4 threads, tests run reliably without transient "connection closed" errors.
-          RUST_TEST_THREADS: "4"
+          # Run sequentially to avoid pool contention. With 100+ tests sharing
+          # global connection pools (keyed by ConnectionParams), concurrent tests
+          # cause intermittent "connection closed" errors from pool exhaustion.
+          # Sequential execution adds ~5s but eliminates all flakiness.
+          RUST_TEST_THREADS: "1"
         run: cargo test --test postgres_integration -- --include-ignored

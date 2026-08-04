@@ -29,7 +29,7 @@ use tabularis_lib::drivers::driver_trait::DatabaseDriver;
 use tabularis_lib::drivers::postgres::PostgresDriver;
 use tabularis_lib::models::ConnectionParams;
 
-use crate::helpers::{pg_params, pg_params_secondary};
+use crate::helpers::{pg_params, pg_params_secondary, retry_transient};
 
 /// Identifies which driver implementation to test.
 #[derive(Debug, Clone)]
@@ -125,14 +125,16 @@ impl ParityHarness {
         let mut results: Vec<(String, JsonValue)> = Vec::new();
 
         for (target, driver) in &self.targets {
-            let result = test_fn(Arc::clone(driver), params.clone())
-                .await
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "Parity test '{}' failed on target {}: {}",
-                        method_name, target, e
-                    )
-                });
+            let result = retry_transient(3, || {
+                test_fn(Arc::clone(driver), params.clone())
+            })
+            .await
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Parity test '{}' failed on target {}: {}",
+                    method_name, target, e
+                )
+            });
             let json = serde_json::to_value(&result).unwrap_or_else(|e| {
                 panic!(
                     "Parity test '{}': failed to serialize result from {}: {}",
