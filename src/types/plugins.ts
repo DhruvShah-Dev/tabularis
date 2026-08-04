@@ -17,6 +17,18 @@ export interface DriverCapabilities {
   connection_string_example?: string;
   /** CamelCase alias accepted for plugin compatibility. */
   connectionStringExample?: string;
+  /** The driver consumes the raw connection URI verbatim instead of the decomposed
+   * host/port/database fields. Set by drivers whose scheme carries semantics the
+   * decomposition would destroy (e.g. the DNS seedlist lookup implied by
+   * `mongodb+srv://`). Defaults to false. */
+  connection_uri?: boolean;
+  /** CamelCase alias accepted for plugin compatibility. */
+  connectionUri?: boolean;
+  /** Additional URI schemes handled by this driver, beyond its own id and the scheme
+   * of `connection_string_example` (e.g. ["mongodb+srv"]). */
+  connection_uri_schemes?: string[];
+  /** CamelCase alias accepted for plugin compatibility. */
+  connectionUriSchemes?: string[];
   identifier_quote: string;
   alter_primary_key: boolean;
   // SQL generation capabilities (optional, default to '' / false when not present)
@@ -36,6 +48,8 @@ export interface DriverCapabilities {
   explain?: boolean;
   /** Supports listing and managing database triggers. Defaults to false. */
   triggers?: boolean;
+  /** Supports listing and managing server accounts (users, grants). Defaults to false. */
+  user_management?: boolean;
   /** Supports managing stored routines (run with parameters, create from template, edit, drop). Defaults to false. */
   routine_management?: boolean;
   /** Supports materialized views (e.g. PostgreSQL). When false, the frontend skips fetching materialized views entirely. Defaults to false. */
@@ -86,6 +100,9 @@ export interface PluginManifest {
   icon?: string;
   /** Plugin-declared setting definitions. Empty/absent for built-in drivers. */
   settings?: PluginSettingDefinition[];
+  /** Optional map of generic inferred type names to driver-specific types.
+   * Used during paste/import to resolve map_inferred_type() locally. */
+  type_mappings?: Record<string, string>;
   /** UI extension declarations for slot-based rendering (Phase 2). */
   ui_extensions?: UIExtensionManifestEntry[];
 }

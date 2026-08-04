@@ -13,8 +13,8 @@ use tokio::sync::{mpsc, oneshot};
 use crate::drivers::driver_trait::{BatchProgressFn, DatabaseDriver, PluginManifest};
 use crate::models::{
     AiSchemaContext, BatchStatementResult, ColumnDefinition, ConnectionParams, DataTypeInfo,
-    ExplainQueryOutput, ForeignKey, Index, QueryResult, RoutineInfo, RoutineParameter, TableColumn,
-    TableInfo, TableSchema, TriggerInfo, ViewInfo,
+    DbPrivilegeCatalog, DbUserInfo, ExplainQueryOutput, ForeignKey, Index, QueryResult, RoutineInfo,
+    RoutineParameter, TableColumn, TableInfo, TableSchema, TriggerInfo, ViewInfo,
 };
 use crate::plugins::rpc::{JsonRpcRequest, JsonRpcResponse};
 
@@ -294,9 +294,10 @@ impl DatabaseDriver for RpcDriver {
     }
 
     fn map_inferred_type(&self, kind: &str) -> String {
+        // Manifest keys are documented as uppercase; the lookup is case-insensitive.
         self.manifest
             .type_mappings
-            .get(kind)
+            .get(&kind.to_uppercase())
             .cloned()
             .unwrap_or_else(|| kind.to_string())
     }
@@ -1034,6 +1035,130 @@ impl DatabaseDriver for RpcDriver {
         serde_json::from_value(res).map_err(|e| e.to_string())
     }
 
+    // --- User management (plugins opt in via `capabilities.userManagement`) --
+
+    async fn get_db_privilege_catalog(&self) -> Result<DbPrivilegeCatalog, String> {
+        let res = self
+            .process
+            .call("get_db_privilege_catalog", json!({}))
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn get_db_users(&self, params: &ConnectionParams) -> Result<Vec<DbUserInfo>, String> {
+        let res = self
+            .process
+            .call("get_db_users", json!({ "params": params }))
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn get_db_user_grants(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+    ) -> Result<Vec<String>, String> {
+        let res = self
+            .process
+            .call(
+                "get_db_user_grants",
+                json!({ "params": params, "user": user, "host": host }),
+            )
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn create_db_user(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+        password: &str,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "create_db_user",
+                json!({ "params": params, "user": user, "host": host, "password": password }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn drop_db_user(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "drop_db_user",
+                json!({ "params": params, "user": user, "host": host }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn set_db_user_password(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+        password: &str,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "set_db_user_password",
+                json!({ "params": params, "user": user, "host": host, "password": password }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn get_db_user_privileges(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+    ) -> Result<Vec<crate::models::DbUserGrantSet>, String> {
+        let res = self
+            .process
+            .call(
+                "get_db_user_privileges",
+                json!({ "params": params, "user": user, "host": host }),
+            )
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn apply_db_user_privileges(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+        database: Option<&str>,
+        table: Option<&str>,
+        privileges: &[String],
+        grant: bool,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "apply_db_user_privileges",
+                json!({
+                    "params": params,
+                    "user": user,
+                    "host": host,
+                    "database": database,
+                    "table": table,
+                    "privileges": privileges,
+                    "grant": grant
+                }),
+            )
+            .await?;
+        Ok(())
+    }
+
     async fn get_trigger_definition(
         &self,
         params: &ConnectionParams,
@@ -1200,6 +1325,8 @@ mod tests {
             port: Some(1234),
             username: Some("user".to_string()),
             password: Some("secret".to_string()),
+            connection_uri: None,
+            connection_uri_in_keychain: None,
             database: DatabaseSelection::Single("db".to_string()),
             ssl_mode: None,
             ssl_ca: None,
@@ -1228,6 +1355,7 @@ mod tests {
             k8s_kubeconfig_path: None,
             startup_script: None,
             use_iam_auth: None,
+            extra: HashMap::new(),
             connection_id: Some("conn-1".to_string()),
         }
     }
@@ -1321,6 +1449,55 @@ mod tests {
         assert_eq!(context.tables[0].name, "users");
         assert_eq!(context.tables[0].columns[0].name, "id");
         assert_eq!(context.total_table_count, 1);
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_the_connection_uri_to_test_connection() {
+        let uri = "mongodb+srv://cluster.example.invalid/app?retryWrites=true&w=majority";
+        let expected = uri.to_string();
+        let driver = test_driver(move |request| {
+            assert_eq!(request.method, "test_connection");
+            assert_eq!(request.params["params"]["connection_uri"], expected);
+            Value::Null
+        });
+        let mut params = test_connection_params();
+        params.connection_uri = Some(uri.to_string());
+
+        driver
+            .test_connection(&params)
+            .await
+            .expect("test connection");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_the_connection_uri_to_subsequent_operations() {
+        let uri = "mongodb+srv://cluster.example.invalid/app?retryWrites=true&w=majority";
+        let expected = uri.to_string();
+        let driver = test_driver(move |request| {
+            assert_eq!(request.method, "get_databases");
+            assert_eq!(request.params["params"]["connection_uri"], expected);
+            json!(["app"])
+        });
+        let mut params = test_connection_params();
+        params.connection_uri = Some(uri.to_string());
+
+        let databases = driver.get_databases(&params).await.expect("get databases");
+
+        assert_eq!(databases, vec!["app"]);
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_omits_the_connection_uri_when_unset() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_databases");
+            assert!(request.params["params"].get("connection_uri").is_none());
+            json!(["db"])
+        });
+
+        driver
+            .get_databases(&test_connection_params())
+            .await
+            .expect("get databases");
     }
 
     #[tokio::test]
@@ -1594,7 +1771,8 @@ mod tests {
             assert_eq!(request.params["pk_map"]["id"], 7);
             assert_eq!(request.params["schema"], "public");
             assert_eq!(request.params["params"]["driver"], "test-plugin");
-            json!("data:image/png;base64,iVBORw0KGgo=")
+            // The documented BLOB wire format (see drivers/common/blob.rs)
+            json!("BLOB:12:image/png:iVBORw0KGgo=")
         });
 
         let mut pk_map = HashMap::new();
@@ -1611,7 +1789,7 @@ mod tests {
             .await
             .expect("fetch_blob_as_data_url");
 
-        assert_eq!(url, "data:image/png;base64,iVBORw0KGgo=");
+        assert_eq!(url, "BLOB:12:image/png:iVBORw0KGgo=");
     }
 
     #[tokio::test]
@@ -1683,6 +1861,21 @@ mod tests {
 
         assert_eq!(cols.len(), 1);
         assert_eq!(cols[0].name, "total");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_materialized_view_columns_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "get_materialized_view_columns");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let cols = driver
+            .get_materialized_view_columns(&test_connection_params(), "mv_x", None)
+            .await
+            .expect("fallback returns empty vec");
+
+        assert!(cols.is_empty());
     }
 
     #[tokio::test]
@@ -1782,6 +1975,8 @@ mod tests {
         // Mapped types
         assert_eq!(driver.map_inferred_type("DATETIME"), "TIMESTAMP");
         assert_eq!(driver.map_inferred_type("JSON"), "JSONB");
+        // Lookup is case-insensitive (input is uppercased before matching)
+        assert_eq!(driver.map_inferred_type("datetime"), "TIMESTAMP");
         // Unmapped types pass through unchanged
         assert_eq!(driver.map_inferred_type("INTEGER"), "INTEGER");
         assert_eq!(driver.map_inferred_type("TEXT"), "TEXT");
