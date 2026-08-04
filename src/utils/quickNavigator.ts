@@ -15,7 +15,7 @@ export interface NavigatorItemParams {
   isMultiDb: boolean;
   schemas: string[];
   schemaDataMap: Record<string, SchemaData>;
-  configuredDatabases: string[];
+  selectedDatabases: string[];
   databaseDataMap: Record<string, SchemaData>;
   tables: TableInfo[];
   views: ViewInfo[];
@@ -31,7 +31,7 @@ export function getNavigatorItems(params: NavigatorItemParams): NavigatorItem[] 
     isMultiDb,
     schemas,
     schemaDataMap,
-    configuredDatabases,
+    selectedDatabases,
     databaseDataMap,
     tables,
     views,
@@ -82,8 +82,8 @@ export function getNavigatorItems(params: NavigatorItemParams): NavigatorItem[] 
         }
       }
     });
-  } else if (isMultiDb && configuredDatabases) {
-    configuredDatabases.forEach((dbName) => {
+  } else if (isMultiDb && selectedDatabases) {
+    selectedDatabases.forEach((dbName) => {
       const data = databaseDataMap[dbName];
       if (data) {
         if (data.tables) {
