@@ -5,7 +5,7 @@
 
 use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use tokio_postgres::types::ToSql;
-use tokio_postgres::NoTls;
+use tokio_postgres::{NoTls, Row};
 use tokio_postgres_rustls::MakeRustlsConnect;
 
 use crate::models::ConnectionParams;
@@ -48,6 +48,23 @@ pub async fn query_strings(
         .map(|r| r.try_get::<_, String>(column).unwrap_or_default())
         .collect();
     Ok(results)
+}
+
+/// Run a query and return the raw rows for caller-side mapping.
+pub async fn query_rows(
+    params: &ConnectionParams,
+    query: &str,
+    query_params: &[&(dyn ToSql + Sync)],
+) -> Result<Vec<Row>, String> {
+    let pool = build_pool(params)?;
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| format!("Connection failed: {e}"))?;
+    client
+        .query(query, query_params)
+        .await
+        .map_err(|e| format!("Query failed: {e}"))
 }
 
 /// Build a deadpool-postgres pool for the given connection parameters.
