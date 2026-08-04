@@ -1,12 +1,69 @@
 //! PostgreSQL connection pool management via deadpool-postgres.
 //!
-//! Placeholder for Sprint 1 Commit 2 — pool construction, TLS, caching.
+//! Provides pool construction with optional TLS (via rustls) and a simple
+//! per-request pool strategy. Pool caching by connection key will be added
+//! in Sprint 2 when metadata queries need persistent connections.
+
+use std::sync::Arc;
+
+use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
+use tokio_postgres::NoTls;
+use tokio_postgres_rustls::MakeRustlsConnect;
 
 use crate::models::ConnectionParams;
 
-/// Acquire a pooled PostgreSQL client for the given connection params.
-/// Currently a placeholder — will be implemented in the next commit.
+/// Build a connection pool from the given params and verify connectivity
+/// by acquiring one client and running `SELECT 1`.
 pub async fn test_connection(params: &ConnectionParams) -> Result<(), String> {
-    let _ = params;
-    Err("client.rs not yet implemented".to_string())
+    let pool = build_pool(params)?;
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| format!("Connection failed: {e}"))?;
+    client
+        .query_one("SELECT 1", &[])
+        .await
+        .map_err(|e| format!("Query failed: {e}"))?;
+    Ok(())
+}
+
+/// Build a deadpool-postgres pool for the given connection parameters.
+fn build_pool(params: &ConnectionParams) -> Result<Pool, String> {
+    let mut cfg = Config::new();
+    cfg.host = params.host.clone();
+    cfg.port = params.port;
+    cfg.dbname = params.database.clone();
+    cfg.user = params.username.clone();
+    cfg.password = params.password.clone();
+    cfg.manager = Some(ManagerConfig {
+        recycling_method: RecyclingMethod::Fast,
+    });
+
+    if needs_tls(params) {
+        let tls_connector = build_tls_connector()?;
+        cfg.create_pool(Some(Runtime::Tokio1), MakeRustlsConnect::new(tls_connector))
+            .map_err(|e| format!("Pool creation failed (TLS): {e}"))
+    } else {
+        cfg.create_pool(Some(Runtime::Tokio1), NoTls)
+            .map_err(|e| format!("Pool creation failed: {e}"))
+    }
+}
+
+/// Determine whether TLS should be used based on ssl_mode.
+fn needs_tls(params: &ConnectionParams) -> bool {
+    match params.ssl_mode.as_deref() {
+        Some("require") | Some("verify-ca") | Some("verify-full") => true,
+        _ => false,
+    }
+}
+
+/// Build a rustls ClientConfig using the platform certificate verifier.
+fn build_tls_connector() -> Result<Arc<rustls::ClientConfig>, String> {
+    use rustls_platform_verifier::BuilderVerifierExt;
+
+    let config = rustls::ClientConfig::builder()
+        .with_platform_verifier()
+        .map_err(|e| format!("Failed to build platform TLS verifier: {e}"))?
+        .with_no_client_auth();
+    Ok(Arc::new(config))
 }
