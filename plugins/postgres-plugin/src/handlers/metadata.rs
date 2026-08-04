@@ -121,7 +121,10 @@ pub async fn get_columns(id: Value, params: &Value) -> Value {
                     let is_nullable_str: String = r.try_get("is_nullable").unwrap_or_default();
                     let column_default: Option<String> = r.try_get("column_default").ok().flatten();
                     let is_identity: String = r.try_get("is_identity").unwrap_or_default();
-                    let char_max_len: Option<i32> = r.try_get("character_maximum_length").ok().flatten();
+                    let char_max_len: Option<i64> = r
+                        .try_get::<_, Option<i64>>("character_maximum_length")
+                        .ok()
+                        .flatten();
                     let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
 
                     let data_type = match enum_values {
@@ -159,10 +162,10 @@ pub async fn get_columns(id: Value, params: &Value) -> Value {
                     if let Some(dv) = default_value {
                         col.as_object_mut().unwrap().insert("default_value".to_string(), json!(dv));
                     }
-                    if let Some(len) = char_max_len {
+                    if let Some(len) = char_max_len.and_then(|v| u64::try_from(v).ok()) {
                         col.as_object_mut().unwrap().insert(
                             "character_maximum_length".to_string(),
-                            json!(len as u64),
+                            json!(len),
                         );
                     }
 
