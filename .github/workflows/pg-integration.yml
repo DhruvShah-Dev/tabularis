@@ -74,4 +74,13 @@ jobs:
           # cause intermittent "connection closed" errors from pool exhaustion.
           # Sequential execution adds ~5s but eliminates all flakiness.
           RUST_TEST_THREADS: "1"
+          # Regenerate golden files so newly added captures are written.
+          REGENERATE_GOLDEN: "1"
         run: cargo test --test postgres_integration -- --include-ignored
+
+      - name: Upload golden files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-files
+          path: src-tauri/tests/postgres_integration/golden/
