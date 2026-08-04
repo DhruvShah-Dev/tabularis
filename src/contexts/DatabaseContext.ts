@@ -108,6 +108,10 @@ export interface ConnectionData {
   needsSchemaSelection: boolean;
   selectedDatabases: string[];
   databaseDataMap: Record<string, SchemaData>;
+  /** Multi-db drivers with no explicit selection: the database list is
+   * fetched from the server on every connect/refresh instead of being
+   * persisted. */
+  allDatabasesMode: boolean;
   isConnecting: boolean;
   isConnected: boolean;
   error?: string;
@@ -163,6 +167,10 @@ export interface DatabaseContextType {
   loadDatabaseData: (database: string, connectionId?: string) => Promise<void>;
   refreshDatabaseData: (database: string, connectionId?: string) => Promise<void>;
   setSelectedDatabases: (databases: string[], connectionId?: string) => void;
+  refreshDatabaseSelection: (
+    connectionId: string,
+    options?: { notifyWhenUnchanged?: boolean },
+  ) => Promise<void>;
   getConnectionData: (connectionId: string) => ConnectionData | undefined;
   isConnectionOpen: (connectionId: string) => boolean;
   /** Connection ids open in ANY window (shared backend registry). */

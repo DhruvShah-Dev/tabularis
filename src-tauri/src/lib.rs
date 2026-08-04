@@ -70,10 +70,14 @@ pub mod preferences;
 pub mod query_history;
 #[cfg(test)]
 pub mod query_history_tests;
+pub mod sql_database_statements;
 pub mod saved_queries;
 #[cfg(test)]
 pub mod saved_queries_tests;
 pub mod ssh_tunnel;
+pub mod sqlite_database;
+#[cfg(test)]
+pub mod sqlite_database_tests;
 pub mod task_manager;
 pub mod theme_commands;
 pub mod theme_models;
@@ -372,6 +376,8 @@ pub fn run() {
             commands::test_connection,
             commands::list_databases,
             commands::save_connection,
+            sqlite_database::create_sqlite_file,
+            sqlite_database::create_sqlite_database,
             commands::delete_connection,
             commands::update_connection,
             commands::duplicate_connection,
@@ -431,6 +437,7 @@ pub fn run() {
             connection_import_commands::apply_tabularis_import,
             commands::get_schemas,
             commands::get_available_databases,
+            commands::set_selected_databases,
             commands::get_tables,
             commands::get_columns,
             commands::get_foreign_keys,
@@ -542,6 +549,15 @@ pub fn run() {
             commands::get_trigger_definition,
             commands::create_trigger,
             commands::drop_trigger,
+            // User management
+            commands::get_db_privilege_catalog,
+            commands::get_db_users,
+            commands::get_db_user_grants,
+            commands::get_db_user_privileges,
+            commands::create_db_user,
+            commands::drop_db_user,
+            commands::set_db_user_password,
+            commands::apply_db_user_privileges,
             // MCP
             mcp::install::get_mcp_status,
             mcp::install::install_mcp_config,
@@ -574,6 +590,7 @@ pub fn run() {
             updater::get_installation_source,
             // Logs
             log_commands::get_logs,
+            log_commands::log_frontend_event,
             log_commands::clear_logs,
             log_commands::get_log_settings,
             log_commands::set_log_enabled,

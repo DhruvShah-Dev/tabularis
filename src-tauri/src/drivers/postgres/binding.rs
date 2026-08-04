@@ -36,6 +36,7 @@ pub(super) struct PgValueOptions<'a> {
     pub enum_type: Option<&'a str>,
     pub max_blob_size: u64,
     pub allow_default: bool,
+    pub hstore_oid: Option<u32>,
 }
 
 /// Build a parameterized "<pk_col> = $N" predicate plus the boxed parameter for the
@@ -142,6 +143,11 @@ pub(super) fn bind_pg_value(
     placeholder_idx: usize,
     options: PgValueOptions<'_>,
 ) -> Result<BoundValue, String> {
+    // The driver unfolds information_schema's generic 'USER-DEFINED' to the real
+    // udt_name, so an hstore column reports its type as plain "hstore" here.
+    if options.column_type == Some("hstore") {
+        return bind_pg_hstore(value, placeholder_idx, options.hstore_oid);
+    }
     // Bind serde_json::Value directly for json/jsonb — serialize-and-cast trips an OID mismatch.
     if let Some(ct) = options.column_type {
         let normalized = extract_base_type(ct);
@@ -182,6 +188,85 @@ pub(super) fn bind_pg_value(
             Err("Cannot bind a JSON object to a non-JSON column".into())
         }
     }
+}
+
+/// Binds a JSON object to an hstore column as `HashMap<String, Option<String>>`,
+/// which `tokio-postgres` encodes natively via its built-in hstore `ToSql` impl.
+/// Requires the real OID of the `hstore` type in this database (extension-defined,
+/// not a well-known Postgres OID) so `prepare_typed` pins the placeholder correctly.
+fn bind_pg_hstore(
+    value: serde_json::Value,
+    placeholder_idx: usize,
+    hstore_oid: Option<u32>,
+) -> Result<BoundValue, String> {
+    let map = match value {
+        serde_json::Value::Null => {
+            return Ok(BoundValue {
+                sql: "NULL".to_string(),
+                param: None,
+            });
+        }
+        serde_json::Value::Object(map) => map,
+
+        // The grid's plain-text cell editor doesn't yet know about hstore, so it
+        // round-trips the value as a JSON-encoded string rather than an object.
+        // Accept that shape here so editing still works until the editor is
+        // taught to treat hstore columns like JSON (issue #395).
+        serde_json::Value::String(s) => match serde_json::from_str::<serde_json::Value>(&s) {
+            Ok(serde_json::Value::Object(map)) => map,
+            _ => {
+                return Err(format!(
+                    "hstore column requires a JSON object value, got a string that is not valid JSON: {:?}",
+                    s
+                ));
+            }
+        },
+        other => {
+            return Err(format!(
+                "hstore column requires a JSON object value, got {:?}",
+                other
+            ));
+        }
+    };
+
+    let oid = hstore_oid.ok_or_else(|| {
+        "Could not resolve the hstore type OID; is the hstore extension installed?".to_string()
+    })?;
+    let hmap = hstore_map_from_json_object(map)?;
+    let pg_type = Type::new(
+        "hstore".to_string(),
+        oid,
+        tokio_postgres::types::Kind::Simple,
+        "public".to_string(),
+    );
+    Ok(BoundValue {
+        sql: format!("${}", placeholder_idx),
+        param: Some((Box::new(hmap), pg_type)),
+    })
+}
+
+/// Converts a JSON object into the `HashMap<String, Option<String>>` shape that
+/// `tokio-postgres` encodes natively as hstore. Every value must be a string or
+/// null — hstore itself only stores text, so numbers/bools/nested objects have no
+/// unambiguous representation and are rejected with a message naming the offending key.
+fn hstore_map_from_json_object(
+    map: serde_json::Map<String, serde_json::Value>,
+) -> Result<HashMap<String, Option<String>>, String> {
+    let mut hmap = HashMap::with_capacity(map.len());
+    for (k, v) in map {
+        let val = match v {
+            serde_json::Value::String(s) => Some(s),
+            serde_json::Value::Null => None,
+            other => {
+                return Err(format!(
+                    "hstore value for key '{}' must be a string or null, got {:?}",
+                    k, other
+                ));
+            }
+        };
+        hmap.insert(k, val);
+    }
+    Ok(hmap)
 }
 
 /// SQL fragment + boxed parameter for a JSON Number bound to PostgreSQL.
@@ -398,6 +483,16 @@ fn bind_pg_string(
         });
     }
 
+    // pgvector types must be handled before the generic array/text paths below:
+    // "[1,2,3]" would otherwise be turned into a PostgreSQL array literal by
+    // `try_parse_pg_array`, and there is no text->vector cast for a bound param.
+    if let Some(binding) = options
+        .column_type
+        .and_then(|column_type| bind_pg_vector_string(s, column_type))
+    {
+        return binding;
+    }
+
     if let Some(bytes) = crate::drivers::common::decode_blob_wire_format(s, options.max_blob_size) {
         return Ok(BoundValue {
             sql: format!("${}", placeholder_idx),
@@ -470,4 +565,48 @@ fn bind_pg_string(
         sql: format!("${}", placeholder_idx),
         param: Some((Box::new(s.to_string()), Type::TEXT)),
     })
+}
+
+/// Bind a value into a pgvector column (`vector`, `halfvec`, `sparsevec`).
+///
+/// pgvector registers no `text -> vector` cast, so a bound TEXT parameter — even
+/// via `CAST($N AS vector)` — is rejected by PostgreSQL. The literal only reaches
+/// the type's input function when it arrives as an *unknown*-typed literal, so we
+/// inline it as `'<value>'::<type>`. To keep that safe, the value is validated
+/// against a strict allow-list of characters that make up a vector literal; a
+/// non-pgvector column returns `None` so the caller falls through to its normal
+/// binding logic.
+fn bind_pg_vector_string(s: &str, column_type: &str) -> Option<Result<BoundValue, String>> {
+    let pg_type = match extract_base_type(column_type).as_str() {
+        "VECTOR" => "vector",
+        "HALFVEC" => "halfvec",
+        "SPARSEVEC" => "sparsevec",
+        _ => return None,
+    };
+
+    let trimmed = s.trim();
+
+    // Characters that can legitimately appear in a vector / halfvec / sparsevec
+    // literal: digits, sign, decimal point, exponent marker, the bracket/brace
+    // delimiters, element separators, the sparsevec index (':') and dimension
+    // ('/') separators, and whitespace. Anything else cannot be inlined safely.
+    let is_vector_literal = !trimmed.is_empty()
+        && trimmed.chars().all(|c| {
+            c.is_ascii_digit()
+                || matches!(
+                    c,
+                    '+' | '-' | '.' | 'e' | 'E' | '[' | ']' | '{' | '}' | ',' | ':' | '/' | ' '
+                )
+        });
+
+    if !is_vector_literal {
+        return Some(Err(format!(
+            "Invalid {pg_type} value: expected a numeric vector literal such as [1,2,3]"
+        )));
+    }
+
+    Some(Ok(BoundValue {
+        sql: format!("'{trimmed}'::{pg_type}"),
+        param: None,
+    }))
 }

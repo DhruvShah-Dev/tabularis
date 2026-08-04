@@ -8,6 +8,7 @@ import {
   getResultValueType,
   buildPkMap,
   serializePkKey,
+  DATA_GRID_ROW_HEIGHT,
   type ColumnDisplayInfo,
   type MergedRow,
 } from "../../utils/dataGrid";
@@ -63,6 +64,23 @@ export interface RowCtx {
   parentViewportWidth: number;
   readonly: boolean | undefined;
   updateSelection: (s: Set<number>) => void;
+  /** Currently selected column indices (DBeaver-style column selection). */
+  selectedColIndices: Set<number>;
+  /** Clears the column selection (row/column selection are exclusive). */
+  clearColSelection: () => void;
+  /** Active cell range (Shift+click rectangle), normalized bounds. */
+  cellRange: {
+    minRow: number;
+    maxRow: number;
+    minCol: number;
+    maxCol: number;
+  } | null;
+  /** Cell click: focuses the anchor, or Shift+click extends the range. */
+  handleCellClick: (
+    rowIndex: number,
+    colIndex: number,
+    e: React.MouseEvent,
+  ) => void;
   setFocusedCell: React.Dispatch<
     React.SetStateAction<{ rowIndex: number; colIndex: number } | null>
   >;
@@ -81,14 +99,7 @@ export interface RowCtx {
       isRawSql?: boolean;
     } | null>
   >;
-  setSidebarRowData: React.Dispatch<
-    React.SetStateAction<{
-      data: Record<string, unknown>;
-      rowIndex: number;
-      focusField?: string;
-    } | null>
-  >;
-  setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  openInSidebar: (rowIndex: number, focusField?: string) => void;
   handleRowClick: (index: number, e: React.MouseEvent) => void;
   handleCellDoubleClick: (
     rowIndex: number,
@@ -124,10 +135,6 @@ export interface RowCtx {
     tempId: string | undefined,
     readOnly: boolean,
   ) => void;
-  buildRowDataWithPending: (
-    rowArray: unknown[],
-    isInsertion: boolean,
-  ) => Record<string, unknown>;
   editInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
@@ -179,12 +186,13 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
     pkIndexMaps,
     parentViewportWidth,
     readonly: readonlyProp,
-    updateSelection,
+    selectedColIndices,
+    cellRange,
+    handleCellClick,
     setFocusedCell,
     setExpandedCell,
     setEditingCell,
-    setSidebarRowData,
-    setSidebarOpen,
+    openInSidebar,
     handleRowClick,
     handleCellDoubleClick,
     handleContextMenu,
@@ -197,7 +205,6 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
     onPendingChange,
     onPendingInsertionChange,
     openJsonViewerWindow,
-    buildRowDataWithPending,
     editInputRef,
   } = ctx;
 
@@ -221,10 +228,18 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
       : null;
   const expansionMatchesRow = expandedColIndex !== null;
 
+  // Column bounds of the active cell range when this row falls inside it —
+  // those cells get the range highlight.
+  const rangeColBounds =
+    cellRange && rowIndex >= cellRange.minRow && rowIndex <= cellRange.maxRow
+      ? cellRange
+      : null;
+
   return (
     <>
       <tr
-        style={{ height: 35 }}
+        data-row-index={rowIndex}
+        style={{ height: DATA_GRID_ROW_HEIGHT }}
         className={`transition-colors group ${
           isSelected
             ? "bg-blue-900/20 border-l-4 border-blue-400"
@@ -240,6 +255,11 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
             setFocusedCell(null);
             onForeignKeyHidePanel?.();
             handleRowClick(rowIndex, e);
+          }}
+          onDoubleClick={() => {
+            if (!readonlyProp) {
+              openInSidebar(rowIndex);
+            }
           }}
           className={`px-2 py-1.5 text-xs text-center border-b border-r border-default sticky left-0 z-10 cursor-pointer select-none w-[50px] min-w-[50px] ${
             isInsertion
@@ -347,16 +367,24 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
           return (
             <td
               key={colName}
+              data-col-index={colIndex}
+              onMouseDown={(e) => {
+                // Shift+click extends the cell range — suppress the browser's
+                // text selection that a Shift+click would otherwise start.
+                if (e.shiftKey) e.preventDefault();
+              }}
               onClick={(e) => {
                 // Don't handle row click if clicking on a button
                 const target = e.target as HTMLElement;
                 if (target.closest("button")) {
                   return;
                 }
-                setFocusedCell({ rowIndex, colIndex });
-                updateSelection(new Set());
+                handleCellClick(rowIndex, colIndex, e);
 
-                if (fkForPreview && onForeignKeyShowPanel) {
+                if (e.shiftKey) {
+                  // Range extension click — don't pivot the FK panel.
+                  onForeignKeyHidePanel?.();
+                } else if (fkForPreview && onForeignKeyShowPanel) {
                   onForeignKeyShowPanel(fkForPreview, rawCellValue);
                 } else {
                   onForeignKeyHidePanel?.();
@@ -375,7 +403,7 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
               onContextMenu={(e) =>
                 handleContextMenu(e, rowOriginal, rowIndex, colIndex, colName)
               }
-              className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 font-mono ${isEditing ? "relative" : "whitespace-nowrap truncate max-w-[300px]"} ${fkForPreview ? "cursor-pointer" : "cursor-text"} ${stateClass} ${isFocused ? "ring-2 ring-inset ring-blue-400" : ""}`}
+              className={`px-4 py-1.5 text-sm border-b border-r border-default last:border-r-0 font-mono ${isEditing ? "relative" : "whitespace-nowrap truncate max-w-[300px]"} ${fkForPreview ? "cursor-pointer" : "cursor-text"} ${stateClass} ${selectedColIndices.has(colIndex) || (rangeColBounds !== null && colIndex >= rangeColBounds.minCol && colIndex <= rangeColBounds.maxCol) ? "bg-blue-500/15" : ""} ${isFocused ? "ring-2 ring-inset ring-blue-400" : ""}`}
               title={
                 !isEditing ? truncateCellPreview(formattedDisplay).text : ""
               }
@@ -407,18 +435,7 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
                             setEditingCell(null);
 
                             // Open sidebar with the current row
-                            const mergedRow = mergedRows[rowIndex];
-                            if (mergedRow) {
-                              setSidebarRowData({
-                                data: buildRowDataWithPending(
-                                  mergedRow.rowData,
-                                  mergedRow.type === "insertion",
-                                ),
-                                rowIndex: rowIndex,
-                                focusField: colName,
-                              });
-                              setSidebarOpen(true);
-                            }
+                            openInSidebar(rowIndex, colName);
                           }}
                           className="w-full bg-base text-primary border-none outline-none p-0 m-0 font-mono"
                         />
@@ -630,18 +647,7 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
                           <button
                             type="button"
                             onClick={() => {
-                              const mergedRow = mergedRows[rowIndex];
-                              if (mergedRow) {
-                                setSidebarRowData({
-                                  data: buildRowDataWithPending(
-                                    mergedRow.rowData,
-                                    mergedRow.type === "insertion",
-                                  ),
-                                  rowIndex,
-                                  focusField: colName,
-                                });
-                                setSidebarOpen(true);
-                              }
+                              openInSidebar(rowIndex, colName);
                             }}
                             className="opacity-0 group-hover/blobcell:opacity-100 transition-opacity p-0.5 rounded text-muted hover:text-secondary hover:bg-surface-tertiary flex-shrink-0"
                             title={t("blobInput.openSidebar")}

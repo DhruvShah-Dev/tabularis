@@ -18,11 +18,13 @@ import { isBlobColumn } from "../../utils/blob";
 import {
   isJsonColumn,
   isJsonContent,
+  isHstoreColumn,
   isStructuredValue,
 } from "../../utils/json";
 import {
   isLongTextValue,
   isTextColumn,
+  isVectorColumn,
   supportsEmptyString,
 } from "../../utils/text";
 import { getDateInputMode } from "../../utils/dateInput";
@@ -74,7 +76,7 @@ export const FieldEditor = ({
   const { t } = useTranslation();
   const isGeometric = type && isGeometricType(type);
   const isBlob = type && isBlobColumn(type, characterMaximumLength);
-  const isJsonByType = !!(type && isJsonColumn(type));
+  const isJsonByType = !!(type && (isJsonColumn(type) || isHstoreColumn(type)));
   const detectedJson =
     !isBlob &&
     !isGeometric &&
@@ -101,7 +103,7 @@ export const FieldEditor = ({
     !dateMode &&
     !isEnum &&
     !isSet &&
-    isTextColumn(type) &&
+    (isTextColumn(type) || isVectorColumn(type)) &&
     (isLongTextValue(value) || isLongTextValue(originalValue));
 
   const defaultPlaceholder = placeholder || t("rowEditor.enterValue");

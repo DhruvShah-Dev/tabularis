@@ -59,7 +59,7 @@ import {
 } from "../../utils/notebookStore";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useSqlAutocompleteRegistration } from "../../hooks/useSqlAutocompleteRegistration";
-import { isMultiDatabaseCapable } from "../../utils/database";
+import { usesMultiDatabaseLayout } from "../../utils/database";
 import { useSettings } from "../../hooks/useSettings";
 import { useAlert } from "../../hooks/useAlert";
 import { useKeybindings } from "../../hooks/useKeybindings";
@@ -92,9 +92,9 @@ export function NotebookView({
   isActive,
 }: NotebookViewProps) {
   const { t } = useTranslation();
-  const { activeSchema, activeCapabilities, selectedDatabases } = useDatabase();
-  const isMultiDb =
-    isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
+  const { activeSchema, activeCapabilities, selectedDatabases, activeDriver } =
+    useDatabase();
+  const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
   const effectiveSchema =
     tab.schema || activeSchema || (isMultiDb ? selectedDatabases[0] : null);
   useSqlAutocompleteRegistration(connectionId, {
@@ -354,6 +354,7 @@ export function NotebookView({
       const { sql: resolvedSql, unresolvedRefs } = resolveQueryVariables(
         sql,
         cellsRef.current,
+        { escapeBackslashes: activeDriver === "mysql" },
       );
 
       if (unresolvedRefs.length > 0) {
@@ -431,6 +432,7 @@ export function NotebookView({
       settings.resultPageSize,
       updateCell,
       params,
+      activeDriver,
       guardDangerousQuery,
       guardProductionWrite,
     ],

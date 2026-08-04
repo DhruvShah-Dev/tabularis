@@ -7,6 +7,7 @@ import { App } from './App';
 import './index.css';
 import './i18n/config';
 import { DatabaseProvider } from './contexts/DatabaseProvider';
+import { ToastProvider } from './contexts/ToastProvider';
 import { SettingsProvider } from './contexts/SettingsProvider';
 import { SavedQueriesProvider } from './contexts/SavedQueriesProvider';
 import { QueryHistoryProvider } from './contexts/QueryHistoryProvider';
@@ -20,8 +21,9 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <UpdateProvider>
       <ThemeProvider>
         <SettingsProvider>
-          <DatabaseProvider>
-            <SavedQueriesProvider>
+          <ToastProvider>
+            <DatabaseProvider>
+              <SavedQueriesProvider>
               <QueryHistoryProvider>
                 <EditorProvider>
                   <ProductionGuardProvider>
@@ -30,7 +32,8 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
                 </EditorProvider>
               </QueryHistoryProvider>
             </SavedQueriesProvider>
-          </DatabaseProvider>
+            </DatabaseProvider>
+          </ToastProvider>
         </SettingsProvider>
       </ThemeProvider>
     </UpdateProvider>

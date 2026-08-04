@@ -164,6 +164,15 @@ pub struct SshTestParams {
     pub allow_passphrase_prompt: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
+    /// Id of the saved database connection whose inline SSH secrets should be
+    /// used as a fallback: they live in the keychain under the DB connection
+    /// id, not in the SSH connections file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub db_connection_id: Option<String>,
+    /// When set, the test emits "connection-test-progress" events tagged with
+    /// this id so the caller can render a step log.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -173,6 +182,22 @@ pub struct ConnectionParams {
     pub port: Option<u16>,
     pub username: Option<String>,
     pub password: Option<String>,
+    /// Opaque driver-specific connection URI forwarded verbatim to the driver
+    /// (e.g. a `mongodb+srv://` seedlist URI). Runtime only: command handlers
+    /// strip it before persisting a connection, because it embeds credentials.
+    #[serde(
+        default,
+        alias = "connectionUri",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub connection_uri: Option<String>,
+    /// True when the URI can be restored from a separate OS keychain entry.
+    #[serde(
+        default,
+        alias = "connectionUriInKeychain",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub connection_uri_in_keychain: Option<bool>,
     pub database: DatabaseSelection,
     pub ssl_mode: Option<String>,
     pub ssl_ca: Option<String>,
@@ -237,6 +262,14 @@ pub struct ConnectionParams {
     /// pool hands out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub startup_script: Option<String>,
+    /// Opaque, plugin-specific connection fields. The host does not interpret
+    /// these — they are persisted verbatim and forwarded to the driver plugin
+    /// as part of `params`, so plugins can carry custom connection settings
+    /// (e.g. an AWS region for DynamoDB) without core schema changes.
+    /// Rendered by plugins through the `connection-modal.extra_fields` slot.
+    /// Absent from the JSON when empty.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub extra: HashMap<String, String>,
     // Connection ID for stable pooling (not persisted, set at runtime)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
@@ -375,6 +408,10 @@ pub struct TestConnectionRequest {
     pub params: ConnectionParams,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
+    /// When set, the test emits "connection-test-progress" events tagged with
+    /// this id so the caller can render a live step log.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -412,6 +449,8 @@ pub struct Index {
     pub is_unique: bool,
     pub is_primary: bool,
     pub seq_in_index: i32,
+    #[serde(default)]
+    pub is_expression: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -475,56 +514,34 @@ impl BatchStatementResult {
     }
 }
 
-/// A single node in a query execution plan tree.
+/// Raw EXPLAIN output produced by a built-in driver.
+///
+/// Parsing lives in the `@tabularis/explain` TypeScript package
+/// (`parseRawExplain`): a driver's job ends at handing over the payload it
+/// obtained — text, a JSON document, or decoded rows re-serialised as a JSON
+/// array — plus the format tag naming what it is.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ExplainNode {
-    pub id: String,
-    pub node_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub relation: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub startup_cost: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub total_cost: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub plan_rows: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub actual_rows: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub actual_time_ms: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub actual_loops: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub buffers_hit: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub buffers_read: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub filter: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub index_condition: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub join_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hash_condition: Option<String>,
-    #[serde(default)]
-    pub extra: HashMap<String, serde_json::Value>,
-    #[serde(default)]
-    pub children: Vec<ExplainNode>,
+pub struct RawExplainOutput {
+    /// Driver id of the engine that produced the payload ("postgres", …).
+    pub engine: String,
+    /// Wire format tag understood by `@tabularis/explain`:
+    /// `postgres-json`, `mysql-json`, `mysql-analyze-text`,
+    /// `mysql-tabular-rows` or `sqlite-eqp-rows`.
+    pub format: String,
+    /// The untouched payload: text, a JSON document, or rows as a JSON array.
+    pub payload: String,
+    pub original_query: String,
 }
 
-/// The complete result of an EXPLAIN query, including the plan tree and metadata.
+/// What `explain_query` hands to the frontend: a raw payload from a built-in
+/// driver, or a plan a plugin driver already parsed. Plugins know engines the
+/// core parsers do not, so their JSON-RPC `explain_query` result passes
+/// through untouched.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ExplainPlan {
-    pub root: ExplainNode,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub planning_time_ms: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub execution_time_ms: Option<f64>,
-    pub original_query: String,
-    pub driver: String,
-    pub has_analyze_data: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub raw_output: Option<String>,
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ExplainQueryOutput {
+    Raw { raw: RawExplainOutput },
+    Plan { plan: serde_json::Value },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -584,6 +601,41 @@ pub struct TriggerInfo {
     pub event: String,   // e.g. "INSERT", "UPDATE", "DELETE", "INSERT OR UPDATE"
     pub timing: String,  // "BEFORE", "AFTER", "INSTEAD OF"
     pub definition: Option<String>,
+}
+
+/// One database account as listed by the server (MySQL/MariaDB:
+/// `mysql.user` rows, identified by the `user`@`host` pair).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DbUserInfo {
+    pub user: String,
+    pub host: String,
+    /// Account is locked (`ALTER USER ... ACCOUNT LOCK`); `false` when the
+    /// server does not expose the flag.
+    pub locked: bool,
+}
+
+/// The privilege keywords a driver accepts in `apply_db_user_privileges`,
+/// split by scope. Sent to the frontend so the privilege editor renders the
+/// dialect's own catalog instead of hardcoding one.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct DbPrivilegeCatalog {
+    /// Privileges valid at the database scope (and also globally).
+    pub database: Vec<String>,
+    /// Privileges valid only at the global scope.
+    pub global: Vec<String>,
+    /// Privileges valid at the table scope.
+    pub table: Vec<String>,
+}
+
+/// One account's privileges on one scope, parsed from the server's grant
+/// metadata (MySQL: one `SHOW GRANTS` line). `database == None` is the
+/// global scope; `table` is only ever `Some` when `database` is.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DbUserGrantSet {
+    pub database: Option<String>,
+    pub table: Option<String>,
+    /// Canonical privilege keywords, `GRANT OPTION` included as an entry.
+    pub privileges: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

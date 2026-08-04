@@ -173,6 +173,8 @@
     "noTablesMatch": "Keine passende Tabelle",
     "filterDatabases": "Datenbanken filtern...",
     "manageDatabases": "Datenbanken verwalten",
+    "databaseSelectionUpdated": "Datenbankauswahl aktualisiert",
+    "droppedDatabasesRemoved": "Entfernt, da nicht mehr auf dem Server vorhanden: {{names}}",
     "structure": "Struktur",
     "favorites": "Favoriten",
     "queryHistory": "Verlauf",
@@ -207,7 +209,13 @@
       "delete": "Löschen",
       "deleteConfirm": "Notebook \"{{title}}\" löschen? Dies kann nicht rückgängig gemacht werden.",
       "renamePlaceholder": "Notebook-Name"
-    }
+    },
+    "addToSplitGroup": "Zur geteilten Gruppe hinzufügen",
+    "removeFromSplitGroup": "Aus der Gruppe entfernen",
+    "movePanel": "Panel verschieben",
+    "refreshDatabaseList": "Datenbankliste aktualisieren",
+    "databaseListUpToDate": "Datenbankliste ist aktuell",
+    "allDatabasesRefreshed": "Datenbanken aktualisiert: {{names}}"
   },
   "mcp": {
     "title": "MCP-Server-Integration",
@@ -258,6 +266,12 @@
   "connections": {
     "title": "Verbindungen",
     "addConnection": "Verbindung hinzufügen",
+    "newSqliteDatabase": {
+      "menuLabel": "Neue SQLite-Datenbank…",
+      "dialogTitle": "Neue SQLite-Datenbank",
+      "fileType": "SQLite-Datenbank",
+      "error": "SQLite-Datenbank konnte nicht erstellt werden"
+    },
     "noConnections": "Keine aktiven Verbindungen",
     "createFirst": "Erstelle deine erste Verbindung",
     "active": "Aktiv",
@@ -350,7 +364,9 @@
       },
       "betaNotice": "Der Import aus einer App befindet sich in der Beta-Phase. Falls ein Problem auftritt,",
       "reportIssue": "melde es auf GitHub."
-    }
+    },
+    "databaseCount_one": "{{count}} Datenbank",
+    "databaseCount_other": "{{count}} Datenbanken"
   },
   "connectionAppearance": {
     "section": "Darstellung",
@@ -394,6 +410,13 @@
     "csvHeaders": "Spaltennamen exportieren",
     "detectJsonInTextColumns": "JSON in Text-Spalten erkennen",
     "detectJsonInTextColumnsDesc": "Zeigt JSON-Viewer-Bedienelemente, wenn eine nicht typisierte Text-Zelle ein JSON-Objekt oder -Array enthält. Verursacht kleine Parse-Kosten pro Zelle.",
+    "rowEditorFollowSelection": "Zeileneditor folgt der Auswahl",
+    "rowEditorFollowSelectionDesc": "Wenn die Zeileneditor-Seitenleiste geöffnet ist, wird sie automatisch aktualisiert, um die neu ausgewählte Zeile anzuzeigen.",
+    "cellDoubleClickAction": "Doppelklick-Aktion für Zellen",
+    "cellDoubleClickActionDesc": "Wählen Sie, was beim Doppelklick auf eine Datenzelle passiert.",
+    "cellDoubleClickInline": "Inline-Bearbeitung",
+    "cellDoubleClickSidebar": "In Seitenleiste öffnen",
+    "cellDoubleClickBoth": "Beides",
     "appearance": "Darstellung",
     "localization": "Lokalisierung",
     "themeSelection": "Themaauswahl",
@@ -425,6 +448,23 @@
     "appearance_editorShowLineNumbersDesc": "Zeigt Zeilennummern im Rand des Editors an.",
     "appearance_editorAcceptSuggestionOnEnter": "Vorschlag mit Eingabetaste übernehmen",
     "appearance_editorAcceptSuggestionOnEnterDesc": "Erlaubt der Eingabetaste (zusätzlich zu Tab), den aktiven Autovervollständigungsvorschlag zu übernehmen. Bei deaktivierter Option fügt Enter immer einen Zeilenumbruch ein.",
+    "queryExecution": "Abfrageausführung",
+    "runStatementUnderCursor": "Anweisung unter dem Cursor ausführen",
+    "runStatementUnderCursorDesc": "Wenn ein Skript mehrere Anweisungen enthält, wird die Anweisung unter dem Cursor ausgeführt, statt die Abfrageauswahl anzuzeigen. Markiere Text, um einen bestimmten Bereich auszuführen.",
+    "formatter_title": "SQL-Formatierung",
+    "formatter_keywordCase": "Schlüsselwort-Schreibweise",
+    "formatter_keywordCaseDesc": "Groß-/Kleinschreibung von SQL-Schlüsselwörtern (SELECT, FROM, WHERE) nach der Formatierung.",
+    "formatter_functionCase": "Funktions-Schreibweise",
+    "formatter_functionCaseDesc": "Groß-/Kleinschreibung von Funktionsnamen (COUNT, SUM, COALESCE) nach der Formatierung.",
+    "formatter_indentStyle": "Einrückungsstil",
+    "formatter_indentStyleDesc": "Standard rückt normal ein. Tabellarisch richtet Klauseln in Spalten aus.",
+    "formatter_tabWidth": "Einrückungsbreite",
+    "formatter_useTabs": "Tabs verwenden",
+    "formatter_useTabsDesc": "Mit Tabs statt Leerzeichen einrücken.",
+    "formatter_linesBetweenQueries": "Zeilen zwischen Abfragen",
+    "formatter_linesBetweenQueriesDesc": "Anzahl der Leerzeilen zwischen separaten SQL-Anweisungen.",
+    "formatter_denseOperators": "Kompakte Operatoren",
+    "formatter_denseOperatorsDesc": "Leerzeichen um Operatoren entfernen (z.B. a=1 statt a = 1).",
     "editConfigJson": "config.json bearbeiten",
     "editConfigJsonDesc": "Bearbeite die rohe Konfigurationsdatei direkt. Ein Neustart ist erforderlich, um Änderungen anzuwenden.",
     "configJsonModal": {
@@ -438,6 +478,7 @@
     },
     "language": "Sprache",
     "languageDesc": "Wähle deine bevorzugte Sprache. \"Auto\" verwendet die Systemsprache.",
+    "languageSearch": "Sprachen durchsuchen...",
     "auto": "Auto (System)",
     "english": "Englisch",
     "italian": "Italienisch",
@@ -618,6 +659,10 @@
         "copy": "Kopieren",
         "copied": "Kopiert!"
       },
+      "uninstallError": {
+        "title": "Deinstallation fehlgeschlagen",
+        "subtitle": "Bei der Deinstallation des Plugins ist ein Fehler aufgetreten. Siehe Details unten."
+      },
       "startError": {
         "title": "Plugin konnte nicht gestartet werden",
         "subtitle": "Der Plugin-Prozess konnte nicht gestartet werden. Prüfe die Fehlerdetails unten.",
@@ -674,6 +719,7 @@
       "tabSwitcher": "Tab wechseln",
       "copySelection": "Auswahl kopieren",
       "toggleSidebar": "Seitenleiste umschalten",
+      "toggleRightSidebar": "Rechte Seitenleiste umschalten",
       "focusTableFilter": "Tabellenfilter fokussieren",
       "openConnections": "Verbindungen öffnen",
       "newConnection": "Neue Verbindung",
@@ -690,6 +736,7 @@
       "pasteImportClipboard": "Aus Zwischenablage importieren",
       "quickNavigator": "Schnellnavigation",
       "triggerSuggestions": "Vorschläge anzeigen",
+      "formatSql": "SQL formatieren",
       "refreshTable": "Tabelle aktualisieren"
     },
     "aiActivity": "KI-Aktivität",
@@ -787,6 +834,7 @@
     "namePlaceholder": "Gib deinen Verbindungsnamen an",
     "nameRequired": "Verbindungsname ist erforderlich",
     "dbNameRequired": "Datenbankname ist erforderlich",
+    "connectionUriRequiresKeychain": "Verbindungs-URIs müssen im Keychain des Betriebssystems gespeichert werden. Aktiviere „Passwörter im Keychain speichern“, um fortzufahren.",
     "dbType": "Datenbanktyp",
     "host": "Host",
     "port": "Port",
@@ -811,6 +859,7 @@
     "filePathPlaceholder": "/absoluter/pfad/zu/db.sqlite",
     "folderPathPlaceholder": "/absoluter/pfad/zum/ordner",
     "browseFile": "Datei auswählen",
+    "createSqliteFile": "Neu",
     "browseFolder": "Ordner auswählen",
     "useSsh": "SSH-Tunnel verwenden",
     "sshHost": "SSH-Host",
@@ -878,7 +927,16 @@
     "useIamAuth": "AWS-IAM-Authentifizierung verwenden (RDS)",
     "useIamAuthHint": "Das Passwortfeld wird als RDS-Auth-Token verwendet (aus `aws rds generate-db-auth-token`). Erfordert TLS. Tokens laufen alle 15 Minuten ab.",
     "useIamAuthTlsRequired": "Aktiviere oben einen SSL-Modus, um die AWS-IAM-Authentifizierung zu nutzen.",
-    "changeDatabase": "Datenbank ändern"
+    "changeDatabase": "Datenbank ändern",
+    "testSsh": "SSH testen",
+    "testSshHint": "Prüft nur den SSH-Tunnel (Host und Anmeldedaten), ohne Verbindung zur Datenbank.",
+    "sshTestSuccess": "SSH-Verbindung zu {{target}} hergestellt",
+    "stopTest": "Stopp",
+    "allDatabases": "Alle Datenbanken",
+    "chooseDatabases": "Datenbanken auswählen",
+    "allDatabasesHint": "Beim Verbinden werden automatisch alle Datenbanken des Servers geladen. Auf dem Server erstellte oder gelöschte Datenbanken erscheinen von selbst — ohne diese Verbindung zu bearbeiten.",
+    "selectDatabasesHint": "Die Datenbanken auswählen, die diese Verbindung enthalten soll.",
+    "loadDatabasesHint": "Auf „Datenbanken laden“ klicken, um die verfügbaren Datenbanken abzurufen."
   },
   "sshConnections": {
     "title": "SSH-Verbindungen",
@@ -904,7 +962,14 @@
     "savedInKeychain": "Passwort im System-Keychain gespeichert",
     "manageDesc": "Wiederverwendbare SSH-Tunnel für deine Datenbankverbindungen. Passwörter und Passphrasen werden im System-Schlüsselbund gespeichert.",
     "deleteInUse_one": "Sie wird von {{count}} gespeicherten Verbindung verwendet, die sich nicht mehr über diesen Tunnel verbinden wird.",
-    "deleteInUse_other": "Sie wird von {{count}} gespeicherten Verbindungen verwendet, die sich nicht mehr über diesen Tunnel verbinden werden."
+    "deleteInUse_other": "Sie wird von {{count}} gespeicherten Verbindungen verwendet, die sich nicht mehr über diesen Tunnel verbinden werden.",
+    "errors": {
+      "connectionRequired": "SSH-Verbindung auswählen oder inline konfigurieren",
+      "connectionMissing": "Die ausgewählte SSH-Verbindung existiert nicht mehr",
+      "hostRequired": "SSH-Host ist erforderlich",
+      "userRequired": "SSH-Benutzer ist erforderlich",
+      "portInvalid": "SSH-Port muss zwischen 1 und 65535 liegen"
+    }
   },
   "sshAskpass": {
     "title": "SSH-Authentifizierung",
@@ -929,7 +994,19 @@
     "clearSort": "Sortierung löschen",
     "copyCell": "Zelle kopieren",
     "copyRow": "Zeile kopieren",
-    "copySelectedRows": "Ausgewählte Zeile(n) kopieren",
+    "selectAll": "Alle auswählen",
+    "selectAllN": "Alle auswählen ({{count}})",
+    "deselectAll": "Alle abwählen",
+    "copySelectedN": "Auswahl kopieren ({{count}})",
+    "selectColumn": "Spalte auswählen",
+    "deselectColumn": "Spalte abwählen",
+    "copySelectedColumns": "Ausgewählte Spalten kopieren ({{count}})",
+    "copyRangeN": "Bereich kopieren ({{rows}}×{{cols}})",
+    "copyAllRows": "Alle kopieren ({{count}})",
+    "copyAll": "Alle kopieren",
+    "copiedRows": "{{count}} Zeile(n) in die Zwischenablage kopiert",
+    "copiedRowsOfTotal": "{{loaded}} von {{total}} Zeile(n) in die Zwischenablage kopiert",
+    "copiedCells": "{{count}} Zelle(n) in die Zwischenablage kopiert",
     "copyColumnName": "Spaltennamen kopieren",
     "copyColumnNameQuoted": "Als `column` kopieren",
     "copyColumnNameTable": "Als table.column kopieren",
@@ -1000,6 +1077,8 @@
     "noActiveSession": "Keine aktive Sitzung. Bitte wähle eine Verbindung aus.",
     "stop": "Stopp",
     "run": "Ausführen",
+    "runSelection": "Auswahl ausführen",
+    "runStatement": "Anweisung ausführen",
     "runAll": "Alle ausführen",
     "export": "Exportieren",
     "connected": "Verbunden",
@@ -1064,10 +1143,14 @@
     "submitChanges": "Änderungen übernehmen",
     "rollbackChanges": "Änderungen zurückrollen",
     "applyToAll": "Auf alle anwenden",
+    "submit": "Übernehmen",
+    "rollback": "Zurückrollen",
+    "pendingCount": "{{count}} ausstehend",
     "executingQuery": "Abfrage wird ausgeführt...",
     "exporting": "Wird exportiert...",
     "rowsProcessed": "Verarbeitete Zeilen",
     "queryParameters": "Abfrageparameter",
+    "formatSql": "SQL formatieren",
     "convertToConsole": "In Konsole umwandeln",
     "parameters": "Parameter",
     "paramValuePlaceholder": "Wert (z. B. 'Text' oder 123)",
@@ -1145,7 +1228,59 @@
       "aiAnalysis": "KI-Analyse",
       "aiAnalysisTitle": "KI-Analyse des Abfrageplans",
       "aiAnalyzing": "Abfrageplan wird mit KI analysiert...",
-      "aiConfigRequired": "KI-Anbieter nicht konfiguriert. Bitte gehe zu Einstellungen > KI."
+      "aiConfigRequired": "KI-Anbieter nicht konfiguriert. Bitte gehe zu Einstellungen > KI.",
+      "selfTime": "Eigenzeit",
+      "totalTime": "Gesamtzeit",
+      "timePerLoop": "Zeit pro Durchlauf",
+      "selfCost": "Eigenkosten",
+      "rowsAllLoops": "Zeilen (alle Durchläufe)",
+      "buffers": "Puffer",
+      "metric": "Metrik",
+      "noMetricData": "Dieser Plan enthält keine darstellbaren Messwerte.",
+      "diagramView": "Diagramm",
+      "statsView": "Statistik",
+      "highestSelfCost": "Höchste Eigenkosten",
+      "slowestSelfStep": "Langsamster Schritt",
+      "diagnostics": {
+        "title": "Befunde",
+        "hotspot": "Hotspot",
+        "hotspotHint": "Dieser Schritt beansprucht einen großen Teil der Gesamtlaufzeit.",
+        "overEstimate": "Mehr Zeilen als geplant",
+        "overEstimateHint": "Der Planer erwartete deutlich weniger Zeilen. Statistiken aktualisieren oder Prädikate prüfen, die er nicht abbilden kann.",
+        "underEstimate": "Weniger Zeilen als geplant",
+        "underEstimateHint": "Der Planer erwartete deutlich mehr Zeilen und hat möglicherweise einen aufwendigeren Plan gewählt als nötig.",
+        "diskSort": "Sortierung auf Platte",
+        "diskSortHint": "Die Sortierung passte nicht in den Speicher. Ein größeres work_mem hält sie im RAM.",
+        "filterLoss": "Filter verwirft fast alles",
+        "filterLossHint": "Nahezu alle gelesenen Zeilen wurden vom Filter verworfen. Ein Index auf dem Prädikat würde die Arbeit vermeiden.",
+        "largeSeqScan": "Großer sequenzieller Scan",
+        "largeSeqScanHint": "Die gesamte Relation wurde gelesen. Prüfen, ob ein Index das Prädikat erfüllen kann.",
+        "heapFetches": "Viele Heap-Zugriffe",
+        "heapFetchesHint": "Der Index-Only-Scan musste doch auf die Tabelle zugreifen. VACUUM aktualisiert die Visibility Map.",
+        "workersUnderused": "Weniger Worker als geplant",
+        "workersUnderusedHint": "Parallele Worker wurden angefordert, aber nicht alle gestartet; der Worker-Pool war wahrscheinlich erschöpft.",
+        "highLoops": "Sehr oft ausgeführt",
+        "highLoopsHint": "Der Schritt lief einmal pro äußerer Zeile, die Werte pro Durchlauf sind daher Mittelwerte.",
+        "cacheMiss": "Von Platte gelesen",
+        "cacheMissHint": "Die meisten Blöcke lagen nicht in den Shared Buffers, der Schritt wartete auf I/O.",
+        "neverExecuted": "Nie ausgeführt",
+        "neverExecutedHint": "Der Planer erzeugte diesen Schritt, der Executor führte ihn nie aus."
+      },
+      "stats": {
+        "nodeCount": "Knoten",
+        "maxDepth": "Tiefe",
+        "totalSelfTime": "Gesamte Eigenzeit",
+        "neverExecutedNodes": "Nie ausgeführt",
+        "byNodeType": "Zeit je Operation",
+        "byRelation": "Zugegriffene Relationen",
+        "byIndex": "Verwendete Indizes",
+        "count": "Anzahl",
+        "share": "Anteil",
+        "accesses": "Zugriffe",
+        "operations": "Operationen",
+        "indexName": "Index",
+        "scans": "Scans"
+      }
     },
     "notebook": {
       "addSqlCell": "SQL-Zelle hinzufügen",
@@ -1369,12 +1504,18 @@
     "noConnectionDesc": "Diagramm kann ohne Verbindungs-ID nicht angezeigt werden.",
     "switchToVertical": "Zum vertikalen Layout wechseln",
     "switchToHorizontal": "Zum horizontalen Layout wechseln",
+    "lockNodes": "Knotenpositionen sperren",
+    "unlockNodes": "Knoten zum Verschieben entsperren",
     "vertical": "Vertikal",
     "horizontal": "Horizontal",
     "showAllTables": "Alle Tabellen anzeigen",
     "showAll": "Alle anzeigen",
     "focusedOn": "Fokussiert auf",
-    "focusOnTable": "Auf Tabelle fokussieren"
+    "focusOnTable": "Auf Tabelle fokussieren",
+    "exportMermaid": "Als Mermaid-Diagramm exportieren",
+    "exportSuccess": "Diagramm exportiert",
+    "exportDbml": "Als DBML exportieren",
+    "export": "Exportieren"
   },
   "views": {
     "createView": "Ansicht erstellen",
@@ -1441,7 +1582,6 @@
     "errorNoTables": "Bitte wähle mindestens eine Tabelle",
     "importStarted": "Import gestartet...",
     "importSuccess": "SQL-Datei erfolgreich ausgeführt",
-    "importFailure": "Import fehlgeschlagen: ",
     "importCancelled": "Import abgebrochen",
     "importFailed": "Import fehlgeschlagen",
     "importingFrom": "Importiere aus",
@@ -1489,7 +1629,14 @@
     "subtitle": "Zeile #{{row}}",
     "save": "Änderungen speichern",
     "cancel": "Abbrechen",
-    "enterValue": "Wert eingeben..."
+    "enterValue": "Wert eingeben...",
+    "pin": "An Zeile anheften",
+    "unpin": "Von Zeile lösen"
+  },
+  "rightSidebar": {
+    "resize": "Seitenleiste skalieren",
+    "collapse": "Rechte Seitenleiste einklappen",
+    "expand": "Rechte Seitenleiste ausklappen"
   },
   "contextMenu": {
     "openSidebar": "Seitenleisten-Editor öffnen",
@@ -1732,6 +1879,8 @@
   },
   "aiApproval": {
     "title": "KI möchte in die Datenbank schreiben",
+    "titleRead": "KI möchte aus der Datenbank lesen",
+    "planEstimatedRows": "Geschätzte Zeilen",
     "subtitle": "Auf {{connection}} — vor Ausführung prüfen.",
     "subtitleWithClient": "{{client}} auf {{connection}} — vor Ausführung prüfen.",
     "query": "Abfrage",
@@ -1826,6 +1975,36 @@
     "runningQuery": "Abfrage wird ausgeführt...",
     "copyAll": "Alles kopieren"
   },
+  "userManagement": {
+    "tabTitle": "Benutzer & Rechte",
+    "filterPlaceholder": "Benutzer filtern...",
+    "newUser": "Neuer Benutzer",
+    "create": "Benutzer erstellen",
+    "userPlaceholder": "Benutzername",
+    "passwordPlaceholder": "Passwort",
+    "newPasswordPlaceholder": "Neues Passwort",
+    "changePassword": "Passwort ändern",
+    "dropUser": "Benutzer löschen",
+    "dropTitle": "Benutzer löschen",
+    "dropConfirm": "Benutzer {{account}} löschen? Dies kann nicht rückgängig gemacht werden.",
+    "locked": "Gesperrt",
+    "loadError": "Benutzer konnten nicht geladen werden:",
+    "noUsers": "Keine Benutzer gefunden",
+    "selectPrompt": "Wähle einen Benutzer, um seine Rechte anzuzeigen",
+    "currentGrants": "Aktuelle Berechtigungen",
+    "scope": "Datenbank",
+    "scopePlaceholder": "Leer = global (*.*)",
+    "revokeTitle": "Rechte entziehen",
+    "revokeConfirm": "{{privileges}} von {{account}} auf {{scope}} entziehen?",
+    "add": "Hinzufügen",
+    "apply": "Anwenden",
+    "privileges": "Rechte",
+    "globalScope": "Global (*.*)",
+    "addScope": "Datenbank / Tabelle hinzufügen",
+    "databasePlaceholder": "Datenbank",
+    "tablePlaceholder": "Tabelle (optional)",
+    "initialPrivilegesHint": "Optional: Anfangsrechte, die direkt nach der Erstellung gewährt werden. Wähle eine Datenbank oder lasse das Feld leer, um global zu gewähren."
+  },
   "deepLink": {
     "installTitle": "Plugin aus Registry installieren",
     "installSubtitle": "Eine Tabularium-Registry hat Tabularis gebeten, ein Plugin zu installieren.",
@@ -1866,5 +2045,64 @@
     "installVersion": "v{{version}} installieren",
     "installingVersion": "v{{version}} wird installiert…",
     "retryInstall": "Installation wiederholen"
+  },
+  "connectionErrors": {
+    "ssh-auth": {
+      "summary": "SSH-Authentifizierung fehlgeschlagen",
+      "recovery": "Benutzer, Passwort oder privaten Schlüssel im SSH-Tab prüfen."
+    },
+    "ssh-unreachable": {
+      "summary": "SSH-Server nicht erreichbar",
+      "recovery": "SSH-Host und -Port prüfen und ob der Server erreichbar ist. Wenn der Tunnel steht, Host und Port der Datenbank aus Sicht des SSH-Servers prüfen."
+    },
+    "ssh": {
+      "summary": "SSH-Tunnel fehlgeschlagen",
+      "recovery": "Die Einstellungen im SSH-Tab prüfen."
+    },
+    "db-auth": {
+      "summary": "Datenbank-Authentifizierung fehlgeschlagen",
+      "recovery": "Benutzername und Passwort der Datenbank prüfen."
+    },
+    "network": {
+      "summary": "Datenbankserver nicht erreichbar",
+      "recovery": "Host und Port prüfen und ob der Server läuft."
+    },
+    "db-not-found": {
+      "summary": "Datenbank nicht gefunden",
+      "recovery": "Den Datenbanknamen prüfen."
+    },
+    "unknown": {
+      "summary": "Verbindung fehlgeschlagen"
+    }
+  },
+  "connectionTest": {
+    "logTitle": "Testprotokoll",
+    "noLog": "Für diesen Test wurden keine Schritte aufgezeichnet.",
+    "rawError": "Fehlerdetails",
+    "copyDiagnostics": "Diagnose kopieren",
+    "copied": "Kopiert!",
+    "steps": {
+      "cancelled": "Test vom Benutzer abgebrochen",
+      "resolve": {
+        "error": "Vorbereitung der Verbindungsparameter fehlgeschlagen"
+      },
+      "sshTunnel": {
+        "start": "SSH-Tunnel wird geöffnet",
+        "ok": "SSH-Tunnel hergestellt",
+        "error": "SSH-Tunnel fehlgeschlagen"
+      },
+      "k8sForward": {
+        "start": "Kubernetes-Port-Forward wird gestartet",
+        "ok": "Port-Forward bereit",
+        "error": "Kubernetes-Port-Forward fehlgeschlagen"
+      },
+      "dbConnect": {
+        "start": "Verbindung zur Datenbank wird hergestellt",
+        "ok": "Datenbankverbindung hergestellt",
+        "error": "Datenbankverbindung fehlgeschlagen"
+      }
+    },
+    "title": "Protokoll des Verbindungstests",
+    "showLog": "Protokoll anzeigen"
   }
 }
