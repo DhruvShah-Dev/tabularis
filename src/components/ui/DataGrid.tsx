@@ -20,6 +20,7 @@ import {
   ArrowDown,
   ArrowUpDown,
   Braces,
+  ClipboardPaste,
   Copy,
   CopyPlus,
   Clock,
@@ -52,9 +53,14 @@ import {
   serializePkKey,
   resolveInsertionCellDisplay,
   resolveExistingCellDisplay,
+  parsePasteMatrix,
+  stripHeaderRow,
+  computePasteTargets,
+  type PasteTarget,
   type ColumnDisplayInfo,
   type MergedRow,
 } from "../../utils/dataGrid";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { useSettings } from "../../hooks/useSettings";
 import { isGeometricType, formatGeometricValue } from "../../utils/geometry";
 import { isBlobColumn, isBlobWireFormat } from "../../utils/blob";
@@ -378,6 +384,16 @@ export const DataGrid = React.memo(
           .map((col) => col.name.toLowerCase()),
       );
     }, [columnMetadata]);
+
+    // Physical columns of the underlying table (lowercased). Aliases and
+    // computed result columns are absent and must not be staged as updates.
+    const physicalColumnSet = useMemo(
+      () =>
+        columnMetadata && columnMetadata.length > 0
+          ? new Set(columnMetadata.map((col) => col.name.toLowerCase()))
+          : null,
+      [columnMetadata],
+    );
 
     // Precompute the result-coloring class per column once (the type is fixed
     // per column), so rows don't reclassify every cell on each render. `null`
@@ -1754,6 +1770,123 @@ export const DataGrid = React.memo(
       setContextMenu(null);
     }, [contextMenu, copyCellValue]);
 
+    // Pastes clipboard text into the grid as staged edits. The paste target,
+    // in priority order: the cell range's top-left, the given cell (context
+    // menu), the top of the row selection, or the focused cell. A single
+    // copied value fills the whole selected range / selected rows.
+    const pasteFromClipboard = useCallback(
+      async (anchorOverride?: { rowIndex: number; colIndex: number }) => {
+        if (readonlyProp) return;
+        const rowSelectionAnchor =
+          selectedRowIndices.size > 0
+            ? { rowIndex: Math.min(...selectedRowIndices), colIndex: 0 }
+            : null;
+        const anchor = cellRange
+          ? { rowIndex: cellRange.minRow, colIndex: cellRange.minCol }
+          : (anchorOverride ?? rowSelectionAnchor ?? focusedCell);
+        if (!anchor) return;
+
+        let text: string | null = null;
+        try {
+          text = await readText();
+        } catch (e) {
+          console.error("Failed to read clipboard:", e);
+          return;
+        }
+        if (!text) return;
+
+        const matrix = stripHeaderRow(
+          parsePasteMatrix(text, csvDelimiter),
+          columns,
+          anchor.colIndex,
+        );
+        let targets: PasteTarget[];
+        if (
+          matrix.length === 1 &&
+          matrix[0].length === 1 &&
+          !cellRange &&
+          !anchorOverride &&
+          rowSelectionAnchor
+        ) {
+          // Single value + row selection: fill every cell of the selected rows
+          // (the row selection is the "range" here, like a spreadsheet).
+          const value = matrix[0][0];
+          targets = [];
+          for (const rowIndex of selectedRowIndices) {
+            for (let colIndex = 0; colIndex < columns.length; colIndex++) {
+              targets.push({ rowIndex, colIndex, value });
+            }
+          }
+        } else {
+          targets = computePasteTargets(
+            matrix,
+            anchor,
+            mergedRows.length,
+            columns.length,
+            cellRange,
+          );
+        }
+        if (targets.length === 0) return;
+
+        // Existing rows can only be staged when the grid can identify them —
+        // without a usable key (raw query results, keyless tables) only
+        // pending-insertion rows accept a paste.
+        const canEditExisting =
+          !!onPendingChange && !!pkColumns && pkIndexMaps.length > 0;
+        let applied = 0;
+        for (const { rowIndex, colIndex, value } of targets) {
+          const mergedRow = mergedRows[rowIndex];
+          if (!mergedRow) continue;
+          const colName = columns[colIndex];
+          if (mergedRow.type === "insertion") {
+            if (onPendingInsertionChange && mergedRow.tempId) {
+              onPendingInsertionChange(mergedRow.tempId, colName, value);
+              applied++;
+            }
+          } else if (canEditExisting) {
+            // Same guard as inline editing: aliases and computed result
+            // columns are not physical columns and must not be staged.
+            if (
+              physicalColumnSet &&
+              !physicalColumnSet.has(colName.toLowerCase())
+            ) {
+              continue;
+            }
+            const pkMapVal = buildPkMap(pkColumns!, mergedRow.rowData, pkIndexMaps);
+            // Same convention as handleEditCommit: pasting the original value
+            // back clears any pending change instead of staging a no-op.
+            const isUnchanged =
+              String(value) === String(mergedRow.rowData[colIndex]);
+            onPendingChange!(pkMapVal, colName, isUnchanged ? undefined : value);
+            applied++;
+          }
+        }
+        if (applied > 0) {
+          showToast(t("dataGrid.pastedCells", { count: applied }), {
+            kind: "success",
+          });
+        } else {
+          showToast(t("dataGrid.pasteNotEditable"), { kind: "info" });
+        }
+      },
+      [
+        readonlyProp,
+        cellRange,
+        focusedCell,
+        selectedRowIndices,
+        mergedRows,
+        columns,
+        physicalColumnSet,
+        csvDelimiter,
+        onPendingChange,
+        onPendingInsertionChange,
+        pkColumns,
+        pkIndexMaps,
+        showToast,
+        t,
+      ],
+    );
+
     // Track the last-interacted grid so document-level shortcuts don't fire in
     // every mounted grid at once.
     useEffect(() => {
@@ -1946,6 +2079,13 @@ export const DataGrid = React.memo(
     // Handle keyboard shortcuts
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
+        const keyTarget = e.target as HTMLElement | null;
+        const isEditableTarget =
+          keyTarget instanceof HTMLInputElement ||
+          keyTarget instanceof HTMLTextAreaElement ||
+          keyTarget instanceof HTMLSelectElement ||
+          keyTarget?.isContentEditable === true;
+
         // CMD/CTRL + C
         if ((e.metaKey || e.ctrlKey) && e.key === "c") {
           // Only handle if not editing a cell
@@ -1966,14 +2106,22 @@ export const DataGrid = React.memo(
           }
         }
 
+        // CMD/CTRL + V — paste clipboard cells into the grid as staged edits
+        if ((e.metaKey || e.ctrlKey) && e.key === "v") {
+          if (
+            !editingCell &&
+            !isEditableTarget &&
+            !readonlyProp &&
+            isActiveGridRef.current &&
+            (cellRange || focusedCell || selectedRowIndices.size > 0)
+          ) {
+            e.preventDefault();
+            pasteFromClipboard();
+          }
+        }
+
         // CMD/CTRL + A — select all loaded rows
         if ((e.metaKey || e.ctrlKey) && e.key === "a") {
-          const target = e.target as HTMLElement | null;
-          const isEditableTarget =
-            target instanceof HTMLInputElement ||
-            target instanceof HTMLTextAreaElement ||
-            target instanceof HTMLSelectElement ||
-            target?.isContentEditable === true;
           // Only handle if not editing a cell, focus is not in a text field,
           // and this grid was the last one interacted with.
           if (!editingCell && !isEditableTarget && isActiveGridRef.current) {
@@ -1991,7 +2139,7 @@ export const DataGrid = React.memo(
 
       document.addEventListener("keydown", handleKeyDown);
       return () => document.removeEventListener("keydown", handleKeyDown);
-    }, [editingCell, selectedRowIndices, selectedColIndices, cellRange, focusedCell, copyCellValue, copySelectedCells, copySelectedColumns, copyCellRange, readonlyProp, deleteRowsByIndices, handleSelectAll]);
+    }, [editingCell, selectedRowIndices, selectedColIndices, cellRange, focusedCell, copyCellValue, copySelectedCells, copySelectedColumns, copyCellRange, pasteFromClipboard, readonlyProp, deleteRowsByIndices, handleSelectAll]);
 
     // Sensitive-column reveal actions (#485). Column toggling uses
     // toggleSetValue like the other Set-based grid state.
@@ -2456,6 +2604,20 @@ export const DataGrid = React.memo(
                   setContextMenu(null);
                 },
               });
+
+              if (!readonlyProp) {
+                menuItems.push({
+                  label: t("dataGrid.pasteCells"),
+                  icon: ClipboardPaste,
+                  action: async () => {
+                    setContextMenu(null);
+                    await pasteFromClipboard({
+                      rowIndex: contextMenu.rowIndex,
+                      colIndex: contextMenu.colIndex,
+                    });
+                  },
+                });
+              }
 
               menuItems.push({ separator: true });
 

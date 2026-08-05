@@ -10,6 +10,9 @@ import {
   getCellStateClass,
   buildPkMap,
   serializePkKey,
+  parsePasteMatrix,
+  stripHeaderRow,
+  computePasteTargets,
   type ColumnDisplayInfo,
   type CellClassParams,
 } from '../../src/utils/dataGrid';
@@ -684,6 +687,210 @@ describe('dataGrid utils', () => {
 
     it('handles string pk values', () => {
       expect(serializePkKey({ slug: 'hello-world' })).toBe('{"slug":"hello-world"}');
+    });
+  });
+
+  describe('parsePasteMatrix', () => {
+    it('parses tab-separated cells and newline-separated rows', () => {
+      expect(parsePasteMatrix('a\tb\nc\td')).toEqual([
+        ['a', 'b'],
+        ['c', 'd'],
+      ]);
+    });
+
+    it('normalizes CRLF line endings', () => {
+      expect(parsePasteMatrix('a\tb\r\nc\td')).toEqual([
+        ['a', 'b'],
+        ['c', 'd'],
+      ]);
+    });
+
+    it('ignores the single trailing newline Excel appends', () => {
+      expect(parsePasteMatrix('a\tb\n')).toEqual([['a', 'b']]);
+    });
+
+    it('keeps interior empty rows and empty cells', () => {
+      expect(parsePasteMatrix('a\t\n\nb')).toEqual([['a', ''], [''], ['b']]);
+    });
+
+    it('returns an empty matrix for empty or whitespace-only text', () => {
+      expect(parsePasteMatrix('')).toEqual([]);
+      expect(parsePasteMatrix('\n')).toEqual([]);
+    });
+
+    it('parses a single value as a 1x1 matrix', () => {
+      expect(parsePasteMatrix('hello')).toEqual([['hello']]);
+    });
+
+    it('keeps a single line with commas as one value', () => {
+      expect(parsePasteMatrix('hello, world')).toEqual([['hello, world']]);
+    });
+
+    it('parses multi-line comma-separated text as CSV', () => {
+      expect(parsePasteMatrix('320,12,2025-02-11\n321,13,2025-02-12')).toEqual([
+        ['320', '12', '2025-02-11'],
+        ['321', '13', '2025-02-12'],
+      ]);
+    });
+
+    it('honors double-quote escaping in CSV', () => {
+      expect(parsePasteMatrix('"a,b",c\n"say ""hi""",d')).toEqual([
+        ['a,b', 'c'],
+        ['say "hi"', 'd'],
+      ]);
+    });
+
+    it('detects semicolons when they dominate the first line', () => {
+      expect(parsePasteMatrix('a;b\nc;d')).toEqual([
+        ['a', 'b'],
+        ['c', 'd'],
+      ]);
+    });
+
+    it('prefers the delimiter hint over detection', () => {
+      expect(parsePasteMatrix('a|b,c\nd|e', '|')).toEqual([
+        ['a', 'b,c'],
+        ['d', 'e'],
+      ]);
+    });
+
+    it('keeps multi-line text without any delimiter as one column', () => {
+      expect(parsePasteMatrix('alpha\nbeta')).toEqual([['alpha'], ['beta']]);
+    });
+
+    it('lets tabs win over commas', () => {
+      expect(parsePasteMatrix('a,b\tc\nd\te')).toEqual([
+        ['a,b', 'c'],
+        ['d', 'e'],
+      ]);
+    });
+  });
+
+  describe('stripHeaderRow', () => {
+    const columns = ['service_id', 'content_id', 'publish_date'];
+
+    it('drops a first row matching the columns at the anchor, in order', () => {
+      expect(
+        stripHeaderRow(
+          [
+            ['service_id', 'content_id'],
+            ['320', '12'],
+          ],
+          columns,
+          0,
+        ),
+      ).toEqual([['320', '12']]);
+    });
+
+    it('matches against the columns starting at the anchor offset', () => {
+      expect(
+        stripHeaderRow(
+          [
+            ['content_id', 'publish_date'],
+            ['12', '2025-02-11'],
+          ],
+          columns,
+          1,
+        ),
+      ).toEqual([['12', '2025-02-11']]);
+    });
+
+    it('keeps a first row of column names in the wrong order', () => {
+      const matrix = [
+        ['content_id', 'service_id'],
+        ['12', '320'],
+      ];
+      expect(stripHeaderRow(matrix, columns, 0)).toEqual(matrix);
+    });
+
+    it('keeps a first row not aligned with the anchor', () => {
+      const matrix = [
+        ['service_id', 'content_id'],
+        ['320', '12'],
+      ];
+      expect(stripHeaderRow(matrix, columns, 1)).toEqual(matrix);
+    });
+
+    it('keeps a first row containing non-column values', () => {
+      const matrix = [
+        ['service_id', 'oops'],
+        ['320', '12'],
+      ];
+      expect(stripHeaderRow(matrix, columns, 0)).toEqual(matrix);
+    });
+
+    it('never strips a single-row matrix', () => {
+      const matrix = [['service_id', 'content_id']];
+      expect(stripHeaderRow(matrix, columns, 0)).toEqual(matrix);
+    });
+  });
+
+  describe('computePasteTargets', () => {
+    it('anchors a matrix at the given cell', () => {
+      const targets = computePasteTargets(
+        [
+          ['a', 'b'],
+          ['c', 'd'],
+        ],
+        { rowIndex: 1, colIndex: 2 },
+        10,
+        10,
+      );
+      expect(targets).toEqual([
+        { rowIndex: 1, colIndex: 2, value: 'a' },
+        { rowIndex: 1, colIndex: 3, value: 'b' },
+        { rowIndex: 2, colIndex: 2, value: 'c' },
+        { rowIndex: 2, colIndex: 3, value: 'd' },
+      ]);
+    });
+
+    it('clips the matrix at the grid edges', () => {
+      const targets = computePasteTargets(
+        [
+          ['a', 'b'],
+          ['c', 'd'],
+        ],
+        { rowIndex: 1, colIndex: 1 },
+        2,
+        2,
+      );
+      expect(targets).toEqual([{ rowIndex: 1, colIndex: 1, value: 'a' }]);
+    });
+
+    it('fills the whole range with a single value', () => {
+      const targets = computePasteTargets(
+        [['x']],
+        { rowIndex: 0, colIndex: 0 },
+        10,
+        10,
+        { minRow: 1, maxRow: 2, minCol: 3, maxCol: 4 },
+      );
+      expect(targets).toEqual([
+        { rowIndex: 1, colIndex: 3, value: 'x' },
+        { rowIndex: 1, colIndex: 4, value: 'x' },
+        { rowIndex: 2, colIndex: 3, value: 'x' },
+        { rowIndex: 2, colIndex: 4, value: 'x' },
+      ]);
+    });
+
+    it('anchors a multi-cell matrix at the range top-left', () => {
+      const targets = computePasteTargets(
+        [['a', 'b']],
+        { rowIndex: 5, colIndex: 5 },
+        10,
+        10,
+        { minRow: 2, maxRow: 3, minCol: 1, maxCol: 1 },
+      );
+      expect(targets).toEqual([
+        { rowIndex: 2, colIndex: 1, value: 'a' },
+        { rowIndex: 2, colIndex: 2, value: 'b' },
+      ]);
+    });
+
+    it('returns no targets for an empty matrix', () => {
+      expect(
+        computePasteTargets([], { rowIndex: 0, colIndex: 0 }, 10, 10),
+      ).toEqual([]);
     });
   });
 });
