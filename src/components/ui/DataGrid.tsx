@@ -785,12 +785,23 @@ export const DataGrid = React.memo(
 
       const mergedRow = mergedRows[rowIndex];
       if (!mergedRow) return;
-      // No primary key defined for the table at all → editing impossible.
+      // No usable row identity (no primary key and no safe all-columns
+      // fallback, see resolveRowIdentity) → explain instead of silently
+      // ignoring the double-click (#598).
       if (
         mergedRow.type !== "insertion" &&
         (!pkColumns || pkColumns.length === 0)
-      )
+      ) {
+        showAlert(
+          t("dataGrid.noRowIdentity", {
+            table: tableName,
+            defaultValue:
+              'Rows can\'t be edited: "{{table}}" has no primary key, so editing requires the result to include all table columns. Select all columns (e.g. SELECT *) or add a primary key.',
+          }),
+          { title: t("common.error"), kind: "warning" },
+        );
         return;
+      }
 
       const colName = columns[colIndex];
 
