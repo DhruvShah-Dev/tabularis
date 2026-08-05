@@ -24,6 +24,18 @@ pub struct BoundValue {
     pub param: Option<TypedPgParam>,
 }
 
+impl std::fmt::Debug for BoundValue {
+    // `dyn ToSql + Sync` isn't Debug, so a derive won't work — show just the
+    // SQL fragment and whether a parameter is bound (sufficient for
+    // .unwrap_err() panic messages and test assertion failures).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BoundValue")
+            .field("sql", &self.sql)
+            .field("param", &self.param.as_ref().map(|(_, ty)| ty.clone()))
+            .finish()
+    }
+}
+
 #[derive(Default)]
 pub struct BindOptions<'a> {
     pub column_type: Option<&'a str>,
