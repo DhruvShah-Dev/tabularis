@@ -238,7 +238,7 @@ async fn exec_query_on_client(
         "columns": columns,
         "rows": json_rows,
         "affected_rows": 0,
-        "truncated": false,
+        "truncated": has_more,
         "pagination": pagination,
     }))
 }
