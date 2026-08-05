@@ -51,7 +51,9 @@ pub async fn handle_line(line: &str) -> Value {
         "get_all_foreign_keys_batch" => handlers::metadata::get_all_foreign_keys_batch(id, &params).await,
 
         // View mutation
-        "create_view" | "alter_view" | "drop_view" => not_implemented(id, &method),
+        "create_view" => handlers::metadata::create_view(id, &params).await,
+        "alter_view" => handlers::metadata::alter_view(id, &params).await,
+        "drop_view" => handlers::metadata::drop_view(id, &params).await,
         "create_trigger" | "drop_trigger" => not_implemented(id, &method),
 
         // Query execution

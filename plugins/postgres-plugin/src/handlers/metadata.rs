@@ -112,70 +112,64 @@ pub async fn get_columns(id: Value, params: &Value) -> Value {
 
     match client::query_rows(&conn_params, query, &[&schema, &table]).await {
         Ok(rows) => {
-            let columns: Vec<Value> = rows
-                .iter()
-                .map(|r| {
-                    let name: String = r.try_get("column_name").unwrap_or_default();
-                    let raw_data_type: String = r.try_get("data_type").unwrap_or_default();
-                    let enum_values: Option<String> = r.try_get("enum_values").ok().flatten();
-                    let is_nullable_str: String = r.try_get("is_nullable").unwrap_or_default();
-                    let column_default: Option<String> = r.try_get("column_default").ok().flatten();
-                    let is_identity: String = r.try_get("is_identity").unwrap_or_default();
-                    let char_max_len: Option<i64> = r
-                        .try_get::<_, Option<i64>>("character_maximum_length")
-                        .ok()
-                        .flatten();
-                    let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
-
-                    let data_type = match enum_values {
-                        Some(ref vals) if !vals.is_empty() => format!("enum({})", vals),
-                        _ => raw_data_type,
-                    };
-
-                    let is_auto_increment = is_identity == "YES"
-                        || column_default
-                            .as_deref()
-                            .map_or(false, |d| d.contains("nextval"));
-
-                    let is_nullable = is_nullable_str == "YES";
-
-                    let default_value = column_default.as_deref().and_then(|d| {
-                        if is_auto_increment
-                            || d.is_empty()
-                            || d == "NULL"
-                            || d.starts_with("NULL::")
-                        {
-                            None
-                        } else {
-                            Some(d.to_string())
-                        }
-                    });
-
-                    let mut col = json!({
-                        "name": name,
-                        "data_type": data_type,
-                        "is_pk": is_pk,
-                        "is_nullable": is_nullable,
-                        "is_auto_increment": is_auto_increment,
-                    });
-
-                    if let Some(dv) = default_value {
-                        col.as_object_mut().unwrap().insert("default_value".to_string(), json!(dv));
-                    }
-                    if let Some(len) = char_max_len.and_then(|v| u64::try_from(v).ok()) {
-                        col.as_object_mut().unwrap().insert(
-                            "character_maximum_length".to_string(),
-                            json!(len),
-                        );
-                    }
-
-                    col
-                })
-                .collect();
+            let columns: Vec<Value> = rows.iter().map(row_to_table_column).collect();
             ok_response(id, json!(columns))
         }
         Err(e) => error_response(id, -32603, &e),
     }
+}
+
+/// Map one `information_schema.columns`-shaped row (as queried by
+/// `get_columns`/`get_view_columns`) to the host's `TableColumn` JSON shape.
+fn row_to_table_column(r: &tokio_postgres::Row) -> Value {
+    let name: String = r.try_get("column_name").unwrap_or_default();
+    let raw_data_type: String = r.try_get("data_type").unwrap_or_default();
+    let enum_values: Option<String> = r.try_get("enum_values").ok().flatten();
+    let is_nullable_str: String = r.try_get("is_nullable").unwrap_or_default();
+    let column_default: Option<String> = r.try_get("column_default").ok().flatten();
+    let is_identity: String = r.try_get("is_identity").unwrap_or_default();
+    let char_max_len: Option<i64> = r
+        .try_get::<_, Option<i64>>("character_maximum_length")
+        .ok()
+        .flatten();
+    let is_pk: bool = r.try_get("is_pk").unwrap_or(false);
+
+    let data_type = match enum_values {
+        Some(ref vals) if !vals.is_empty() => format!("enum({})", vals),
+        _ => raw_data_type,
+    };
+
+    let is_auto_increment = is_identity == "YES"
+        || column_default.as_deref().map_or(false, |d| d.contains("nextval"));
+
+    let is_nullable = is_nullable_str == "YES";
+
+    let default_value = column_default.as_deref().and_then(|d| {
+        if is_auto_increment || d.is_empty() || d == "NULL" || d.starts_with("NULL::") {
+            None
+        } else {
+            Some(d.to_string())
+        }
+    });
+
+    let mut col = json!({
+        "name": name,
+        "data_type": data_type,
+        "is_pk": is_pk,
+        "is_nullable": is_nullable,
+        "is_auto_increment": is_auto_increment,
+    });
+
+    if let Some(dv) = default_value {
+        col.as_object_mut().unwrap().insert("default_value".to_string(), json!(dv));
+    }
+    if let Some(len) = char_max_len.and_then(|v| u64::try_from(v).ok()) {
+        col.as_object_mut()
+            .unwrap()
+            .insert("character_maximum_length".to_string(), json!(len));
+    }
+
+    col
 }
 
 pub async fn get_foreign_keys(id: Value, params: &Value) -> Value {
@@ -366,7 +360,104 @@ pub async fn get_view_definition(id: Value, params: &Value) -> Value {
     }
 }
 
-pub async fn get_view_columns(id: Value, _params: &Value) -> Value { not_implemented(id, "get_view_columns") }
+pub async fn get_view_columns(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let view_name = params.get("view_name").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let query = r#"
+        SELECT
+            c.column_name::text,
+            CASE
+                WHEN c.data_type = 'USER-DEFINED' THEN c.udt_name::text
+                ELSE c.data_type::text
+            END AS data_type,
+            c.is_nullable::text,
+            c.column_default::text,
+            c.is_identity::text,
+            c.character_maximum_length,
+            (SELECT string_agg('''' || replace(e.enumlabel, '''', '''''') || '''', ',' ORDER BY e.enumsortorder)
+             FROM pg_enum e
+             JOIN pg_type t ON t.oid = e.enumtypid
+             JOIN pg_namespace tn ON tn.oid = t.typnamespace
+             WHERE t.typname = c.udt_name AND tn.nspname = c.udt_schema) AS enum_values,
+            EXISTS (
+                SELECT 1
+                FROM pg_constraint pk_con
+                JOIN pg_class pk_table ON pk_table.oid = pk_con.conrelid
+                JOIN pg_namespace pk_schema ON pk_schema.oid = pk_table.relnamespace
+                JOIN unnest(pk_con.conkey) AS pk_col(attnum) ON true
+                JOIN pg_attribute pk_att
+                    ON pk_att.attrelid = pk_table.oid
+                    AND pk_att.attnum = pk_col.attnum
+                    AND NOT pk_att.attisdropped
+                WHERE pk_con.contype = 'p'
+                    AND pk_schema.nspname = c.table_schema
+                    AND pk_table.relname = c.table_name
+                    AND pk_att.attname = c.column_name
+            ) AS is_pk
+        FROM information_schema.columns c
+        WHERE c.table_schema = $1 AND c.table_name = $2
+        ORDER BY c.ordinal_position
+    "#;
+
+    match client::query_rows(&conn_params, query, &[&schema, &view_name]).await {
+        Ok(rows) => {
+            let columns: Vec<Value> = rows.iter().map(row_to_table_column).collect();
+            ok_response(id, json!(columns))
+        }
+        Err(e) => error_response(id, -32603, &e),
+    }
+}
+
+pub async fn create_view(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let view_name = params.get("view_name").and_then(Value::as_str).unwrap_or("");
+    let definition = params.get("definition").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let query = format!(
+        "CREATE VIEW {} AS {}",
+        crate::utils::identifiers::qualified(schema, view_name),
+        definition
+    );
+    match client::execute_typed(&conn_params, &query, &[]).await {
+        Ok(_) => ok_response(id, Value::Null),
+        Err(e) => error_response(id, -32603, &format!("Failed to create view: {}", e)),
+    }
+}
+
+pub async fn alter_view(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let view_name = params.get("view_name").and_then(Value::as_str).unwrap_or("");
+    let definition = params.get("definition").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let query = format!(
+        "CREATE OR REPLACE VIEW {} AS {}",
+        crate::utils::identifiers::qualified(schema, view_name),
+        definition
+    );
+    match client::execute_typed(&conn_params, &query, &[]).await {
+        Ok(_) => ok_response(id, Value::Null),
+        Err(e) => error_response(id, -32603, &format!("Failed to alter view: {}", e)),
+    }
+}
+
+pub async fn drop_view(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let view_name = params.get("view_name").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let query = format!(
+        "DROP VIEW IF EXISTS {}",
+        crate::utils::identifiers::qualified(schema, view_name)
+    );
+    match client::execute_typed(&conn_params, &query, &[]).await {
+        Ok(_) => ok_response(id, Value::Null),
+        Err(e) => error_response(id, -32603, &format!("Failed to drop view: {}", e)),
+    }
+}
 
 pub async fn get_materialized_views(id: Value, params: &Value) -> Value {
     let conn_params = ConnectionParams::from_value(inner_params(params));
@@ -391,9 +482,65 @@ pub async fn get_materialized_views(id: Value, params: &Value) -> Value {
     }
 }
 
-pub async fn get_materialized_view_columns(id: Value, _params: &Value) -> Value { not_implemented(id, "get_materialized_view_columns") }
+pub async fn get_materialized_view_columns(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let view_name = params.get("view_name").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    // Materialized views are not exposed via information_schema.columns, so
+    // their columns must be read from the system catalog.
+    let query = r#"
+        SELECT
+            a.attname AS column_name,
+            format_type(a.atttypid, a.atttypmod) AS data_type,
+            a.attnotnull AS not_null
+        FROM pg_attribute a
+        JOIN pg_class c ON c.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = $1 AND c.relname = $2 AND c.relkind = 'm'
+          AND a.attnum > 0 AND NOT a.attisdropped
+        ORDER BY a.attnum
+    "#;
+
+    match client::query_rows(&conn_params, query, &[&schema, &view_name]).await {
+        Ok(rows) => {
+            let columns: Vec<Value> = rows
+                .iter()
+                .map(|r| {
+                    let name: String = r.try_get("column_name").unwrap_or_default();
+                    let data_type: String = r.try_get("data_type").unwrap_or_default();
+                    let not_null: bool = r.try_get("not_null").unwrap_or(false);
+                    json!({
+                        "name": name,
+                        "data_type": data_type,
+                        "is_pk": false,
+                        "is_nullable": !not_null,
+                        "is_auto_increment": false,
+                    })
+                })
+                .collect();
+            ok_response(id, json!(columns))
+        }
+        Err(e) => error_response(id, -32603, &e),
+    }
+}
+
 pub async fn get_materialized_view_definition(id: Value, _params: &Value) -> Value { not_implemented(id, "get_materialized_view_definition") }
-pub async fn refresh_materialized_view(id: Value, _params: &Value) -> Value { not_implemented(id, "refresh_materialized_view") }
+
+pub async fn refresh_materialized_view(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let view_name = params.get("view_name").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let query = format!(
+        "REFRESH MATERIALIZED VIEW {}",
+        crate::utils::identifiers::qualified(schema, view_name)
+    );
+    match client::execute_typed(&conn_params, &query, &[]).await {
+        Ok(_) => ok_response(id, Value::Null),
+        Err(e) => error_response(id, -32603, &format!("Failed to refresh materialized view: {}", e)),
+    }
+}
 
 pub async fn get_routines(id: Value, params: &Value) -> Value {
     let conn_params = ConnectionParams::from_value(inner_params(params));
