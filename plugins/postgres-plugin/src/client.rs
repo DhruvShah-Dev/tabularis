@@ -4,7 +4,7 @@
 //! for common patterns (single-column string queries, parameterized queries).
 
 use deadpool_postgres::{Config, ManagerConfig, Pool, RecyclingMethod, Runtime};
-use tokio_postgres::types::ToSql;
+use tokio_postgres::types::{ToSql, Type};
 use tokio_postgres::{NoTls, Row};
 use tokio_postgres_rustls::MakeRustlsConnect;
 
@@ -65,6 +65,60 @@ pub async fn query_rows(
         .query(query, query_params)
         .await
         .map_err(|e| format!("Query failed: {e}"))
+}
+
+/// Execute a statement with explicit per-placeholder wire types, pinned via
+/// `prepare_typed`. Required for `CAST($N AS X)`-style placeholders where
+/// letting the server infer the type from query context would reject the
+/// bind before PostgreSQL's own parser sees the value. Returns affected rows.
+pub async fn execute_typed(
+    params: &ConnectionParams,
+    query: &str,
+    typed_params: &[(&(dyn ToSql + Sync), Type)],
+) -> Result<u64, String> {
+    let pool = build_pool(params)?;
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| format!("Connection failed: {e}"))?;
+    let types: Vec<Type> = typed_params.iter().map(|(_, t)| t.clone()).collect();
+    let stmt = client
+        .prepare_typed(query, &types)
+        .await
+        .map_err(|e| format!("Prepare failed: {e}"))?;
+    let values: Vec<&(dyn ToSql + Sync)> = typed_params.iter().map(|(v, _)| *v).collect();
+    client
+        .execute(&stmt, &values)
+        .await
+        .map_err(|e| format!("Execute failed: {e}"))
+}
+
+/// Fetch data types for every column in a table as a name -> type map.
+/// Used by insert to resolve type-aware binding for all columns in one query.
+pub async fn get_column_types_map(
+    params: &ConnectionParams,
+    table: &str,
+    schema: &str,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    let query = r#"
+        SELECT
+            column_name,
+            CASE
+                WHEN data_type = 'USER-DEFINED' THEN udt_name
+                ELSE data_type
+            END AS resolved_type
+        FROM information_schema.columns
+        WHERE table_schema = $1 AND table_name = $2
+    "#;
+    let rows = query_rows(params, query, &[&schema, &table]).await?;
+    Ok(rows
+        .iter()
+        .filter_map(|r| {
+            let name: String = r.try_get("column_name").ok()?;
+            let ty: String = r.try_get("resolved_type").ok()?;
+            Some((name, ty))
+        })
+        .collect())
 }
 
 /// Build a deadpool-postgres pool for the given connection parameters.

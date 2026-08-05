@@ -9,6 +9,7 @@
 
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
+mod binding;
 mod client;
 mod error;
 mod extract;
