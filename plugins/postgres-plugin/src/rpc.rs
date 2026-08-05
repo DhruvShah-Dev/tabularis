@@ -77,8 +77,8 @@ pub async fn handle_line(line: &str) -> Value {
         "drop_foreign_key" => handlers::ddl::drop_foreign_key(id, &params).await,
 
         // BLOB
-        "save_blob_to_file" => not_implemented(id, &method),
-        "fetch_blob_as_data_url" => not_implemented(id, &method),
+        "save_blob_to_file" => handlers::blob::save_blob_to_file(id, &params).await,
+        "fetch_blob_as_data_url" => handlers::blob::fetch_blob_as_data_url(id, &params).await,
 
         other => not_implemented(id, other),
     }

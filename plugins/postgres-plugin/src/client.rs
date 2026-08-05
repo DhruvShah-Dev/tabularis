@@ -113,6 +113,30 @@ pub async fn execute_typed(
         .map_err(|e| format!("Execute failed: {e}"))
 }
 
+/// Run a SELECT with explicit per-placeholder wire types (same rationale as
+/// `execute_typed`) and return the resulting rows.
+pub async fn query_typed(
+    params: &ConnectionParams,
+    query: &str,
+    typed_params: &[(&(dyn ToSql + Sync), Type)],
+) -> Result<Vec<Row>, String> {
+    let pool = get_or_create_pool(params)?;
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| format!("Connection failed: {e}"))?;
+    let types: Vec<Type> = typed_params.iter().map(|(_, t)| t.clone()).collect();
+    let stmt = client
+        .prepare_typed(query, &types)
+        .await
+        .map_err(|e| format!("Prepare failed: {e}"))?;
+    let values: Vec<&(dyn ToSql + Sync)> = typed_params.iter().map(|(v, _)| *v).collect();
+    client
+        .query(&stmt, &values)
+        .await
+        .map_err(|e| format!("Query failed: {e}"))
+}
+
 /// Fetch data types for every column in a table as a name -> type map.
 /// Used by insert to resolve type-aware binding for all columns in one query.
 pub async fn get_column_types_map(

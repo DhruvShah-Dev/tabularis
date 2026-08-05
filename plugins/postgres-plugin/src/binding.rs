@@ -353,3 +353,35 @@ pub fn bind_pk_value(
         _ => Err("Unsupported PK type".to_string()),
     }
 }
+
+/// Build a compound `WHERE` predicate from every entry of a pk_map, sorted
+/// alphabetically by key for determinism (matches the builtin's composite-PK
+/// ordering). Returns the predicate string (e.g. `"a" = $1 AND "b" = $2`) and
+/// the typed parameters, starting at `placeholder_idx`. Shared by
+/// update_record, delete_record, save_blob_to_file, and fetch_blob_as_data_url
+/// — every method that identifies one row by primary key.
+pub fn build_pk_map_predicate(
+    pk_map: &serde_json::Map<String, Value>,
+    column_types: &std::collections::HashMap<String, String>,
+    placeholder_idx: usize,
+) -> Result<(String, Vec<TypedPgParam>), String> {
+    let mut keys: Vec<&String> = pk_map.keys().collect();
+    keys.sort();
+
+    let mut predicates: Vec<String> = Vec::with_capacity(keys.len());
+    let mut owned_params: Vec<TypedPgParam> = Vec::new();
+    let mut idx = placeholder_idx;
+
+    for key in keys {
+        let val = &pk_map[key];
+        let pk_type = column_types.get(key).map(String::as_str);
+        let bound = bind_pk_value(val, idx, pk_type)?;
+        predicates.push(format!("\"{}\" = {}", key.replace('"', "\"\""), bound.sql));
+        if let Some(param) = bound.param {
+            owned_params.push(param);
+            idx += 1;
+        }
+    }
+
+    Ok((predicates.join(" AND "), owned_params))
+}

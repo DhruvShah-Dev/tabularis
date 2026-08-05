@@ -8,7 +8,7 @@
 use serde_json::Value;
 use tokio_postgres::types::{ToSql, Type};
 
-use crate::binding::{bind_pg_value, bind_pk_value, BindOptions};
+use crate::binding::{bind_pg_value, build_pk_map_predicate, BindOptions};
 use crate::client;
 use crate::models::{inner_params, ConnectionParams};
 use crate::rpc::{error_response, ok_response};
@@ -130,28 +130,15 @@ async fn exec_update(
         placeholder_idx = 2;
     }
 
-    // Composite keys sorted alphabetically for determinism (matches builtin).
-    let mut keys: Vec<&String> = pk_map.keys().collect();
-    keys.sort();
-
-    let mut predicates: Vec<String> = Vec::with_capacity(keys.len());
-    for key in keys {
-        let val = &pk_map[key];
-        let pk_type = column_types.get(key).map(String::as_str);
-        let bound_pk = bind_pk_value(val, placeholder_idx, pk_type)?;
-        predicates.push(format!("\"{}\" = {}", key.replace('"', "\"\""), bound_pk.sql));
-        if let Some(param) = bound_pk.param {
-            owned_params.push(param);
-            placeholder_idx += 1;
-        }
-    }
+    let (predicate, pk_params) = build_pk_map_predicate(pk_map, &column_types, placeholder_idx)?;
+    owned_params.extend(pk_params);
 
     let query = format!(
         "UPDATE {} SET \"{}\" = {} WHERE {}",
         qualified,
         col_name.replace('"', "\"\""),
         bound.sql,
-        predicates.join(" AND ")
+        predicate
     );
 
     let typed_params: Vec<(&(dyn ToSql + Sync), Type)> = owned_params
@@ -188,25 +175,9 @@ async fn exec_delete(
 
     let column_types = client::get_column_types_map(conn_params, table, schema).await.unwrap_or_default();
 
-    let mut keys: Vec<&String> = pk_map.keys().collect();
-    keys.sort();
+    let (predicate, owned_params) = build_pk_map_predicate(pk_map, &column_types, 1)?;
 
-    let mut predicates: Vec<String> = Vec::with_capacity(keys.len());
-    let mut owned_params: Vec<crate::binding::TypedPgParam> = Vec::new();
-    let mut placeholder_idx = 1usize;
-
-    for key in keys {
-        let val = &pk_map[key];
-        let pk_type = column_types.get(key).map(String::as_str);
-        let bound_pk = bind_pk_value(val, placeholder_idx, pk_type)?;
-        predicates.push(format!("\"{}\" = {}", key.replace('"', "\"\""), bound_pk.sql));
-        if let Some(param) = bound_pk.param {
-            owned_params.push(param);
-            placeholder_idx += 1;
-        }
-    }
-
-    let query = format!("DELETE FROM {} WHERE {}", qualified, predicates.join(" AND "));
+    let query = format!("DELETE FROM {} WHERE {}", qualified, predicate);
 
     let typed_params: Vec<(&(dyn ToSql + Sync), Type)> = owned_params
         .iter()
