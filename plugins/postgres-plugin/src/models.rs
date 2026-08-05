@@ -3,6 +3,7 @@
 //! Mirrors the `ConnectionParams` struct the host sends. Fields are optional
 //! since different database types leave different fields blank.
 
+use serde::Deserialize;
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
@@ -54,3 +55,16 @@ impl ConnectionParams {
 pub fn inner_params(value: &Value) -> &Value {
     value.get("params").unwrap_or(value)
 }
+
+/// Mirrors `crate::models::ColumnDefinition` on the host — a single column's
+/// shape for DDL generation (CREATE TABLE, ADD COLUMN, ALTER COLUMN).
+#[derive(Debug, Clone, Deserialize)]
+pub struct ColumnDefinition {
+    pub name: String,
+    pub data_type: String,
+    pub is_nullable: bool,
+    pub is_pk: bool,
+    pub is_auto_increment: bool,
+    pub default_value: Option<String>,
+}
+
