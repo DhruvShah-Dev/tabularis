@@ -60,11 +60,11 @@ const TAB_ITEMS: Array<{
   labelKey: string;
 }> = [
   { id: "general", icon: SettingsIcon, labelKey: "settings.general" },
-  { id: "privacy", icon: EyeOff, labelKey: "settings.privacy" },
   { id: "ssh", icon: Cable, labelKey: "sshConnections.title" },
   { id: "backup", icon: Archive, labelKey: "settings.backup.title" },
   { id: "plugins", icon: Plug, labelKey: "settings.plugins.title" },
   { id: "appearance", icon: Palette, labelKey: "settings.appearance" },
+  { id: "privacy", icon: EyeOff, labelKey: "settings.privacy" },
   { id: "localization", icon: Languages, labelKey: "settings.localization" },
   { id: "ai", icon: Sparkles, labelKey: "settings.ai.tab" },
   { id: "ai-activity", icon: Shield, labelKey: "settings.aiActivity" },

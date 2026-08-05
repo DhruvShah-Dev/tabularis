@@ -6,13 +6,12 @@ import {
   DEFAULT_MASKING_PATTERNS,
   normalizeMaskingPatterns,
 } from "../../utils/columnMasking";
+import { Select } from "../ui/Select";
+import { MaskingOverridesEditor } from "./MaskingOverridesEditor";
 import { SettingSection, SettingRow, SettingToggle } from "./SettingControls";
 
 const TEXTAREA_CLASS =
   "w-full h-28 bg-base border border-strong rounded-lg p-3 text-primary text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors resize-y";
-
-const SELECT_CLASS =
-  "bg-base border border-strong rounded px-3 py-1.5 text-sm text-primary focus:outline-none focus:border-blue-500";
 
 /** Privacy settings: sensitive-column masking in the results grid (#485). */
 export function PrivacyTab() {
@@ -22,31 +21,13 @@ export function PrivacyTab() {
 
   const maskingEnabled = settings.columnMaskingEnabled ?? true;
   const patterns = settings.columnMaskingPatterns ?? DEFAULT_MASKING_PATTERNS;
-  const overrides = settings.columnMaskingOverrides ?? {};
 
-  // Textareas edit a draft and commit normalized values on blur so typing
-  // trailing newlines doesn't fight the controlled value.
+  // The patterns textarea edits a draft and commits normalized values on
+  // blur so typing trailing newlines doesn't fight the controlled value.
   const [patternsDraft, setPatternsDraft] = useState<string | null>(null);
   const [selectedConnId, setSelectedConnId] = useState<string>("");
-  const [includeDraft, setIncludeDraft] = useState<string | null>(null);
-  const [excludeDraft, setExcludeDraft] = useState<string | null>(null);
 
   const connId = selectedConnId || connections[0]?.id || "";
-  const connOverride = overrides[connId] ?? {};
-  const include = connOverride.include ?? [];
-  const exclude = connOverride.exclude ?? [];
-
-  const commitOverride = (field: "include" | "exclude", raw: string) => {
-    const list = normalizeMaskingPatterns(raw.split("\n"));
-    const next = { ...overrides };
-    const entry = { ...next[connId], [field]: list };
-    if (!entry.include?.length && !entry.exclude?.length) {
-      delete next[connId];
-    } else {
-      next[connId] = entry;
-    }
-    updateSetting("columnMaskingOverrides", next);
-  };
 
   return (
     <div>
@@ -96,63 +77,20 @@ export function PrivacyTab() {
           label={t("settings.maskingConnection")}
           description={t("settings.maskingConnectionDesc")}
         >
-          <select
-            value={connId}
+          <Select
+            value={connId || null}
+            options={connections.map((c) => c.id)}
+            labels={Object.fromEntries(connections.map((c) => [c.id, c.name]))}
+            onChange={setSelectedConnId}
             disabled={!maskingEnabled || connections.length === 0}
-            onChange={(e) => {
-              setSelectedConnId(e.target.value);
-              setIncludeDraft(null);
-              setExcludeDraft(null);
-            }}
-            className={SELECT_CLASS}
-          >
-            {connections.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </SettingRow>
-
-        <SettingRow
-          label={t("settings.maskingInclude")}
-          description={t("settings.maskingIncludeDesc")}
-          vertical
-        >
-          <textarea
-            value={includeDraft ?? include.join("\n")}
-            disabled={!maskingEnabled || !connId}
-            onChange={(e) => setIncludeDraft(e.target.value)}
-            onBlur={() => {
-              if (includeDraft !== null) {
-                commitOverride("include", includeDraft);
-                setIncludeDraft(null);
-              }
-            }}
-            className={TEXTAREA_CLASS}
-            placeholder={t("settings.maskingOverridePlaceholder")}
+            searchable={connections.length > 8}
+            className="w-56"
           />
         </SettingRow>
 
-        <SettingRow
-          label={t("settings.maskingExclude")}
-          description={t("settings.maskingExcludeDesc")}
-          vertical
-        >
-          <textarea
-            value={excludeDraft ?? exclude.join("\n")}
-            disabled={!maskingEnabled || !connId}
-            onChange={(e) => setExcludeDraft(e.target.value)}
-            onBlur={() => {
-              if (excludeDraft !== null) {
-                commitOverride("exclude", excludeDraft);
-                setExcludeDraft(null);
-              }
-            }}
-            className={TEXTAREA_CLASS}
-            placeholder={t("settings.maskingOverridePlaceholder")}
-          />
-        </SettingRow>
+        {connId && (
+          <MaskingOverridesEditor key={connId} connectionId={connId} />
+        )}
       </SettingSection>
     </div>
   );
