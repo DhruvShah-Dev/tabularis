@@ -19,6 +19,7 @@ import {
   useDangerousQueryGuard,
   DANGEROUS_QUERY_I18N,
 } from "../hooks/useDangerousQueryGuard";
+import { useProductionGuard } from "../hooks/useProductionGuard";
 import {
   generateTempId,
   initializeNewRow,
@@ -352,7 +353,7 @@ export const Editor = () => {
     parameters: string[];
     pendingPageNum: number;
     pendingTabId?: string;
-    mode: "run" | "save";
+    mode: "run" | "save" | "explain";
     pendingMultiQueries?: string[];
   }>({
     isOpen: false,
@@ -409,6 +410,7 @@ export const Editor = () => {
     guardQuery: guardDangerousQuery,
     resolve: resolveDangerousQuery,
   } = useDangerousQueryGuard();
+  const guardProductionWrite = useProductionGuard();
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
   const [isDbDropdownOpen, setIsDbDropdownOpen] = useState(false);
@@ -924,6 +926,7 @@ export const Editor = () => {
       if (!textToRun || !textToRun.trim()) return;
 
       if (!(await guardDangerousQuery(textToRun))) return;
+      if (!(await guardProductionWrite(activeConnectionId, textToRun))) return;
 
       // Check for parameters
       const params = extractQueryParams(textToRun, activeDialect);
@@ -1151,6 +1154,7 @@ export const Editor = () => {
       activeDatabaseName,
       addHistoryEntry,
       guardDangerousQuery,
+      guardProductionWrite,
       activeDialect,
     ],
   );
@@ -1164,6 +1168,9 @@ export const Editor = () => {
       if (!targetTab) return;
 
       if (!(await guardDangerousQuery(queries))) return;
+      if (!(await guardProductionWrite(activeConnectionId, queries.join(";\n")))) {
+        return;
+      }
 
       // Collect all unique parameters across all queries
       const allParams = [
@@ -1337,7 +1344,20 @@ export const Editor = () => {
       });
       updateTab(targetTabId, { isLoading: false });
     },
-    [activeConnectionId, updateTab, patchResultEntry, settings.resultPageSize, activeSchema, t, isMultiDb, activeDatabaseName, addHistoryEntry, guardDangerousQuery, activeDialect],
+    [
+      activeConnectionId,
+      updateTab,
+      patchResultEntry,
+      settings.resultPageSize,
+      activeSchema,
+      t,
+      isMultiDb,
+      activeDatabaseName,
+      addHistoryEntry,
+      guardDangerousQuery,
+      guardProductionWrite,
+      activeDialect,
+    ],
   );
 
   // Auto-run entry point for navigation-initiated executions (sidebar "open
@@ -1814,10 +1834,41 @@ export const Editor = () => {
     }
   }, [activeTab, activeDialect, runQuery, runMultipleQueries, settings.runStatementUnderCursor]);
 
-  const openExplainForQuery = useCallback((query: string) => {
-    setVisualExplainQuery(query);
+  const openExplainForQuery = useCallback((query: string, tabId?: string) => {
+    let queryToExplain = query;
+    const params = extractQueryParams(queryToExplain, activeDialect);
+    const targetTabId = tabId ?? activeTabIdRef.current;
+
+    if (params.length > 0 && targetTabId) {
+      const targetTab = tabsRef.current.find((tab) => tab.id === targetTabId);
+      const storedParams = targetTab?.queryParams || {};
+      const missingParams = params.filter(
+        (param) =>
+          storedParams[param] === undefined || storedParams[param].trim() === "",
+      );
+
+      if (missingParams.length > 0) {
+        setQueryParamsModal({
+          isOpen: true,
+          sql: queryToExplain,
+          parameters: params,
+          pendingPageNum: 1,
+          pendingTabId: targetTabId,
+          mode: "explain",
+        });
+        return;
+      }
+
+      queryToExplain = interpolateQueryParams(
+        queryToExplain,
+        storedParams,
+        activeDialect,
+      );
+    }
+
+    setVisualExplainQuery(queryToExplain);
     setIsVisualExplainOpen(true);
-  }, []);
+  }, [activeDialect]);
 
   const handleExplainButton = useCallback(() => {
     if (!activeTab || !activeConnectionId) return;
@@ -2612,6 +2663,9 @@ export const Editor = () => {
     )
       return;
 
+    // Production safety: grid edits are writes, confirm before committing.
+    if (!(await guardProductionWrite(activeConnectionId))) return;
+
     updateActiveTab({ isLoading: true });
 
     try {
@@ -2782,6 +2836,7 @@ export const Editor = () => {
     activeCapabilities,
     showAlert,
     rowIdentity,
+    guardProductionWrite,
   ]);
 
   // Cmd/Ctrl+S: commit the active tab's pending grid changes (like TablePlus).
@@ -2826,9 +2881,18 @@ export const Editor = () => {
         } else {
           runQuery(sql, pendingPageNum, pendingTabId, newParams);
         }
+      } else if (mode === "explain") {
+        setVisualExplainQuery(interpolateQueryParams(sql, newParams, activeDialect));
+        setIsVisualExplainOpen(true);
       }
     },
-    [queryParamsModal, updateTab, runQuery, runMultipleQueries],
+    [
+      activeDialect,
+      queryParamsModal,
+      updateTab,
+      runQuery,
+      runMultipleQueries,
+    ],
   );
 
   const handleEditParams = useCallback(() => {

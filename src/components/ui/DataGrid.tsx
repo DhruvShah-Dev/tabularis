@@ -73,6 +73,7 @@ import {
 } from "../../utils/dateInput";
 import { useRightSidebar } from "../../hooks/useRightSidebar";
 import { useDatabase } from "../../hooks/useDatabase";
+import { useProductionGuard } from "../../hooks/useProductionGuard";
 import {
   columnValuesForCopy,
   columnValuesToInClause,
@@ -194,6 +195,7 @@ export const DataGrid = React.memo(
   }: DataGridProps) => {
     const { t } = useTranslation();
     const { activeSchema, connections } = useDatabase();
+    const guardProductionWrite = useProductionGuard();
     const { showAlert } = useAlert();
     const { showToast } = useToast();
     const { settings } = useSettings();
@@ -997,6 +999,13 @@ export const DataGrid = React.memo(
 
         if (!connectionId) return;
 
+        // Production safety: this path writes immediately, without the
+        // staged-changes commit (which has its own guard upstream).
+        if (!(await guardProductionWrite(connectionId))) {
+          setEditingCell(null);
+          return;
+        }
+
         // Legacy immediate update
         try {
           await invoke("update_record", {
@@ -1032,6 +1041,7 @@ export const DataGrid = React.memo(
       onRefresh,
       showAlert,
       t,
+      guardProductionWrite,
     ]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent) => {

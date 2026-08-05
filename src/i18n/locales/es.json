@@ -23,6 +23,29 @@
     "fromPlaceholder": "desde",
     "toPlaceholder": "hasta"
   },
+  "tags": {
+    "label": "Etiquetas",
+    "new": "Nueva etiqueta",
+    "add": "Añadir",
+    "namePlaceholder": "Nombre de la etiqueta…",
+    "manage": "Gestionar etiquetas",
+    "done": "Hecho",
+    "deleteTitle": "Eliminar etiqueta",
+    "deleteConfirm": "¿Eliminar la etiqueta \"{{name}}\"? Se quitará de todas las conexiones."
+  },
+  "environment": {
+    "label": "Entorno",
+    "none": "Sin entorno",
+    "development": "Desarrollo",
+    "staging": "Staging",
+    "production": "Producción",
+    "short": { "development": "DEV", "staging": "STAGING", "production": "PROD" },
+    "banner": "Producción — {{name}}",
+    "warnTitle": "Base de datos de producción",
+    "warnMessage": "Está a punto de modificar datos de producción en \"{{name}}\". ¿Seguro que desea continuar?",
+    "warnConfirm": "Ejecutar de todos modos",
+    "warnSnooze": "No volver a preguntar para esta conexión (esta sesión)"
+  },
   "common": {
     "save": "Guardar",
     "close": "Cerrar",
