@@ -445,6 +445,49 @@ Before declaring Phase 1 complete, verify:
 
 ---
 
+## Repo Extraction — Timing and Open Question
+
+**Access to `TabularisDB/tabularis-postgresql-plugin` was granted during Phase 1
+development (2026-08-05).** Decision: stay in-tree through CP-4, then extract.
+
+**Why wait:**
+
+- Phase 1 is mid-TDD with a tight build → test → feedback loop within a single
+  CI run (`pg-integration.yml` builds the plugin and runs all 80 parity tests
+  against it in one job). Splitting into two repos now means cross-repo CI
+  (the host would need to clone/build the plugin repo as a dependency, or pull
+  release artifacts) — friction that actively hurts iteration speed while the
+  RPC surface and manifest are still shifting commit to commit.
+- This matches the plan's original intent: build in-tree through Phase 1,
+  extract to a standalone repo at the CP-4 beta gate — consistent with how
+  every other Tabularis plugin (DuckDB, ClickHouse, DynamoDB, etc.) is
+  structured as an external repo.
+
+**Open question to resolve before/at CP-4 — where do the 80 parity tests live
+post-extraction?**
+
+The parity tests currently live in `tabularis`'s own test suite
+(`src-tauri/tests/postgres_integration/parity*.rs`). They import
+`tabularis_lib` types directly (`DatabaseDriver`, `PostgresDriver`,
+`ConnectionParams`, etc.) and spawn the plugin binary in-process via
+`RpcDriver::new()`. Two options once the plugin moves to its own repo:
+
+1. **Keep parity tests in `tabularis`.** The host CI would need to build or
+   fetch the plugin binary from the new repo (e.g. checkout as a step, or
+   download a release artifact) before running the existing test suite
+   unchanged. Simpler on the plugin-repo side; adds a cross-repo dependency
+   to `tabularis`'s CI.
+2. **Move parity tests to the plugin repo.** The plugin repo would need a
+   `tabularis_lib` dependency (path or published crate) to get `DatabaseDriver`
+   and the builtin `PostgresDriver` for comparison. Keeps the plugin
+   self-testing but couples it to the host's internal crate — `tabularis_lib`
+   isn't currently published or designed for external consumption.
+
+Revisit this when CP-4 is close — by then the RPC surface should be stable
+enough that the decision doesn't need to be made twice.
+
+---
+
 ## Potential Gaps & Risks Specific to Phase 1
 
 | Gap/Risk | Impact | Mitigation |
