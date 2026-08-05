@@ -62,7 +62,7 @@ pub fn extract_value(row: &Row, index: usize) -> JsonValue {
             try_extract::<serde_json::Value>(row, index, |v| v)
         }
         ref t if *t == Type::BYTEA => try_extract::<Vec<u8>>(row, index, |v| {
-            let b64 = base64_encode(&v);
+            let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &v);
             JsonValue::String(format!(
                 "BLOB:{}:application/octet-stream:{}",
                 v.len(),
@@ -158,82 +158,3 @@ where
         }
     }
 }
-
-fn base64_encode(data: &[u8]) -> String {
-    use std::io::Write;
-    let mut buf = Vec::new();
-    {
-        let mut encoder = Base64Encoder::new(&mut buf);
-        encoder.write_all(data).unwrap();
-        encoder.finish().unwrap();
-    }
-    String::from_utf8(buf).unwrap()
-}
-
-/// Minimal base64 encoder (standard alphabet, with padding).
-struct Base64Encoder<'a> {
-    out: &'a mut Vec<u8>,
-    buf: [u8; 3],
-    pos: usize,
-}
-
-impl<'a> Base64Encoder<'a> {
-    fn new(out: &'a mut Vec<u8>) -> Self {
-        Self {
-            out,
-            buf: [0; 3],
-            pos: 0,
-        }
-    }
-
-    fn finish(mut self) -> std::io::Result<()> {
-        if self.pos > 0 {
-            for i in self.pos..3 {
-                self.buf[i] = 0;
-            }
-            let b0 = self.buf[0];
-            let b1 = self.buf[1];
-            let b2 = self.buf[2];
-            self.out.push(B64_CHARS[((b0 >> 2) & 0x3F) as usize]);
-            self.out
-                .push(B64_CHARS[(((b0 & 0x03) << 4) | ((b1 >> 4) & 0x0F)) as usize]);
-            if self.pos > 1 {
-                self.out
-                    .push(B64_CHARS[(((b1 & 0x0F) << 2) | ((b2 >> 6) & 0x03)) as usize]);
-            } else {
-                self.out.push(b'=');
-            }
-            self.out.push(b'=');
-        }
-        Ok(())
-    }
-}
-
-impl<'a> std::io::Write for Base64Encoder<'a> {
-    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
-        for &byte in data {
-            self.buf[self.pos] = byte;
-            self.pos += 1;
-            if self.pos == 3 {
-                let b0 = self.buf[0];
-                let b1 = self.buf[1];
-                let b2 = self.buf[2];
-                self.out.push(B64_CHARS[((b0 >> 2) & 0x3F) as usize]);
-                self.out
-                    .push(B64_CHARS[(((b0 & 0x03) << 4) | ((b1 >> 4) & 0x0F)) as usize]);
-                self.out
-                    .push(B64_CHARS[(((b1 & 0x0F) << 2) | ((b2 >> 6) & 0x03)) as usize]);
-                self.out.push(B64_CHARS[(b2 & 0x3F) as usize]);
-                self.pos = 0;
-            }
-        }
-        Ok(data.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-const B64_CHARS: &[u8; 64] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

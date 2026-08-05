@@ -112,7 +112,17 @@ fn bind_pg_string(
         });
     }
 
-    // 2. Boolean column
+    // 2. Blob wire format — must run before the boolean/numeric heuristics
+    // below, since a base64 blob string could otherwise look like a
+    // plausible (if garbage) numeric/boolean value for a mistyped column.
+    if let Some(bytes) = decode_blob_wire_format(s) {
+        return Ok(BoundValue {
+            sql: format!("${}", placeholder_idx),
+            param: Some((Box::new(bytes), Type::BYTEA)),
+        });
+    }
+
+    // 3. Boolean column
     if matches!(base_type, Some("BOOLEAN") | Some("BOOL")) {
         let lower = s.trim().to_lowercase();
         let b = match lower.as_str() {
@@ -131,7 +141,7 @@ fn bind_pg_string(
         });
     }
 
-    // 3. Numeric column
+    // 4. Numeric column
     if let Some(bt) = base_type {
         match bt {
             "SMALLINT" | "INTEGER" | "BIGINT" | "INT2" | "INT4" | "INT8" | "SERIAL"
@@ -166,7 +176,7 @@ fn bind_pg_string(
         }
     }
 
-    // 4. Temporal column
+    // 5. Temporal column
     if let Some(bt) = base_type {
         let cast_target = match bt {
             "TIMESTAMP" | "TIMESTAMP WITHOUT TIME ZONE" => Some("timestamp"),
@@ -185,7 +195,7 @@ fn bind_pg_string(
         }
     }
 
-    // 5. UUID shape (value-based fallback, independent of column type)
+    // 6. UUID shape (value-based fallback, independent of column type)
     if s.parse::<Uuid>().is_ok() {
         return Ok(BoundValue {
             sql: format!("CAST(${} AS uuid)", placeholder_idx),
@@ -193,7 +203,7 @@ fn bind_pg_string(
         });
     }
 
-    // 6. PG array literal (JSON array embedded in a string, e.g. "[1,2,3]")
+    // 7. PG array literal (JSON array embedded in a string, e.g. "[1,2,3]")
     let trimmed = s.trim();
     if trimmed.starts_with('[') && trimmed.ends_with(']') {
         if let Ok(Value::Array(arr)) = serde_json::from_str::<Value>(trimmed) {
@@ -205,11 +215,27 @@ fn bind_pg_string(
         }
     }
 
-    // 7. Final fallback: plain TEXT
+    // 8. Final fallback: plain TEXT
     Ok(BoundValue {
         sql: format!("${}", placeholder_idx),
         param: Some((Box::new(s.to_string()), Type::TEXT)),
     })
+}
+
+/// Decode the canonical BLOB wire format back to raw bytes.
+///
+/// Expected format: `"BLOB:<total_size_bytes>:<mime_type>:<base64_data>"`.
+/// Returns `None` if the string doesn't match, so it falls through to the
+/// rest of the binding cascade as a plain string. Matches
+/// `decode_blob_wire_format` in `src-tauri/src/drivers/common/blob.rs`
+/// (this plugin doesn't yet support the `BLOB_FILE_REF:` variant since
+/// that requires filesystem access outside the scope of value binding).
+fn decode_blob_wire_format(value: &str) -> Option<Vec<u8>> {
+    let rest = value.strip_prefix("BLOB:")?;
+    // Skip the size field, then the mime field.
+    let after_size = rest.splitn(2, ':').nth(1)?;
+    let base64_data = after_size.splitn(2, ':').nth(1)?;
+    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, base64_data).ok()
 }
 
 /// Convert a JSON array to a PostgreSQL `ARRAY[...]` literal string.
