@@ -1,4 +1,5 @@
-//! Extra parity tests for CRUD — composite PK, NULL update, insert_with_default.
+//! Extra parity tests for CRUD — composite PK, NULL update, insert_with_default,
+//! enum column binding.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -210,4 +211,82 @@ async fn parity_insert_with_default() {
 
     let rows = verify.get("rows").and_then(Value::as_array).unwrap();
     assert!(!rows.is_empty(), "Inserted row should be queryable");
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_insert_enum_value() {
+    require_pg!();
+    let harness = ParityHarness::new().await;
+
+    // with_enum.current_mood is a PostgreSQL enum (test_schema.mood). Binding
+    // an enum column requires a CAST($N AS <enum_type>) — without it, the
+    // driver sends a plain TEXT parameter and PostgreSQL rejects it with
+    // "column current_mood is of type mood but expression is of type text".
+    // insert_record is destructive (adds a row neither target can attribute
+    // to a stable id), so clean up per target inside the loop.
+    for (target, driver) in harness.targets() {
+        let mut data = HashMap::new();
+        data.insert("current_mood".to_string(), json!("sad"));
+
+        let affected = driver
+            .insert_record(&harness.params, "with_enum", data, Some("test_schema"), 0)
+            .await
+            .unwrap_or_else(|e| panic!("insert_record with enum value failed on {}: {}", target, e));
+        assert_eq!(affected, 1, "{}: inserting one enum row should affect 1 row", target);
+
+        driver
+            .execute_query(
+                &harness.params,
+                "DELETE FROM test_schema.with_enum WHERE current_mood = 'sad'",
+                None,
+                1,
+                Some("test_schema"),
+            )
+            .await
+            .unwrap_or_else(|e| panic!("cleanup delete failed on {}: {}", target, e));
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn parity_update_enum_value() {
+    require_pg!();
+    let harness = ParityHarness::new().await;
+
+    // Same enum-CAST requirement as parity_insert_enum_value, exercised via
+    // update_record instead. Seed row id=1 always exists (see
+    // tests/fixtures/postgres_seed.sql) with current_mood = 'happy'.
+    for (target, driver) in harness.targets() {
+        let mut pk_map = HashMap::new();
+        pk_map.insert("id".to_string(), json!(1));
+
+        let affected = driver
+            .update_record(
+                &harness.params,
+                "with_enum",
+                &pk_map,
+                "current_mood",
+                json!("neutral"),
+                Some("test_schema"),
+                0,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("update_record with enum value failed on {}: {}", target, e));
+        assert_eq!(affected, 1, "{}: updating the enum column should affect 1 row", target);
+
+        // Restore the seeded value so later tests see the original state.
+        driver
+            .update_record(
+                &harness.params,
+                "with_enum",
+                &pk_map,
+                "current_mood",
+                json!("happy"),
+                Some("test_schema"),
+                0,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("restore failed on {}: {}", target, e));
+    }
 }

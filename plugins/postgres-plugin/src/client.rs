@@ -141,6 +141,46 @@ pub async fn get_column_types_map(
         .collect())
 }
 
+/// Fetch the schema-qualified, quoted enum type name for every enum column
+/// in a table (e.g. `current_mood -> "test_schema"."mood"`). Columns not
+/// backed by an enum type are absent from the map.
+pub async fn get_enum_column_types(
+    params: &ConnectionParams,
+    schema: &str,
+    table: &str,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    let query = "SELECT a.attname::text AS column_name, \
+        tn.nspname::text AS type_schema, t.typname::text AS type_name \
+        FROM pg_attribute a \
+        JOIN pg_class c ON c.oid = a.attrelid \
+        JOIN pg_namespace n ON n.oid = c.relnamespace \
+        JOIN pg_type t ON t.oid = a.atttypid \
+        JOIN pg_namespace tn ON tn.oid = t.typnamespace \
+        WHERE n.nspname = $1 AND c.relname = $2 \
+        AND a.attnum > 0 AND NOT a.attisdropped AND t.typtype = 'e'";
+
+    let rows = query_rows(params, query, &[&schema, &table]).await?;
+    Ok(rows
+        .iter()
+        .filter_map(|r| {
+            let col: String = r.try_get("column_name").ok()?;
+            let type_schema: String = r.try_get("type_schema").ok()?;
+            let type_name: String = r.try_get("type_name").ok()?;
+            Some((col, quote_qualified_type(&type_schema, &type_name)))
+        })
+        .collect())
+}
+
+/// Quote a schema-qualified type name (e.g. `"public"."mood"`) so it can be
+/// spliced into a `CAST($N AS ...)` without becoming an injection vector.
+fn quote_qualified_type(type_schema: &str, type_name: &str) -> String {
+    format!(
+        "\"{}\".\"{}\"",
+        type_schema.replace('"', "\"\""),
+        type_name.replace('"', "\"\""),
+    )
+}
+
 /// Get the cached pool for these connection params, creating and caching one
 /// on first use. Public for use by query handlers that need direct pool
 /// access (e.g. to acquire one client for a multi-statement batch).
@@ -222,80 +262,6 @@ fn build_tls_connector() -> Result<rustls::ClientConfig, String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+#[path = "client_tests.rs"]
+mod client_tests;
 
-    fn params(host: &str, port: u16, db: &str, user: &str) -> ConnectionParams {
-        ConnectionParams {
-            driver: Some("postgres-plugin".to_string()),
-            host: Some(host.to_string()),
-            port: Some(port),
-            database: Some(db.to_string()),
-            username: Some(user.to_string()),
-            password: None,
-            ssl_mode: None,
-            ssl_ca: None,
-            ssl_cert: None,
-            ssl_key: None,
-            connection_string: None,
-        }
-    }
-
-    #[test]
-    fn connection_key_differs_by_database() {
-        let a = connection_key(&params("localhost", 5432, "db1", "postgres"));
-        let b = connection_key(&params("localhost", 5432, "db2", "postgres"));
-        assert_ne!(a, b, "different databases must not share a cache key");
-    }
-
-    #[test]
-    fn connection_key_differs_by_host() {
-        let a = connection_key(&params("host1", 5432, "db", "postgres"));
-        let b = connection_key(&params("host2", 5432, "db", "postgres"));
-        assert_ne!(a, b);
-    }
-
-    #[test]
-    fn connection_key_differs_by_port() {
-        let a = connection_key(&params("localhost", 5432, "db", "postgres"));
-        let b = connection_key(&params("localhost", 5433, "db", "postgres"));
-        assert_ne!(a, b);
-    }
-
-    #[test]
-    fn connection_key_differs_by_user() {
-        let a = connection_key(&params("localhost", 5432, "db", "alice"));
-        let b = connection_key(&params("localhost", 5432, "db", "bob"));
-        assert_ne!(a, b);
-    }
-
-    #[test]
-    fn connection_key_is_stable_for_identical_params() {
-        let a = connection_key(&params("localhost", 5432, "db", "postgres"));
-        let b = connection_key(&params("localhost", 5432, "db", "postgres"));
-        assert_eq!(a, b);
-    }
-
-    #[test]
-    fn get_or_create_pool_reuses_cached_entry_for_identical_params() {
-        // deadpool's Pool::new is lazy (no connection attempt at creation
-        // time), so this exercises only the cache bookkeeping, not real
-        // connectivity. Use a key unlikely to collide with other tests
-        // running in the same process.
-        let p = params("cache-test-host-unique", 5432, "db", "user");
-        let key = connection_key(&p);
-
-        let before = POOLS.lock().unwrap().len();
-        get_or_create_pool(&p).expect("first call creates and caches a pool");
-        let after_first = POOLS.lock().unwrap().len();
-        assert_eq!(after_first, before + 1, "first call should insert one entry");
-        assert!(POOLS.lock().unwrap().contains_key(&key));
-
-        get_or_create_pool(&p).expect("second call should hit the cache");
-        let after_second = POOLS.lock().unwrap().len();
-        assert_eq!(
-            after_second, after_first,
-            "second call with identical params must not create a new entry"
-        );
-    }
-}

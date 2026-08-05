@@ -47,6 +47,7 @@ async fn exec_insert(
     }
 
     let column_types = client::get_column_types_map(conn_params, table, schema).await.unwrap_or_default();
+    let enum_types = client::get_enum_column_types(conn_params, schema, table).await.unwrap_or_default();
 
     let mut cols: Vec<String> = Vec::with_capacity(entries.len());
     let mut sql_fragments: Vec<String> = Vec::with_capacity(entries.len());
@@ -58,6 +59,7 @@ async fn exec_insert(
         let column_type = column_types.get(&col_name).map(String::as_str);
         let options = BindOptions {
             column_type,
+            enum_type: enum_types.get(&col_name).map(String::as_str),
             allow_default: false,
         };
         let bound = bind_pg_value(val, placeholder_idx, &options)?;
@@ -112,9 +114,11 @@ async fn exec_update(
     let qualified = format!("\"{}\".\"{}\"", schema.replace('"', "\"\""), table.replace('"', "\"\""));
 
     let column_types = client::get_column_types_map(conn_params, table, schema).await.unwrap_or_default();
+    let enum_types = client::get_enum_column_types(conn_params, schema, table).await.unwrap_or_default();
 
     let options = BindOptions {
         column_type: column_types.get(col_name).map(String::as_str),
+        enum_type: enum_types.get(col_name).map(String::as_str),
         allow_default: true,
     };
     let bound = bind_pg_value(new_val, 1, &options)?;

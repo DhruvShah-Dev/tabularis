@@ -39,6 +39,10 @@ impl std::fmt::Debug for BoundValue {
 #[derive(Default)]
 pub struct BindOptions<'a> {
     pub column_type: Option<&'a str>,
+    /// Schema-qualified, already-quoted enum type name (e.g. `"public"."mood"`)
+    /// when the target column is a PostgreSQL enum; `None` otherwise. Drives
+    /// the `CAST($N AS <enum>)` coercion in [`bind_pg_enum_string`].
+    pub enum_type: Option<&'a str>,
     pub allow_default: bool,
 }
 
@@ -134,7 +138,14 @@ fn bind_pg_string(
         });
     }
 
-    // 3. Boolean column
+    // 3. Enum column — always coerces through its own type. Any of the later
+    // shape-based heuristics (uuid-shaped, array-shaped strings) would
+    // otherwise misinterpret a label that merely looks like one of those.
+    if let Some(enum_type) = options.enum_type {
+        return Ok(bind_pg_enum_string(s, enum_type, placeholder_idx));
+    }
+
+    // 4. Boolean column
     if matches!(base_type, Some("BOOLEAN") | Some("BOOL")) {
         let lower = s.trim().to_lowercase();
         let b = match lower.as_str() {
@@ -153,7 +164,7 @@ fn bind_pg_string(
         });
     }
 
-    // 4. Numeric column
+    // 5. Numeric column
     if let Some(bt) = base_type {
         match bt {
             "SMALLINT" | "INTEGER" | "BIGINT" | "INT2" | "INT4" | "INT8" | "SERIAL"
@@ -188,7 +199,7 @@ fn bind_pg_string(
         }
     }
 
-    // 5. Temporal column
+    // 6. Temporal column
     if let Some(bt) = base_type {
         let cast_target = match bt {
             "TIMESTAMP" | "TIMESTAMP WITHOUT TIME ZONE" => Some("timestamp"),
@@ -207,7 +218,7 @@ fn bind_pg_string(
         }
     }
 
-    // 6. UUID shape (value-based fallback, independent of column type)
+    // 7. UUID shape (value-based fallback, independent of column type)
     if s.parse::<Uuid>().is_ok() {
         return Ok(BoundValue {
             sql: format!("CAST(${} AS uuid)", placeholder_idx),
@@ -215,7 +226,7 @@ fn bind_pg_string(
         });
     }
 
-    // 7. PG array literal (JSON array embedded in a string, e.g. "[1,2,3]")
+    // 8. PG array literal (JSON array embedded in a string, e.g. "[1,2,3]")
     let trimmed = s.trim();
     if trimmed.starts_with('[') && trimmed.ends_with(']') {
         if let Ok(Value::Array(arr)) = serde_json::from_str::<Value>(trimmed) {
@@ -227,11 +238,23 @@ fn bind_pg_string(
         }
     }
 
-    // 8. Final fallback: plain TEXT
+    // 9. Final fallback: plain TEXT
     Ok(BoundValue {
         sql: format!("${}", placeholder_idx),
         param: Some((Box::new(s.to_string()), Type::TEXT)),
     })
+}
+
+/// Bind a value into an enum column via `CAST($N AS <qualified_enum>)`.
+/// The placeholder is pinned to `TEXT` so tokio-postgres does not reject the
+/// bound `String` client-side before the CAST resolves it server-side.
+/// `qualified_enum` must already be quoted (see `quote_qualified_type` in
+/// `client.rs`) so it cannot become a SQL-injection vector.
+fn bind_pg_enum_string(s: &str, qualified_enum: &str, placeholder_idx: usize) -> BoundValue {
+    BoundValue {
+        sql: format!("CAST(${} AS {})", placeholder_idx, qualified_enum),
+        param: Some((Box::new(s.to_string()), Type::TEXT)),
+    }
 }
 
 /// Decode the canonical BLOB wire format back to raw bytes.

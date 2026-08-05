@@ -63,6 +63,7 @@ mod bind_pg_value_tests {
     fn object_with_jsonb_column_type_binds_natively() {
         let options = BindOptions {
             column_type: Some("jsonb"),
+            enum_type: None,
             allow_default: false,
         };
         let bound = bind_pg_value(json!({"a": 1}), 1, &options).unwrap();
@@ -77,6 +78,7 @@ mod bind_pg_value_tests {
         // "value is neither String nor Null" gate.
         let options = BindOptions {
             column_type: Some("jsonb"),
+            enum_type: None,
             allow_default: false,
         };
         let bound = bind_pg_value(json!("{\"a\":1}"), 1, &options).unwrap();
@@ -87,6 +89,7 @@ mod bind_pg_value_tests {
     fn default_sentinel_only_honored_when_allow_default_is_true() {
         let options = BindOptions {
             column_type: None,
+            enum_type: None,
             allow_default: true,
         };
         let bound = bind_pg_value(json!("__USE_DEFAULT__"), 1, &options).unwrap();
@@ -98,6 +101,7 @@ mod bind_pg_value_tests {
     fn default_sentinel_ignored_on_insert_allow_default_false() {
         let options = BindOptions {
             column_type: None,
+            enum_type: None,
             allow_default: false,
         };
         let bound = bind_pg_value(json!("__USE_DEFAULT__"), 1, &options).unwrap();
@@ -119,9 +123,41 @@ mod bind_pg_value_tests {
     }
 
     #[test]
+    fn enum_column_binds_with_qualified_cast() {
+        let options = BindOptions {
+            column_type: None,
+            enum_type: Some("\"test_schema\".\"mood\""),
+            allow_default: false,
+        };
+        let bound = bind_pg_value(json!("sad"), 1, &options).unwrap();
+        assert_eq!(bound.sql, "CAST($1 AS \"test_schema\".\"mood\")");
+        assert!(bound.param.is_some());
+    }
+
+    #[test]
+    fn enum_column_takes_precedence_over_uuid_shape() {
+        // A value that happens to look like a UUID must still bind through
+        // the enum CAST if the column is an enum — the enum step runs before
+        // the UUID-shape heuristic in the cascade.
+        let options = BindOptions {
+            column_type: None,
+            enum_type: Some("\"public\".\"status\""),
+            allow_default: false,
+        };
+        let bound = bind_pg_value(
+            json!("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
+            1,
+            &options,
+        )
+        .unwrap();
+        assert_eq!(bound.sql, "CAST($1 AS \"public\".\"status\")");
+    }
+
+    #[test]
     fn boolean_column_accepts_common_truthy_strings() {
         let options = BindOptions {
             column_type: Some("boolean"),
+            enum_type: None,
             allow_default: false,
         };
         for truthy in ["true", "t", "yes", "y", "on", "1", "TRUE"] {
@@ -134,6 +170,7 @@ mod bind_pg_value_tests {
     fn boolean_column_rejects_invalid_string() {
         let options = BindOptions {
             column_type: Some("boolean"),
+            enum_type: None,
             allow_default: false,
         };
         let err = bind_pg_value(json!("maybe"), 1, &options).unwrap_err();
@@ -144,6 +181,7 @@ mod bind_pg_value_tests {
     fn integer_column_string_binds_as_bigint_cast() {
         let options = BindOptions {
             column_type: Some("integer"),
+            enum_type: None,
             allow_default: false,
         };
         let bound = bind_pg_value(json!("42"), 1, &options).unwrap();
@@ -154,6 +192,7 @@ mod bind_pg_value_tests {
     fn integer_column_rejects_non_numeric_string() {
         let options = BindOptions {
             column_type: Some("integer"),
+            enum_type: None,
             allow_default: false,
         };
         let err = bind_pg_value(json!("not-a-number"), 1, &options).unwrap_err();
@@ -164,6 +203,7 @@ mod bind_pg_value_tests {
     fn numeric_column_string_binds_as_numeric_cast() {
         let options = BindOptions {
             column_type: Some("numeric"),
+            enum_type: None,
             allow_default: false,
         };
         let bound = bind_pg_value(json!("12345.67"), 1, &options).unwrap();
@@ -174,6 +214,7 @@ mod bind_pg_value_tests {
     fn timestamp_column_string_binds_with_timestamp_cast() {
         let options = BindOptions {
             column_type: Some("timestamp"),
+            enum_type: None,
             allow_default: false,
         };
         let bound = bind_pg_value(json!("2026-01-15 14:30:00"), 1, &options).unwrap();
@@ -184,6 +225,7 @@ mod bind_pg_value_tests {
     fn timestamptz_column_string_binds_with_timestamptz_cast() {
         let options = BindOptions {
             column_type: Some("timestamptz"),
+            enum_type: None,
             allow_default: false,
         };
         let bound = bind_pg_value(json!("2026-01-15 14:30:00+00"), 1, &options).unwrap();
