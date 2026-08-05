@@ -1,10 +1,7 @@
 //! Extra parity tests for query execution — affected_rows_for_dml, batch_session_state.
 
-use std::sync::Arc;
-
 use serde_json::Value;
 use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -64,60 +61,55 @@ async fn parity_execute_batch_session_state() {
     require_pg!();
     let harness = ParityHarness::new().await;
 
-    // Batch with transaction + temp table — session state must persist across
-    // statements within the batch.
-    let result = harness
-        .assert_parity(
-            "execute_batch:session_state_full",
-            |driver, params| async move {
-                let statements = vec![
-                    "BEGIN".to_string(),
-                    "CREATE TEMP TABLE _parity_batch_test (x INT)".to_string(),
-                    "INSERT INTO _parity_batch_test VALUES (42)".to_string(),
-                    "SELECT x FROM _parity_batch_test".to_string(),
-                    "COMMIT".to_string(),
-                ];
-                driver
-                    .execute_batch(
-                        &params,
-                        &statements,
-                        Some(100),
-                        1,
-                        Some("test_schema"),
-                        None,
-                    )
-                    .await
-            },
-        )
-        .await;
+    // execute_batch returns Vec<BatchStatementResult>, and each entry
+    // carries execution_time_ms: Option<f64> — a genuine wall-clock value
+    // that can never byte-match between two separate driver processes.
+    // assert_parity's exact comparison is the wrong tool here (same class
+    // of issue fixed in parity_batch.rs) — call each target directly and
+    // check only the deterministic fields.
+    let statements = vec![
+        "BEGIN".to_string(),
+        "CREATE TEMP TABLE _parity_batch_test (x INT)".to_string(),
+        "INSERT INTO _parity_batch_test VALUES (42)".to_string(),
+        "SELECT x FROM _parity_batch_test".to_string(),
+        "COMMIT".to_string(),
+    ];
 
-    // Result should be a JSON array with results for all 5 statements
-    let arr = result.as_array().expect("batch result should be an array");
-    assert!(
-        arr.len() >= 4,
-        "Expected at least 4 results, got: {}",
-        arr.len()
-    );
+    for (target, driver) in harness.targets() {
+        let result = driver
+            .execute_batch(&harness.params, &statements, Some(100), 1, Some("test_schema"), None)
+            .await
+            .unwrap_or_else(|e| panic!("execute_batch failed on {}: {}", target, e));
+        let arr = serde_json::to_value(&result).expect("serialize batch result");
+        let arr = arr.as_array().expect("batch result should be an array");
 
-    // The SELECT result (4th statement, index 3) should return the inserted value
-    let select_result = &arr[3];
-    let succeeded = select_result.get("error").map(Value::is_null).unwrap_or(false);
-    assert!(
-        succeeded,
-        "SELECT from temp table should succeed, got: {:?}",
-        select_result
-    );
+        assert!(
+            arr.len() >= 4,
+            "{}: expected at least 4 results, got: {}",
+            target,
+            arr.len()
+        );
 
-    // Verify the SELECT returned the value 42
-    if let Some(result_obj) = select_result.get("result") {
-        if let Some(rows) = result_obj.get("rows").and_then(Value::as_array) {
-            assert_eq!(rows.len(), 1, "SELECT should return 1 row");
-            if let Some(row) = rows.first().and_then(Value::as_array) {
-                assert_eq!(
-                    row.first().and_then(Value::as_i64),
-                    Some(42),
-                    "Temp table should contain value 42"
-                );
+        // The SELECT result (4th statement, index 3) should return the inserted value
+        let select_result = &arr[3];
+        let succeeded = select_result.get("error").map(Value::is_null).unwrap_or(false);
+        assert!(
+            succeeded,
+            "{}: SELECT from temp table should succeed, got: {:?}",
+            target, select_result
+        );
+
+        if let Some(result_obj) = select_result.get("result") {
+            if let Some(rows) = result_obj.get("rows").and_then(Value::as_array) {
+                assert_eq!(rows.len(), 1, "{}: SELECT should return 1 row", target);
+                if let Some(row) = rows.first().and_then(Value::as_array) {
+                    assert_eq!(
+                        row.first().and_then(Value::as_i64),
+                        Some(42),
+                        "{}: temp table should contain value 42",
+                        target
+                    );
+                }
             }
         }
     }

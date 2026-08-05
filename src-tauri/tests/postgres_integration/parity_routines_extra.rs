@@ -1,10 +1,7 @@
 //! Extra parity tests for routines — overloaded functions, procedures, drop_routine.
 
-use std::sync::Arc;
-
 use serde_json::Value;
 use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -73,9 +70,13 @@ async fn parity_drop_routine() {
     require_pg!();
     let harness = ParityHarness::new().await;
 
-    // Create a temporary function on all targets so we can test drop
-    for (_target, driver) in harness.targets() {
-        let _ = driver
+    // drop_routine is destructive against the one shared physical database
+    // both targets point at — assert_parity calls each target in sequence,
+    // so the second target's drop would legitimately fail with "function
+    // does not exist" once the first target already dropped it. Re-create
+    // (idempotent via CREATE OR REPLACE) before each target's drop attempt.
+    for (target, driver) in harness.targets() {
+        driver
             .execute_query(
                 &harness.params,
                 "CREATE OR REPLACE FUNCTION test_schema.parity_drop_fn(a INT) \
@@ -84,20 +85,14 @@ async fn parity_drop_routine() {
                 1,
                 Some("test_schema"),
             )
-            .await;
-    }
+            .await
+            .unwrap_or_else(|e| panic!("setup create function failed on {}: {}", target, e));
 
-    // Drop it — both drivers should succeed identically
-    harness
-        .assert_parity(
-            "drop_routine:parity_drop_fn",
-            |driver, params| async move {
-                driver
-                    .drop_routine(&params, "parity_drop_fn", "FUNCTION", Some("test_schema"))
-                    .await
-            },
-        )
-        .await;
+        driver
+            .drop_routine(&harness.params, "parity_drop_fn", "FUNCTION", Some("test_schema"))
+            .await
+            .unwrap_or_else(|e| panic!("drop_routine failed on {}: {}", target, e));
+    }
 
     // Verify it's gone by checking that the routine no longer appears
     let result = harness

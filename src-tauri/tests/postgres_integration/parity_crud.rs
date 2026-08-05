@@ -3,11 +3,9 @@
 //! All tests use the `crud_scratch` table which is truncated by the seed script.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use serde_json::{json, Value};
+use serde_json::json;
 use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -79,31 +77,43 @@ async fn parity_delete_record() {
     require_pg!();
     let harness = ParityHarness::new().await;
 
-    // Setup: insert a row to delete
-    for (_target, driver) in harness.targets() {
-        let _ = driver
+    // DELETE is destructive against the one shared physical database both
+    // targets point at — assert_parity calls each target in sequence, so a
+    // row inserted once and deleted by the first target would legitimately
+    // report 0 rows affected for the second target (it's already gone).
+    // Re-insert the row before each target's delete attempt instead of
+    // sharing a single setup pass, and compare only the deterministic
+    // affected_rows count directly (matches the direct-per-target pattern
+    // used in parity_batch.rs for the same class of issue).
+    let mut affected_by_target = Vec::new();
+    for (target, driver) in harness.targets() {
+        driver
             .execute_query(
                 &harness.params,
-                "INSERT INTO test_schema.crud_scratch(id, name, value) VALUES (9001, 'delete_target', 1) ON CONFLICT (id) DO NOTHING",
+                "INSERT INTO test_schema.crud_scratch(id, name, value) VALUES (9001, 'delete_target', 1) ON CONFLICT (id) DO UPDATE SET name = 'delete_target', value = 1",
                 None,
                 1,
                 Some("test_schema"),
             )
-            .await;
+            .await
+            .unwrap_or_else(|e| panic!("setup insert failed on {}: {}", target, e));
+
+        let mut pk_map = HashMap::new();
+        pk_map.insert("id".to_string(), json!(9001));
+        let affected = driver
+            .delete_record(&harness.params, "crud_scratch", &pk_map, Some("test_schema"))
+            .await
+            .unwrap_or_else(|e| panic!("delete_record failed on {}: {}", target, e));
+        affected_by_target.push((target.to_string(), affected));
     }
 
-    let result = harness
-        .assert_parity("delete_record:basic", |driver, params| async move {
-            let mut pk_map = HashMap::new();
-            pk_map.insert("id".to_string(), json!(9001));
-            driver
-                .delete_record(&params, "crud_scratch", &pk_map, Some("test_schema"))
-                .await
-        })
-        .await;
-
-    let affected = result.as_u64().expect("delete should return affected rows");
-    assert_eq!(affected, 1, "deleting one matching row should affect 1 row");
+    for (target, affected) in &affected_by_target {
+        assert_eq!(
+            *affected, 1,
+            "{}: deleting one matching row should affect 1 row",
+            target
+        );
+    }
 }
 
 #[tokio::test]

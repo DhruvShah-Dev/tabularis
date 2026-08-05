@@ -1,10 +1,6 @@
 //! Extra parity tests for views — alter_view and empty schema scenarios.
 
-use std::sync::Arc;
-
-use serde_json::Value;
 use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -16,65 +12,48 @@ async fn parity_alter_view() {
 
     let view_name = "parity_alter_view";
     let schema = Some("test_schema");
-
-    // Cleanup from any prior failed run
-    for (_target, driver) in harness.targets() {
-        let _ = driver.drop_view(&harness.params, view_name, schema).await;
-    }
-
-    // Create initial view with one column
     let def1 = "SELECT id FROM test_schema.all_types";
-    harness
-        .assert_parity("create_view:alter_setup", |driver, params| {
-            let vn = view_name.to_string();
-            let d = def1.to_string();
-            async move {
-                driver.create_view(&params, &vn, &d, Some("test_schema")).await
-            }
-        })
-        .await;
-
-    // Alter (replace) with new definition that has two columns
     let def2 = "SELECT id, col_text FROM test_schema.all_types";
-    harness
-        .assert_parity("alter_view:replace_def", |driver, params| {
-            let vn = view_name.to_string();
-            let d = def2.to_string();
-            async move {
-                driver.alter_view(&params, &vn, &d, Some("test_schema")).await
-            }
-        })
-        .await;
 
-    // Verify the altered view has two columns
-    let cols = harness
-        .assert_parity("get_view_columns:after_alter", |driver, params| {
-            let vn = view_name.to_string();
-            async move {
-                driver
-                    .get_view_columns(&params, &vn, Some("test_schema"))
-                    .await
-            }
-        })
-        .await;
+    // create_view/drop_view are destructive against the one shared physical
+    // database both targets point at — assert_parity calls each target in
+    // sequence, so the second target's plain CREATE VIEW would legitimately
+    // fail with "view already exists" and its DROP would legitimately fail
+    // with "view does not exist" once the first target already did so.
+    // alter_view itself uses CREATE OR REPLACE (idempotent), so it's safe
+    // under assert_parity — but the surrounding create/drop are not. Run the
+    // whole create->alter->verify->drop sequence directly per target.
+    for (target, driver) in harness.targets() {
+        // Cleanup from any prior failed run.
+        let _ = driver.drop_view(&harness.params, view_name, schema).await;
 
-    let columns = cols.as_array().expect("altered view columns should be an array");
-    assert_eq!(
-        columns.len(),
-        2,
-        "Altered view should have 2 columns, got: {}",
-        columns.len()
-    );
+        driver
+            .create_view(&harness.params, view_name, def1, schema)
+            .await
+            .unwrap_or_else(|e| panic!("create_view failed on {}: {}", target, e));
 
-    // Cleanup
-    harness
-        .assert_parity("drop_view:alter_cleanup", |driver, params| {
-            let vn = view_name.to_string();
-            async move {
-                driver.drop_view(&params, &vn, Some("test_schema")).await
-            }
-        })
-        .await;
+        driver
+            .alter_view(&harness.params, view_name, def2, schema)
+            .await
+            .unwrap_or_else(|e| panic!("alter_view failed on {}: {}", target, e));
+
+        let columns = driver
+            .get_view_columns(&harness.params, view_name, schema)
+            .await
+            .unwrap_or_else(|e| panic!("get_view_columns failed on {}: {}", target, e));
+        assert_eq!(
+            columns.len(),
+            2,
+            "{}: altered view should have 2 columns, got: {}",
+            target,
+            columns.len()
+        );
+
+        driver
+            .drop_view(&harness.params, view_name, schema)
+            .await
+            .unwrap_or_else(|e| panic!("drop_view (cleanup) failed on {}: {}", target, e));
+    }
 }
 
 #[tokio::test]

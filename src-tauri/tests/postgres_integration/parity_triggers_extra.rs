@@ -1,10 +1,6 @@
 //! Extra parity tests for triggers — create/drop trigger and empty schema.
 
-use std::sync::Arc;
-
-use serde_json::Value;
 use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -25,70 +21,46 @@ async fn parity_create_and_drop_trigger() {
             .await;
     }
 
-    // Create trigger (reuse existing trigger function audit_trigger_fn)
+    // create_trigger/drop_trigger are destructive against the one shared
+    // physical database both targets point at — assert_parity calls each
+    // target in sequence, so the second target's CREATE would legitimately
+    // fail with "trigger already exists" (created by the first target) and
+    // its DROP would legitimately fail with "trigger does not exist" (already
+    // dropped by the first target). Run create+drop directly per target
+    // instead, so each target creates its own copy and drops its own copy.
     let create_sql = format!(
         "CREATE TRIGGER {} BEFORE INSERT ON test_schema.{} \
          FOR EACH ROW EXECUTE FUNCTION test_schema.audit_trigger_fn()",
         trigger_name, table_name
     );
 
-    harness
-        .assert_parity("create_trigger:parity_temp", |driver, params| {
-            let sql = create_sql.clone();
-            async move {
-                driver
-                    .create_trigger(&params, &sql, Some("test_schema"))
-                    .await
-            }
-        })
-        .await;
+    for (target, driver) in harness.targets() {
+        driver
+            .create_trigger(&harness.params, &create_sql, Some("test_schema"))
+            .await
+            .unwrap_or_else(|e| panic!("create_trigger failed on {}: {}", target, e));
 
-    // Verify the trigger exists by listing triggers
-    let result = harness
-        .assert_parity("get_triggers:after_create", |driver, params| async move {
-            driver.get_triggers(&params, Some("test_schema")).await
-        })
-        .await;
+        // Verify the trigger exists by listing triggers (read-only, safe to
+        // check per-target since both point at the same live state).
+        let triggers = driver
+            .get_triggers(&harness.params, Some("test_schema"))
+            .await
+            .unwrap_or_else(|e| panic!("get_triggers failed on {}: {}", target, e));
+        let found = triggers.iter().any(|t| t.name == trigger_name);
+        assert!(found, "{}: created trigger {} should appear in list", target, trigger_name);
 
-    let triggers = result.as_array().expect("triggers should be an array");
-    let found = triggers
-        .iter()
-        .any(|t| t.get("name").and_then(Value::as_str) == Some(trigger_name));
-    assert!(
-        found,
-        "Created trigger {} should appear in list",
-        trigger_name
-    );
+        driver
+            .drop_trigger(&harness.params, trigger_name, table_name, Some("test_schema"))
+            .await
+            .unwrap_or_else(|e| panic!("drop_trigger failed on {}: {}", target, e));
 
-    // Drop the trigger
-    harness
-        .assert_parity("drop_trigger:parity_temp", |driver, params| {
-            let tn = trigger_name.to_string();
-            let tbl = table_name.to_string();
-            async move {
-                driver
-                    .drop_trigger(&params, &tn, &tbl, Some("test_schema"))
-                    .await
-            }
-        })
-        .await;
-
-    // Verify it's gone
-    let result = harness
-        .assert_parity("get_triggers:after_drop", |driver, params| async move {
-            driver.get_triggers(&params, Some("test_schema")).await
-        })
-        .await;
-
-    let triggers = result.as_array().expect("triggers should be an array");
-    let still_found = triggers
-        .iter()
-        .any(|t| t.get("name").and_then(Value::as_str) == Some(trigger_name));
-    assert!(
-        !still_found,
-        "Dropped trigger {} should not appear in list",
-        trigger_name
-    );
+        let triggers = driver
+            .get_triggers(&harness.params, Some("test_schema"))
+            .await
+            .unwrap_or_else(|e| panic!("get_triggers (after drop) failed on {}: {}", target, e));
+        let still_found = triggers.iter().any(|t| t.name == trigger_name);
+        assert!(!still_found, "{}: dropped trigger {} should not appear in list", target, trigger_name);
+    }
 }
 
 #[tokio::test]

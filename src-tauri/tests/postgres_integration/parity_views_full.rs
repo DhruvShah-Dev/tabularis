@@ -1,10 +1,6 @@
 //! Parity tests for view and materialized view lifecycle operations.
 
-use std::sync::Arc;
-
-use serde_json::Value;
 use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -41,64 +37,50 @@ async fn parity_create_drop_view() {
     let view_name = "parity_temp_view";
     let definition = "SELECT id, col_text FROM test_schema.all_types WHERE id < 10";
 
-    // Create the view
-    harness
-        .assert_parity("create_view:temp", |driver, params| {
-            let def = definition.to_string();
-            let vn = view_name.to_string();
-            async move {
-                driver
-                    .create_view(&params, &vn, &def, Some("test_schema"))
-                    .await
-            }
-        })
-        .await;
-
-    // Verify the view exists by fetching its columns
-    let cols = harness
-        .assert_parity("get_view_columns:temp", |driver, params| {
-            let vn = view_name.to_string();
-            async move {
-                driver
-                    .get_view_columns(&params, &vn, Some("test_schema"))
-                    .await
-            }
-        })
-        .await;
-
-    let columns = cols.as_array().expect("temp view columns should be an array");
-    assert!(!columns.is_empty(), "temp view should have columns");
-
-    // Drop the view
-    harness
-        .assert_parity("drop_view:temp", |driver, params| {
-            let vn = view_name.to_string();
-            async move {
-                driver
-                    .drop_view(&params, &vn, Some("test_schema"))
-                    .await
-            }
-        })
-        .await;
-
-    // Verify it's gone — get_view_columns queries information_schema.columns
-    // filtered by table name, so a dropped view returns Ok(empty), not Err.
+    // create_view/drop_view are destructive against the one shared physical
+    // database both targets point at — assert_parity calls each target in
+    // sequence, so the second target's plain CREATE VIEW would legitimately
+    // fail with "view already exists" (created by the first target) and its
+    // DROP would legitimately fail with "view does not exist" (already
+    // dropped by the first target). Run create+verify+drop directly per
+    // target instead, so each target creates and drops its own view.
     for (target, driver) in harness.targets() {
-        let result = driver
+        // Cleanup from any prior failed run.
+        let _ = driver.drop_view(&harness.params, view_name, Some("test_schema")).await;
+
+        driver
+            .create_view(&harness.params, view_name, definition, Some("test_schema"))
+            .await
+            .unwrap_or_else(|e| panic!("create_view failed on {}: {}", target, e));
+
+        let columns = driver
             .get_view_columns(&harness.params, view_name, Some("test_schema"))
-            .await;
-        match result {
-            Ok(cols) => assert!(
-                cols.is_empty(),
-                "view should have no columns after drop on target {}, got: {:?}",
-                target,
-                cols
-            ),
-            Err(e) => panic!(
-                "get_view_columns on dropped view should return Ok(empty), not Err, on target {}: {}",
-                target, e
-            ),
-        }
+            .await
+            .unwrap_or_else(|e| panic!("get_view_columns failed on {}: {}", target, e));
+        assert!(!columns.is_empty(), "{}: temp view should have columns", target);
+
+        driver
+            .drop_view(&harness.params, view_name, Some("test_schema"))
+            .await
+            .unwrap_or_else(|e| panic!("drop_view failed on {}: {}", target, e));
+
+        // get_view_columns queries information_schema.columns filtered by
+        // table name, so a dropped view returns Ok(empty), not Err.
+        let columns_after_drop = driver
+            .get_view_columns(&harness.params, view_name, Some("test_schema"))
+            .await
+            .unwrap_or_else(|e| {
+                panic!(
+                    "get_view_columns on dropped view should return Ok(empty), not Err, on {}: {}",
+                    target, e
+                )
+            });
+        assert!(
+            columns_after_drop.is_empty(),
+            "{}: view should have no columns after drop, got: {:?}",
+            target,
+            columns_after_drop
+        );
     }
 }
 

@@ -6,11 +6,9 @@
 //! identical wire-format strings for the same row.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use serde_json::{json, Value};
+use serde_json::json;
 use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -24,70 +22,53 @@ async fn parity_blob_insert_and_query() {
     require_pg!();
     let harness = ParityHarness::new().await;
 
-    // Insert a blob via the wire format
-    let _insert_result = harness
-        .assert_parity(
-            "insert_record:bytea",
-            |driver, params| async move {
-                // 4 bytes (0xCA 0xFE 0xBA 0xBE) encoded as base64 = "yv66vg=="
-                let blob_wire = "BLOB:4:application/octet-stream:yv66vg==";
-                let mut data = HashMap::new();
-                data.insert("col_bytea".to_string(), json!(blob_wire));
-                data.insert("col_text".to_string(), json!("parity_blob_test"));
-                driver
-                    .insert_record(&params, "all_types", data, Some("test_schema"), 10_000_000)
-                    .await
-            },
-        )
-        .await;
+    // insert_record is destructive against the one shared physical database
+    // both targets point at — assert_parity calls each target in sequence,
+    // and col_text has no unique constraint, so inserting the same marker
+    // value from both targets produces TWO rows in the shared table (not
+    // one row inserted "the same way twice"). Run insert+query+cleanup
+    // directly per target so each target's row is isolated and cleaned up
+    // before the next target runs.
+    for (target, driver) in harness.targets() {
+        // 4 bytes (0xCA 0xFE 0xBA 0xBE) encoded as base64 = "yv66vg=="
+        let blob_wire = "BLOB:4:application/octet-stream:yv66vg==";
+        let mut data = HashMap::new();
+        data.insert("col_bytea".to_string(), json!(blob_wire));
+        data.insert("col_text".to_string(), json!("parity_blob_test"));
+        driver
+            .insert_record(&harness.params, "all_types", data, Some("test_schema"), 10_000_000)
+            .await
+            .unwrap_or_else(|e| panic!("insert_record failed on {}: {}", target, e));
 
-    // Query back and verify both drivers return identical results
-    let query_result = harness
-        .assert_parity(
-            "execute_query:bytea_select",
-            |driver, params| async move {
-                driver
-                    .execute_query(
-                        &params,
-                        "SELECT col_bytea FROM test_schema.all_types WHERE col_text = 'parity_blob_test'",
-                        None,
-                        1,
-                        Some("test_schema"),
-                    )
-                    .await
-            },
-        )
-        .await;
+        let query_result = driver
+            .execute_query(
+                &harness.params,
+                "SELECT col_bytea FROM test_schema.all_types WHERE col_text = 'parity_blob_test'",
+                None,
+                1,
+                Some("test_schema"),
+            )
+            .await
+            .unwrap_or_else(|e| panic!("execute_query failed on {}: {}", target, e));
 
-    // Verify the query returned a row with non-null bytea
-    let rows = query_result
-        .get("rows")
-        .and_then(|v| v.as_array())
-        .expect("should have rows");
-    assert_eq!(rows.len(), 1, "should find the inserted blob row");
-    let first_row = rows[0].as_array().expect("row should be an array");
-    assert!(
-        !first_row[0].is_null(),
-        "bytea column should not be null"
-    );
+        assert_eq!(query_result.rows.len(), 1, "{}: should find exactly the inserted blob row", target);
+        assert!(
+            !query_result.rows[0][0].is_null(),
+            "{}: bytea column should not be null",
+            target
+        );
 
-    // Clean up via both drivers
-    let _cleanup = harness
-        .assert_parity(
-            "execute_query:bytea_cleanup",
-            |driver, params| async move {
-                driver
-                    .execute_query(
-                        &params,
-                        "DELETE FROM test_schema.all_types WHERE col_text = 'parity_blob_test'",
-                        None,
-                        1,
-                        Some("test_schema"),
-                    )
-                    .await
-            },
-        )
-        .await;
+        driver
+            .execute_query(
+                &harness.params,
+                "DELETE FROM test_schema.all_types WHERE col_text = 'parity_blob_test'",
+                None,
+                1,
+                Some("test_schema"),
+            )
+            .await
+            .unwrap_or_else(|e| panic!("cleanup delete failed on {}: {}", target, e));
+    }
 }
 
 /// Parity equivalent of `test_save_blob_to_file`.
