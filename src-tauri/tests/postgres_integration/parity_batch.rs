@@ -33,8 +33,8 @@ async fn parity_batch_session_state() {
 
     // The second statement result should contain a row with current_schema
     let second = &arr[1];
-    let success = second.get("success").and_then(Value::as_bool);
-    assert_eq!(success, Some(true), "SELECT current_schema() should succeed");
+    let succeeded = second.get("error").map(Value::is_null).unwrap_or(false);
+    assert!(succeeded, "SELECT current_schema() should succeed, got: {:?}", second);
 }
 
 #[tokio::test]
@@ -63,12 +63,12 @@ async fn parity_batch_mixed_statements() {
     assert_eq!(arr.len(), 2, "should have results for both statements");
 
     // First statement (SELECT) should succeed
-    let first_success = arr[0].get("success").and_then(Value::as_bool);
-    assert_eq!(first_success, Some(true), "SELECT should succeed");
+    let first_ok = arr[0].get("error").map(Value::is_null).unwrap_or(false);
+    assert!(first_ok, "SELECT should succeed, got: {:?}", arr[0]);
 
     // Second statement (INSERT) should succeed
-    let second_success = arr[1].get("success").and_then(Value::as_bool);
-    assert_eq!(second_success, Some(true), "INSERT should succeed");
+    let second_ok = arr[1].get("error").map(Value::is_null).unwrap_or(false);
+    assert!(second_ok, "INSERT should succeed, got: {:?}", arr[1]);
 }
 
 #[tokio::test]
@@ -96,14 +96,14 @@ async fn parity_batch_error_handling() {
     assert_eq!(arr.len(), 2, "should have results for both statements");
 
     // First statement should succeed
-    let first_success = arr[0].get("success").and_then(Value::as_bool);
-    assert_eq!(first_success, Some(true), "valid SELECT should succeed");
+    let first_ok = arr[0].get("error").map(Value::is_null).unwrap_or(false);
+    assert!(first_ok, "valid SELECT should succeed, got: {:?}", arr[0]);
 
     // Second statement should fail (table doesn't exist)
-    let second_success = arr[1].get("success").and_then(Value::as_bool);
-    assert_eq!(
-        second_success,
-        Some(false),
-        "query on non-existent table should fail"
+    let second_failed = arr[1].get("error").map(|e| !e.is_null()).unwrap_or(false);
+    assert!(
+        second_failed,
+        "query on non-existent table should fail, got: {:?}",
+        arr[1]
     );
 }

@@ -15,14 +15,15 @@ async fn parity_update_composite_pk() {
     require_pg!();
     let harness = ParityHarness::new().await;
 
-    // order_items has composite PK (order_id, item_no).
-    // Setup: ensure the row exists on all targets.
+    // order_items has composite PK (order_id, item_no) and order_id has an FK
+    // to orders(id). The seed only creates order id=1, so reuse it here with
+    // a distinct item_no to avoid colliding with the seeded (1, 1) row.
     for (_target, driver) in harness.targets() {
         let _ = driver
             .execute_query(
                 &harness.params,
                 "INSERT INTO test_schema.order_items(order_id, item_no, product) \
-                 VALUES (99, 1, 'Parity Widget') ON CONFLICT (order_id, item_no) DO NOTHING",
+                 VALUES (1, 99, 'Parity Widget') ON CONFLICT (order_id, item_no) DO NOTHING",
                 None,
                 1,
                 Some("test_schema"),
@@ -36,8 +37,8 @@ async fn parity_update_composite_pk() {
             "update_record:composite_pk",
             |driver, params| async move {
                 let mut pk_map = HashMap::new();
-                pk_map.insert("order_id".to_string(), json!(99));
-                pk_map.insert("item_no".to_string(), json!(1));
+                pk_map.insert("order_id".to_string(), json!(1));
+                pk_map.insert("item_no".to_string(), json!(99));
                 driver
                     .update_record(
                         &params,
@@ -62,8 +63,8 @@ async fn parity_update_composite_pk() {
     // Restore original value
     for (_target, driver) in harness.targets() {
         let mut pk_map = HashMap::new();
-        pk_map.insert("order_id".to_string(), json!(99));
-        pk_map.insert("item_no".to_string(), json!(1));
+        pk_map.insert("order_id".to_string(), json!(1));
+        pk_map.insert("item_no".to_string(), json!(99));
         let _ = driver
             .update_record(
                 &harness.params,

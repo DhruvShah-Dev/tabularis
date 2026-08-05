@@ -81,16 +81,24 @@ async fn parity_create_drop_view() {
         })
         .await;
 
-    // Verify it's gone — fetching columns should error
+    // Verify it's gone — get_view_columns queries information_schema.columns
+    // filtered by table name, so a dropped view returns Ok(empty), not Err.
     for (target, driver) in harness.targets() {
         let result = driver
             .get_view_columns(&harness.params, view_name, Some("test_schema"))
             .await;
-        assert!(
-            result.is_err(),
-            "view should not exist after drop on target {}",
-            target
-        );
+        match result {
+            Ok(cols) => assert!(
+                cols.is_empty(),
+                "view should have no columns after drop on target {}, got: {:?}",
+                target,
+                cols
+            ),
+            Err(e) => panic!(
+                "get_view_columns on dropped view should return Ok(empty), not Err, on target {}: {}",
+                target, e
+            ),
+        }
     }
 }
 

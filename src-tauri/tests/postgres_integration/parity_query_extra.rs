@@ -101,11 +101,11 @@ async fn parity_execute_batch_session_state() {
 
     // The SELECT result (4th statement, index 3) should return the inserted value
     let select_result = &arr[3];
-    let success = select_result.get("success").and_then(Value::as_bool);
-    assert_eq!(
-        success,
-        Some(true),
-        "SELECT from temp table should succeed"
+    let succeeded = select_result.get("error").map(Value::is_null).unwrap_or(false);
+    assert!(
+        succeeded,
+        "SELECT from temp table should succeed, got: {:?}",
+        select_result
     );
 
     // Verify the SELECT returned the value 42

@@ -64,7 +64,8 @@ async fn parity_execute_query_with_pagination() {
     require_pg!();
     let harness = ParityHarness::new().await;
 
-    // Page 1 with limit 2
+    // The seed only guarantees 2 rows in all_types, so paginate with limit=1
+    // across 2 pages rather than limit=2 (which would leave page 2 empty).
     let page1 = harness
         .assert_parity(
             "execute_query:pagination_page1",
@@ -73,7 +74,7 @@ async fn parity_execute_query_with_pagination() {
                     .execute_query(
                         &params,
                         "SELECT id, col_text FROM test_schema.all_types ORDER BY id",
-                        Some(2),
+                        Some(1),
                         1,
                         Some("test_schema"),
                     )
@@ -83,9 +84,9 @@ async fn parity_execute_query_with_pagination() {
         .await;
 
     let rows_p1 = page1.get("rows").and_then(Value::as_array).unwrap();
-    assert_eq!(rows_p1.len(), 2, "page 1 should have exactly 2 rows");
+    assert_eq!(rows_p1.len(), 1, "page 1 should have exactly 1 row");
 
-    // Page 2 with limit 2 — should return different rows
+    // Page 2 with limit 1 — should return a different row
     let page2 = harness
         .assert_parity(
             "execute_query:pagination_page2",
@@ -94,7 +95,7 @@ async fn parity_execute_query_with_pagination() {
                     .execute_query(
                         &params,
                         "SELECT id, col_text FROM test_schema.all_types ORDER BY id",
-                        Some(2),
+                        Some(1),
                         2,
                         Some("test_schema"),
                     )
@@ -104,7 +105,7 @@ async fn parity_execute_query_with_pagination() {
         .await;
 
     let rows_p2 = page2.get("rows").and_then(Value::as_array).unwrap();
-    assert_eq!(rows_p2.len(), 2, "page 2 should have exactly 2 rows");
+    assert_eq!(rows_p2.len(), 1, "page 2 should have exactly 1 row");
     assert_ne!(rows_p1, rows_p2, "pages should return different rows");
 }
 
