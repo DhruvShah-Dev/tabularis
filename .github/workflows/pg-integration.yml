@@ -72,6 +72,9 @@ jobs:
       - name: Build PostgreSQL plugin
         run: cargo build --release --manifest-path plugins/postgres-plugin/Cargo.toml
 
+      - name: Run PostgreSQL plugin unit tests
+        run: cargo test --manifest-path plugins/postgres-plugin/Cargo.toml
+
       - name: Run PostgreSQL integration tests
         working-directory: src-tauri
         env:
