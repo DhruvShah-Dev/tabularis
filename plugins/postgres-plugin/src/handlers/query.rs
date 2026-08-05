@@ -154,11 +154,10 @@ async fn exec_query_on_client(
         }));
     }
 
-    // Build paginated query
+    // Build paginated query — strips any existing LIMIT/OFFSET first so we
+    // never emit a query with two LIMIT clauses (which is a syntax error).
     let (final_query, page_size) = if let Some(lim) = limit {
-        let offset = (page.saturating_sub(1)) * lim;
-        // Fetch one extra row for has_more detection
-        let paginated = format!("{} LIMIT {} OFFSET {}", query, lim + 1, offset);
+        let paginated = crate::utils::pagination::build_paginated_query(query, lim, page);
         (paginated, lim)
     } else {
         (query.to_string(), 0u32)

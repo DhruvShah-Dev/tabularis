@@ -10,6 +10,8 @@
 use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 mod binding;
+#[cfg(test)]
+mod binding_tests;
 mod client;
 mod error;
 mod extract;
