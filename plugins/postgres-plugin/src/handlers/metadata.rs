@@ -581,8 +581,90 @@ pub async fn get_routines(id: Value, params: &Value) -> Value {
     }
 }
 
-pub async fn get_routine_parameters(id: Value, _params: &Value) -> Value { not_implemented(id, "get_routine_parameters") }
-pub async fn get_routine_definition(id: Value, _params: &Value) -> Value { not_implemented(id, "get_routine_definition") }
+pub async fn get_routine_parameters(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let routine_name = params.get("routine_name").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let return_type_query = r#"
+        SELECT data_type, routine_type
+        FROM information_schema.routines
+        WHERE routine_schema = $1 AND routine_name = $2
+        LIMIT 1
+    "#;
+    let routine_info = match client::query_rows(&conn_params, return_type_query, &[&schema, &routine_name]).await {
+        Ok(rows) => rows,
+        Err(e) => return error_response(id, -32603, &e),
+    };
+
+    let mut parameters: Vec<Value> = Vec::new();
+
+    if let Some(info) = routine_info.first() {
+        let routine_type: String = info.try_get("routine_type").unwrap_or_default();
+        if routine_type == "FUNCTION" {
+            let data_type: String = info.try_get("data_type").unwrap_or_default();
+            if !data_type.eq_ignore_ascii_case("void") && !data_type.eq_ignore_ascii_case("trigger") {
+                parameters.push(json!({
+                    "name": "",
+                    "data_type": data_type,
+                    "mode": "OUT",
+                    "ordinal_position": 0,
+                }));
+            }
+        }
+    }
+
+    let query = r#"
+        SELECT p.parameter_name, p.data_type, p.parameter_mode, p.ordinal_position
+        FROM information_schema.parameters p
+        JOIN information_schema.routines r ON p.specific_name = r.specific_name
+        WHERE r.routine_schema = $1 AND r.routine_name = $2
+        ORDER BY p.ordinal_position
+    "#;
+    match client::query_rows(&conn_params, query, &[&schema, &routine_name]).await {
+        Ok(rows) => {
+            parameters.extend(rows.iter().map(|r| {
+                let name: Option<String> = r.try_get("parameter_name").ok().flatten();
+                let data_type: String = r.try_get("data_type").unwrap_or_default();
+                let mode: String = r.try_get("parameter_mode").unwrap_or_default();
+                let ordinal_position: i32 = r.try_get("ordinal_position").unwrap_or(0);
+                json!({
+                    "name": name.unwrap_or_default(),
+                    "data_type": data_type,
+                    "mode": mode,
+                    "ordinal_position": ordinal_position,
+                })
+            }));
+            ok_response(id, json!(parameters))
+        }
+        Err(e) => error_response(id, -32603, &e),
+    }
+}
+
+pub async fn get_routine_definition(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let routine_name = params.get("routine_name").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let query = r#"
+        SELECT pg_get_functiondef(p.oid) as definition
+        FROM pg_proc p
+        JOIN pg_namespace n ON p.pronamespace = n.oid
+        WHERE n.nspname = $1 AND p.proname = $2
+        LIMIT 1
+    "#;
+
+    match client::query_rows(&conn_params, query, &[&schema, &routine_name]).await {
+        Ok(rows) => match rows.first() {
+            Some(row) => {
+                let definition: String = row.try_get("definition").unwrap_or_default();
+                ok_response(id, json!(definition))
+            }
+            None => error_response(id, -32603, &format!("Routine '{}' not found", routine_name)),
+        },
+        Err(e) => error_response(id, -32603, &e),
+    }
+}
 
 pub async fn get_triggers(id: Value, params: &Value) -> Value {
     let conn_params = ConnectionParams::from_value(inner_params(params));
@@ -624,7 +706,63 @@ pub async fn get_triggers(id: Value, params: &Value) -> Value {
     }
 }
 
-pub async fn get_trigger_definition(id: Value, _params: &Value) -> Value { not_implemented(id, "get_trigger_definition") }
+pub async fn get_trigger_definition(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let trigger_name = params.get("trigger_name").and_then(Value::as_str).unwrap_or("");
+    let table_name = params.get("table_name").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let query = r#"
+        SELECT pg_get_triggerdef(t.oid, true) AS definition
+        FROM pg_trigger t
+        JOIN pg_class c ON t.tgrelid = c.oid
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE t.tgname = $1
+          AND c.relname = $2
+          AND n.nspname = $3
+          AND NOT t.tgisinternal
+        LIMIT 1
+    "#;
+
+    match client::query_rows(&conn_params, query, &[&trigger_name, &table_name, &schema]).await {
+        Ok(rows) => match rows.first() {
+            Some(row) => {
+                let definition: String = row.try_get("definition").unwrap_or_default();
+                ok_response(id, json!(definition))
+            }
+            None => error_response(id, -32603, &format!("Trigger '{}' not found", trigger_name)),
+        },
+        Err(e) => error_response(id, -32603, &e),
+    }
+}
+
+pub async fn create_trigger(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let trigger_sql = params.get("trigger_sql").and_then(Value::as_str).unwrap_or("");
+
+    match client::execute_typed(&conn_params, trigger_sql, &[]).await {
+        Ok(_) => ok_response(id, Value::Null),
+        Err(e) => error_response(id, -32603, &format!("Failed to create trigger: {}", e)),
+    }
+}
+
+pub async fn drop_trigger(id: Value, params: &Value) -> Value {
+    let conn_params = ConnectionParams::from_value(inner_params(params));
+    let trigger_name = params.get("trigger_name").and_then(Value::as_str).unwrap_or("");
+    let table_name = params.get("table_name").and_then(Value::as_str).unwrap_or("");
+    let schema = params.get("schema").and_then(Value::as_str).unwrap_or("public");
+
+    let query = format!(
+        "DROP TRIGGER IF EXISTS {} ON {}",
+        crate::utils::identifiers::quote_identifier(trigger_name),
+        crate::utils::identifiers::qualified(schema, table_name),
+    );
+    match client::execute_typed(&conn_params, &query, &[]).await {
+        Ok(_) => ok_response(id, Value::Null),
+        Err(e) => error_response(id, -32603, &format!("Failed to drop trigger: {}", e)),
+    }
+}
+
 pub async fn get_schema_snapshot(id: Value, _params: &Value) -> Value { not_implemented(id, "get_schema_snapshot") }
 pub async fn get_all_columns_batch(id: Value, _params: &Value) -> Value { not_implemented(id, "get_all_columns_batch") }
 pub async fn get_all_foreign_keys_batch(id: Value, _params: &Value) -> Value { not_implemented(id, "get_all_foreign_keys_batch") }

@@ -54,7 +54,8 @@ pub async fn handle_line(line: &str) -> Value {
         "create_view" => handlers::metadata::create_view(id, &params).await,
         "alter_view" => handlers::metadata::alter_view(id, &params).await,
         "drop_view" => handlers::metadata::drop_view(id, &params).await,
-        "create_trigger" | "drop_trigger" => not_implemented(id, &method),
+        "create_trigger" => handlers::metadata::create_trigger(id, &params).await,
+        "drop_trigger" => handlers::metadata::drop_trigger(id, &params).await,
 
         // Query execution
         "execute_query" => handlers::query::execute_query(id, &params).await,
