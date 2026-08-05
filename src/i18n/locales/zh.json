@@ -947,6 +947,7 @@
   "dataGrid": {
     "noRowIdentity": "无法编辑行:\"{{table}}\" 没有主键,因此编辑要求结果包含表的所有列。请选择所有列(例如 SELECT *)或添加主键。",
     "keylessRowNotFound": "更新 \"{{column}}\" 时没有行与原始值匹配。该表没有主键,数据可能已更改,请刷新后重试。",
+    "keylessDeleteNotFound": "删除时没有行与原始值匹配。该表没有主键,数据可能已更改,请刷新后重试。",
     "newRow": "新建",
     "noData": "无数据显示",
     "editRow": "编辑行",

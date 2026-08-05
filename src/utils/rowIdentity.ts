@@ -19,17 +19,43 @@ export interface RowIdentity {
 }
 
 /**
+ * Approximate (floating-point) numeric types. Their stored values are not
+ * exactly representable, so an equality comparison against the decimal
+ * representation shown in the grid may not match (e.g. a MySQL FLOAT column
+ * compared with a decimal literal). Exact numerics (decimal/numeric) are fine.
+ */
+const APPROXIMATE_NUMERIC_TYPES = new Set([
+	"float",
+	"float4",
+	"float8",
+	"double",
+	"double precision",
+	"real",
+]);
+
+function isApproximateNumericType(dataType: string): boolean {
+	const base = dataType
+		.toLowerCase()
+		.replace(/\(.*$/, "")
+		.replace(/\s+unsigned$/, "")
+		.trim();
+	return APPROXIMATE_NUMERIC_TYPES.has(base);
+}
+
+/**
  * Returns true when a column's value can be safely compared with `=` (or
- * `IS NULL`) in a WHERE clause. Binary, geometric, JSON and hstore columns are
- * excluded: the grid holds display/wire representations of their values, which
- * would not match the stored value in an equality comparison.
+ * `IS NULL`) in a WHERE clause. Binary, geometric, JSON, hstore and
+ * floating-point columns are excluded: the grid holds display/wire
+ * representations of their values, which would not match the stored value in
+ * an equality comparison.
  */
 export function isComparableColumn(column: TableColumn): boolean {
 	return (
 		!isBlobColumn(column.data_type, column.character_maximum_length) &&
 		!isGeometricType(column.data_type) &&
 		!isJsonColumn(column.data_type) &&
-		!isHstoreColumn(column.data_type)
+		!isHstoreColumn(column.data_type) &&
+		!isApproximateNumericType(column.data_type)
 	);
 }
 
@@ -87,7 +113,8 @@ export interface KeylessUpdateStep {
  *
  * Values whose stored result is unknown client-side (currently only the
  * DEFAULT sentinel) are ordered last: after such an update the row can no
- * longer be re-identified through that column.
+ * longer be re-identified through that column, so it is dropped from the
+ * WHERE maps of any later step instead of matching a value we don't know.
  */
 export function buildKeylessUpdatePlan(
 	identityMap: Record<string, unknown>,
@@ -102,7 +129,11 @@ export function buildKeylessUpdatePlan(
 	return entries.map(([colName, newVal]) => {
 		const step: KeylessUpdateStep = { colName, newVal, pkMap: { ...current } };
 		if (colName in current) {
-			current[colName] = newVal;
+			if (isOpaque(newVal)) {
+				delete current[colName];
+			} else {
+				current[colName] = newVal;
+			}
 		}
 		return step;
 	});

@@ -58,6 +58,26 @@ describe("rowIdentity", () => {
 			expect(isComparableColumn(col("a", "JSONB"))).toBe(false);
 			expect(isComparableColumn(col("a", "hstore"))).toBe(false);
 		});
+
+		it("should reject approximate numeric types", () => {
+			// Stored floats are not exactly representable, so equality against
+			// the grid's decimal representation may not match (e.g. MySQL FLOAT).
+			expect(isComparableColumn(col("a", "float"))).toBe(false);
+			expect(isComparableColumn(col("a", "FLOAT"))).toBe(false);
+			expect(isComparableColumn(col("a", "double"))).toBe(false);
+			expect(isComparableColumn(col("a", "double precision"))).toBe(false);
+			expect(isComparableColumn(col("a", "double unsigned"))).toBe(false);
+			expect(isComparableColumn(col("a", "real"))).toBe(false);
+			expect(isComparableColumn(col("a", "float4"))).toBe(false);
+			expect(isComparableColumn(col("a", "float8"))).toBe(false);
+			expect(isComparableColumn(col("a", "FLOAT(10)"))).toBe(false);
+		});
+
+		it("should keep exact numeric types comparable", () => {
+			expect(isComparableColumn(col("a", "numeric"))).toBe(true);
+			expect(isComparableColumn(col("a", "decimal"))).toBe(true);
+			expect(isComparableColumn(col("a", "bigint"))).toBe(true);
+		});
 	});
 
 	describe("resolveRowIdentity", () => {
@@ -142,6 +162,7 @@ describe("rowIdentity", () => {
 				col("payload", "blob"),
 				col("shape", "geometry"),
 				col("meta", "json"),
+				col("score", "float"),
 			];
 			expect(
 				resolveRowIdentity(null, columns, [
@@ -149,6 +170,7 @@ describe("rowIdentity", () => {
 					"payload",
 					"shape",
 					"meta",
+					"score",
 				]),
 			).toEqual({ columns: ["name"], isKeyless: true });
 		});
@@ -218,6 +240,19 @@ describe("rowIdentity", () => {
 			});
 			expect(plan.map((s) => s.colName)).toEqual(["b", "a"]);
 			expect(plan[1].pkMap).toEqual({ a: 1, b: "y", c: null });
+		});
+
+		it("should drop DEFAULT-sentinel columns from subsequent WHERE maps", () => {
+			// After SET a = DEFAULT the stored value of "a" is unknown
+			// client-side: later steps must omit it from their WHERE map
+			// instead of matching the sentinel string (guaranteed 0 rows).
+			const plan = buildKeylessUpdatePlan(identity, {
+				a: USE_DEFAULT_SENTINEL,
+				b: USE_DEFAULT_SENTINEL,
+			});
+			expect(plan.map((s) => s.colName)).toEqual(["a", "b"]);
+			expect(plan[0].pkMap).toEqual({ a: 1, b: "x", c: null });
+			expect(plan[1].pkMap).toEqual({ b: "x", c: null });
 		});
 
 		it("should return an empty plan for no changes", () => {

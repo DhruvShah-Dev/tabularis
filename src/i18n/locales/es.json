@@ -1005,6 +1005,7 @@
   "dataGrid": {
     "noRowIdentity": "No se pueden editar las filas: \"{{table}}\" no tiene clave primaria, por lo que la edición requiere que el resultado incluya todas las columnas de la tabla. Selecciona todas las columnas (p. ej. SELECT *) o añade una clave primaria.",
     "keylessRowNotFound": "Ninguna fila coincidió con los valores originales al actualizar \"{{column}}\". La tabla no tiene clave primaria y los datos pueden haber cambiado: actualiza y vuelve a intentarlo.",
+    "keylessDeleteNotFound": "Ninguna fila coincidió con los valores originales al eliminar. La tabla no tiene clave primaria y los datos pueden haber cambiado: actualiza y vuelve a intentarlo.",
     "newRow": "NUEVA",
     "noData": "No hay datos para mostrar",
     "editRow": "Editar Fila",

@@ -2679,16 +2679,59 @@ export const Editor = () => {
 
       // Deletions
       if (deletions.length > 0) {
-        promises.push(
-          ...deletions.map((pkMap) =>
-            invoke("delete_record", {
-              connectionId: activeConnectionId,
-              table: activeTable,
-              pkMap,
-              ...dataChangeScope,
+        if (isKeyless) {
+          // Every grid row sharing an identity is marked for deletion
+          // together (pendingDeletions is keyed by the serialized identity),
+          // but drivers differ in how many duplicates one DELETE removes
+          // (MySQL appends LIMIT 1, PostgreSQL/SQLite sweep them all).
+          // Repeat each DELETE until the number of copies the grid showed is
+          // gone, and surface a clear error when the row no longer matches.
+          const countByKey = new Map<string, number>();
+          if (activeTab.result && pkColumns) {
+            const pkIndices = pkColumns.map((c) =>
+              activeTab.result!.columns.indexOf(c),
+            );
+            if (pkIndices.every((i) => i !== -1)) {
+              for (const row of activeTab.result.rows) {
+                const key = serializePkKey(buildPkMap(pkColumns, row, pkIndices));
+                countByKey.set(key, (countByKey.get(key) ?? 0) + 1);
+              }
+            }
+          }
+          promises.push(
+            ...deletions.map(async (pkMap) => {
+              let remaining = countByKey.get(serializePkKey(pkMap)) ?? 1;
+              while (remaining > 0) {
+                const affected = await invoke<number>("delete_record", {
+                  connectionId: activeConnectionId,
+                  table: activeTable,
+                  pkMap,
+                  ...dataChangeScope,
+                });
+                if (affected === 0) {
+                  throw new Error(
+                    t("dataGrid.keylessDeleteNotFound", {
+                      defaultValue:
+                        "No row matched the original values while deleting. The table has no primary key and its data may have changed — refresh and retry.",
+                    }),
+                  );
+                }
+                remaining -= affected;
+              }
             }),
-          ),
-        );
+          );
+        } else {
+          promises.push(
+            ...deletions.map((pkMap) =>
+              invoke("delete_record", {
+                connectionId: activeConnectionId,
+                table: activeTable,
+                pkMap,
+                ...dataChangeScope,
+              }),
+            ),
+          );
+        }
       }
 
       // Updates
