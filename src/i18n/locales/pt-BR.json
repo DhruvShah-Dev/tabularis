@@ -2047,6 +2047,7 @@
     "searchLabel": "Buscar comandos",
     "placeholder": "Buscar ações...",
     "executionError": "Não foi possível concluir a ação",
+    "objectsLoadError": "Não foi possível carregar alguns objetos: {{names}}",
     "noResults": "Nenhuma ação correspondente encontrada",
     "navigationHint": "Navegar",
     "escapeHint": "Fechar",

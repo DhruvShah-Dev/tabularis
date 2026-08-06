@@ -307,18 +307,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     setSchemaVersion((v) => v + 1);
   };
 
-  const runQuery = (sql: string, queryName?: string, tableName?: string, preventAutoRun: boolean = false, schema?: string) => {
-    if (tableName) {
-      openEditor(navigate, {
-        kind: "table",
-        initialQuery: sql,
-        tableName,
-        schema,
-        targetConnectionId: activeConnectionId ?? undefined,
-      });
-      return;
-    }
-
+  /** Table navigation goes through `objectNavigation`; this only opens consoles. */
+  const runQuery = (sql: string, queryName?: string, preventAutoRun: boolean = false, schema?: string) => {
     openEditor(navigate, {
       kind: "console",
       initialQuery: sql,
@@ -457,7 +447,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
         routineType === "FUNCTION"
           ? t("routines.newFunction")
           : t("routines.newProcedure");
-      runQuery(template, tabName, undefined, true, activeSchema ?? undefined);
+      runQuery(template, tabName, true, activeSchema ?? undefined);
     } catch (e) {
       console.error(e);
       showAlert(t("routines.templateError") + String(e), { kind: "error" });
@@ -818,7 +808,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                         <div
                           key={q.id}
                           onClick={() => setSelectedFavoriteId(q.id)}
-                          onDoubleClick={() => runQuery(q.sql, q.name, undefined, false, q.database ?? undefined)}
+                          onDoubleClick={() => runQuery(q.sql, q.name, false, q.database ?? undefined)}
                           onContextMenu={(e) =>
                             handleContextMenu(e, "query", q.id, q.name, q)
                           }
@@ -861,7 +851,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
               recoveryNotice={historyRecoveryNotice}
               onDismissRecoveryNotice={dismissHistoryRecoveryNotice}
               onDoubleClick={(entry) => {
-                runQuery(entry.sql, undefined, undefined, false, entry.database ?? undefined);
+                runQuery(entry.sql, undefined, false, entry.database ?? undefined);
               }}
               onContextMenu={(e, entry) => {
                 handleContextMenu(e, "history", entry.id, entry.sql, entry as unknown as ContextMenuData);
@@ -1906,6 +1896,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                     {
                       label: t("sidebar.viewSchema"),
                       icon: FileText,
+                      disabled: !activeConnectionId,
                       action: () => {
                         if (!activeConnectionId) return;
                         setSchemaModal({
@@ -1935,6 +1926,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                     supportsManageTables(activeCapabilities) ? {
                       label: t("sidebar.generateSQL"),
                       icon: FileCode,
+                      disabled: !activeConnectionId,
                       action: () => {
                         if (!activeConnectionId) return;
                         setGenerateSQLModal({
@@ -2278,7 +2270,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                         routineType: routineType,
                                         ...(routineSchema ? { schema: routineSchema } : {}),
                                       });
-                                      runQuery(script, `${contextMenu.id} Edit`, undefined, true, routineSchema);
+                                      runQuery(script, `${contextMenu.id} Edit`, true, routineSchema);
                                     } catch (e) {
                                       console.error(e);
                                       showAlert(
@@ -2330,6 +2322,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                   {
                                     label: t("sidebar.viewTriggerDefinition"),
                                     icon: FileText,
+                                    disabled: !triggerData,
                                     action: () => {
                                       if (!triggerData) return;
                                       objectNavigation?.openTriggerDefinition(
@@ -2391,7 +2384,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                   icon: FileCode,
                                   action: () => {
                                     const spec = newConsoleForDatabase(contextMenu.id);
-                                    runQuery(spec.sql, spec.title, undefined, true, spec.schema);
+                                    runQuery(spec.sql, spec.title, true, spec.schema);
                                   },
                                 },
                                 {
@@ -2437,17 +2430,17 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                   {
                                     label: t("sidebar.insertToEditor"),
                                     icon: FileInput,
-                                    action: () => runQuery(historyEntry.sql, undefined, undefined, true, historyEntry.database ?? undefined),
+                                    action: () => runQuery(historyEntry.sql, undefined, true, historyEntry.database ?? undefined),
                                   },
                                   {
                                     label: t("sidebar.runQuery"),
                                     icon: Play,
-                                    action: () => runQuery(historyEntry.sql, undefined, undefined, false, historyEntry.database ?? undefined),
+                                    action: () => runQuery(historyEntry.sql, undefined, false, historyEntry.database ?? undefined),
                                   },
                                   {
                                     label: t("sidebar.openInNewTab"),
                                     icon: Plus,
-                                    action: () => runQuery(historyEntry.sql, undefined, undefined, true, historyEntry.database ?? undefined),
+                                    action: () => runQuery(historyEntry.sql, undefined, true, historyEntry.database ?? undefined),
                                   },
                                   {
                                     label: t("sidebar.addToFavorites"),
@@ -2483,7 +2476,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                 action: () => {
                                   if (contextMenu.data && "sql" in contextMenu.data) {
                                     const sq = contextMenu.data as SavedQuery;
-                                    runQuery(sq.sql, sq.name, undefined, false, sq.database ?? undefined);
+                                    runQuery(sq.sql, sq.name, false, sq.database ?? undefined);
                                   }
                                 },
                               },
@@ -2711,7 +2704,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           routine={runRoutineModal.routine}
           schema={runRoutineModal.schema}
           onRun={(sql) => {
-            runQuery(sql, `${t("routines.runTabPrefix")} ${runRoutineModal.routine.name}`, undefined, false, runRoutineModal.schema);
+            runQuery(sql, `${t("routines.runTabPrefix")} ${runRoutineModal.routine.name}`, false, runRoutineModal.schema);
           }}
         />
       )}

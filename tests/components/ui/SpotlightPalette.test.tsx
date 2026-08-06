@@ -1,10 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Modal } from "../../../src/components/ui/Modal";
 import { SpotlightPalette } from "../../../src/components/ui/SpotlightPalette";
 
-function renderPalette(itemCount = 2, selectedIndex = 0) {
+function renderPalette(
+  itemCount = 2,
+  selectedIndex = 0,
+  children: ReactNode = <div>Results</div>,
+) {
   const onClose = vi.fn();
   const onQueryChange = vi.fn();
   const onSelectedIndexChange = vi.fn();
@@ -26,7 +31,7 @@ function renderPalette(itemCount = 2, selectedIndex = 0) {
       resultsId="palette-results"
       footer={<span>Keyboard help</span>}
     >
-      <div>Results</div>
+      {children}
     </SpotlightPalette>,
   );
 
@@ -77,6 +82,54 @@ describe("SpotlightPalette", () => {
     expect(onSelectedIndexChange).toHaveBeenNthCalledWith(1, 0);
     expect(onSelectedIndexChange).toHaveBeenNthCalledWith(2, 0);
     expect(onSubmit).toHaveBeenCalledWith(1);
+  });
+
+  // Mirrors what PaletteResults renders: rows hold nothing focusable, and the
+  // active item's actions sit in a tabbable group after the close button.
+  const resultsWithActions = (
+    <>
+      <div role="listbox" />
+      <div role="group" data-palette-actions="">
+        <button type="button">Generate SQL</button>
+      </div>
+    </>
+  );
+
+  it("should wrap Tab from the last result action back to search", () => {
+    renderPalette(1, 0, resultsWithActions);
+    const searchInput = screen.getByRole("combobox", { name: "Search" });
+    const actionButton = screen.getByRole("button", {
+      name: "Generate SQL",
+    });
+    actionButton.focus();
+    const tabEvent = new KeyboardEvent("keydown", {
+      key: "Tab",
+      bubbles: true,
+      cancelable: true,
+    });
+
+    actionButton.dispatchEvent(tabEvent);
+
+    expect(tabEvent.defaultPrevented).toBe(true);
+    expect(searchInput).toHaveFocus();
+  });
+
+  it("should leave the selection alone while an action is focused", () => {
+    const { onSelectedIndexChange } = renderPalette(
+      3,
+      0,
+      resultsWithActions,
+    );
+    const actionButton = screen.getByRole("button", {
+      name: "Generate SQL",
+    });
+    actionButton.focus();
+
+    fireEvent.keyDown(actionButton, { key: "ArrowDown" });
+
+    // Moving the selection would unmount this button and drop focus to body.
+    expect(onSelectedIndexChange).not.toHaveBeenCalled();
+    expect(actionButton).toHaveFocus();
   });
 
   it("should close with Escape and a backdrop press", () => {

@@ -2000,6 +2000,7 @@
     "searchLabel": "명령 검색",
     "placeholder": "작업 검색...",
     "executionError": "작업을 완료할 수 없습니다",
+    "objectsLoadError": "일부 객체를 불러오지 못했습니다: {{names}}",
     "noResults": "일치하는 작업이 없습니다",
     "navigationHint": "이동",
     "escapeHint": "닫기",

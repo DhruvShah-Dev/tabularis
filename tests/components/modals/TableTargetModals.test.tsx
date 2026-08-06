@@ -133,4 +133,72 @@ describe("table target modals", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/"schema":"sales"/)).toBeInTheDocument();
   });
+
+  it("should open the console through the scope runtime when one is given", async () => {
+    invokeMock.mockResolvedValue([]);
+    const openEditor = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <GenerateSQLModal
+          isOpen
+          target={{
+            connectionId: "connection-b",
+            tableName: "orders",
+            schema: "sales",
+          }}
+          openEditor={openEditor}
+          onClose={vi.fn()}
+        />
+        <LocationState />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText("generateSQL.loading"),
+      ).not.toBeInTheDocument(),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "generateSQL.runInConsole",
+      }),
+    );
+
+    expect(openEditor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "console",
+        preventAutoRun: true,
+        schema: "sales",
+        targetConnectionId: "connection-b",
+      }),
+    );
+    // A split panel owns its editor, so the router must stay untouched.
+    expect(
+      screen.queryByText(/"targetConnectionId"/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("should show an inline error when the connection dialect is unknown", () => {
+    render(
+      <MemoryRouter>
+        <GenerateSQLModal
+          isOpen
+          target={{
+            connectionId: "connection-unknown",
+            tableName: "orders",
+          }}
+          onClose={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "generateSQL.unknownDialect",
+    );
+    expect(screen.queryByText("generateSQL.copy")).not.toBeInTheDocument();
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(showAlertMock).not.toHaveBeenCalled();
+  });
 });

@@ -1936,6 +1936,7 @@
     "searchLabel": "搜索命令",
     "placeholder": "搜索操作...",
     "executionError": "无法完成操作",
+    "objectsLoadError": "无法加载部分对象：{{names}}",
     "noResults": "未找到匹配的操作",
     "navigationHint": "导航",
     "escapeHint": "关闭",

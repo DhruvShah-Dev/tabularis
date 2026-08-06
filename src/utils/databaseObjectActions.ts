@@ -27,6 +27,11 @@ interface QueryableObjectRequests {
   count: ConsoleEditorNavigationRequest;
 }
 
+interface CountRequestOptions extends DatabaseObjectTarget {
+  driver: string | null;
+  qualifySchema?: boolean;
+}
+
 export interface RoutineDefinitionTarget {
   connectionId: string;
   routineName: string;
@@ -102,6 +107,27 @@ interface DefinitionRequestOptions {
   schema?: string;
 }
 
+function createCountRequest({
+  connectionId,
+  driver,
+  objectName,
+  qualifySchema = true,
+  schema,
+}: CountRequestOptions): ConsoleEditorNavigationRequest {
+  const quotedObject = quoteTableRef(
+    objectName,
+    driver,
+    qualifySchema ? schema : undefined,
+  );
+
+  return {
+    kind: "console",
+    initialQuery: `SELECT COUNT(*) as count FROM ${quotedObject}`,
+    schema,
+    targetConnectionId: connectionId,
+  };
+}
+
 /**
  * Loads a routine or trigger body and opens it in the editor. The only database
  * object action that is more than a request builder, because it has to fetch
@@ -171,11 +197,13 @@ export function createQueryableObjectRequests({
       ...(title ? { title } : {}),
       ...base,
     },
-    count: {
-      kind: "console",
-      initialQuery: `SELECT COUNT(*) as count FROM ${quotedObject}`,
-      ...base,
-    },
+    count: createCountRequest({
+      connectionId,
+      driver,
+      objectName,
+      qualifySchema,
+      schema,
+    }),
   };
 }
 
@@ -197,6 +225,16 @@ export function createTableConsoleRequest(
     schema: spec.schema,
     targetConnectionId: target.connectionId,
   };
+}
+
+export function createTableCountRequest(
+  target: DatabaseObjectTarget,
+  driver: string | null,
+): ConsoleEditorNavigationRequest {
+  return createCountRequest({
+    ...target,
+    driver,
+  });
 }
 
 export function createDefinitionRequest({

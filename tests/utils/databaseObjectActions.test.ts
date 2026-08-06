@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createDefinitionRequest,
   createQueryableObjectRequests,
+  createTableCountRequest,
   createTableConsoleRequest,
   loadRoutineDefinition,
   loadTriggerDefinition,
@@ -133,8 +134,32 @@ describe("createQueryableObjectRequests", () => {
     expect(requests.open.initialQuery).toBe(
       'SELECT * FROM "events"',
     );
+    expect(requests.count.initialQuery).toBe(
+      'SELECT COUNT(*) as count FROM "events"',
+    );
     expect(requests.open.title).toBe("events (analytics)");
     expect(requests.open.schema).toBe("analytics");
+    expect(requests.count.schema).toBe("analytics");
+  });
+});
+
+describe("createTableCountRequest", () => {
+  it("should create only the count request for a scoped table", () => {
+    expect(
+      createTableCountRequest(
+        {
+          connectionId: "connection-b",
+          objectName: "orders",
+          schema: "sales",
+        },
+        "postgres",
+      ),
+    ).toEqual({
+      kind: "console",
+      initialQuery: 'SELECT COUNT(*) as count FROM "sales"."orders"',
+      schema: "sales",
+      targetConnectionId: "connection-b",
+    });
   });
 });
 

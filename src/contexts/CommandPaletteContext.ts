@@ -11,6 +11,7 @@ export interface CommandPaletteStateContextType {
 export interface CommandPaletteDispatchContextType {
   openPalette: (mode: CommandPaletteMode) => void;
   closePalette: () => void;
+  togglePalette: (mode: CommandPaletteMode) => void;
 }
 
 export const CommandPaletteStateContext = createContext<

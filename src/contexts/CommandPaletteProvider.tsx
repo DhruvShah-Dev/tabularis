@@ -1,6 +1,7 @@
 import {
   useCallback,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -36,6 +37,8 @@ export const CommandPaletteProvider = ({
 
   const [activePalette, setActivePalette] =
     useState<CommandPaletteMode | null>(null);
+  const activePaletteRef = useRef<CommandPaletteMode | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const activeScopeId = getActiveCommandScopeId({
     explorerConnectionId,
@@ -54,10 +57,34 @@ export const CommandPaletteProvider = ({
     ) {
       return;
     }
+    if (
+      !previousFocusRef.current &&
+      document.activeElement instanceof HTMLElement
+    ) {
+      previousFocusRef.current = document.activeElement;
+    }
+    activePaletteRef.current = nextMode;
     setActivePalette(nextMode);
   }, [activeScopeId, scopeStore]);
 
-  const closePalette = useCallback(() => setActivePalette(null), []);
+  const closePalette = useCallback(() => {
+    const previousFocus = previousFocusRef.current;
+    activePaletteRef.current = null;
+    previousFocusRef.current = null;
+    setActivePalette(null);
+    window.requestAnimationFrame(() => previousFocus?.focus());
+  }, []);
+
+  const togglePalette = useCallback(
+    (nextMode: CommandPaletteMode) => {
+      if (activePaletteRef.current === nextMode) {
+        closePalette();
+      } else {
+        openPalette(nextMode);
+      }
+    },
+    [closePalette, openPalette],
+  );
 
   const stateValue = useMemo(
     () => ({
@@ -70,8 +97,9 @@ export const CommandPaletteProvider = ({
     () => ({
       openPalette,
       closePalette,
+      togglePalette,
     }),
-    [closePalette, openPalette],
+    [closePalette, openPalette, togglePalette],
   );
   const scopeValue = useMemo(
     () => ({

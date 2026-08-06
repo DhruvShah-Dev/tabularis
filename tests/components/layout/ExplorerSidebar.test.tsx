@@ -175,9 +175,33 @@ describe("ExplorerSidebar — database object navigation", () => {
     event: "INSERT",
     timing: "AFTER",
   };
+  const databaseState = {
+    activeConnectionId: "c1" as string | null,
+    activeDriver: "postgres",
+    activeCapabilities: { routines: true, triggers: true },
+    activeTable: null,
+    setActiveTable: vi.fn(),
+    tables: [{ name: "orders" }],
+    views: [{ name: "active_orders" }],
+    routines: [routine],
+    triggers: [trigger] as Array<typeof trigger>,
+    schemas: [] as string[],
+    connectionDataMap: { c1: {} },
+    schemaDataMap: {},
+    databaseDataMap: {},
+    selectedSchemas: [] as string[],
+    selectedDatabases: [] as string[],
+    connections: [],
+    isLoadingTables: false,
+    isLoadingSchemas: false,
+    connect: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    databaseState.activeConnectionId = "c1";
+    databaseState.triggers = [trigger];
 
     vi.mocked(useDatabaseObjectNavigation).mockReturnValue(
       objectNavigation as unknown as ReturnType<
@@ -187,27 +211,9 @@ describe("ExplorerSidebar — database object navigation", () => {
 
     // No `schemas` capability keeps the sidebar in its flat layout, where tables,
     // views, routines and triggers all render off the connection root.
-    vi.mocked(useDatabase).mockReturnValue({
-      activeConnectionId: "c1",
-      activeDriver: "postgres",
-      activeCapabilities: { routines: true, triggers: true },
-      activeTable: null,
-      setActiveTable: vi.fn(),
-      tables: [{ name: "orders" }],
-      views: [{ name: "active_orders" }],
-      routines: [routine],
-      triggers: [trigger],
-      schemas: [],
-      connectionDataMap: { c1: {} },
-      schemaDataMap: {},
-      databaseDataMap: {},
-      selectedSchemas: [],
-      selectedDatabases: [],
-      connections: [],
-      isLoadingTables: false,
-      isLoadingSchemas: false,
-      connect: vi.fn(),
-    } as unknown as ReturnType<typeof useDatabase>);
+    vi.mocked(useDatabase).mockReturnValue(
+      databaseState as unknown as ReturnType<typeof useDatabase>,
+    );
 
     vi.mocked(useSavedQueries).mockReturnValue({
       queries: [],
@@ -312,5 +318,37 @@ describe("ExplorerSidebar — database object navigation", () => {
     openContextMenuOn("orders");
     fireEvent.click(screen.getByText("sidebar.countRows"));
     expect(objectNavigation.count).toHaveBeenCalledWith("orders", undefined);
+  });
+
+  it("disables table actions that require an active connection", () => {
+    databaseState.activeConnectionId = null;
+
+    openContextMenuOn("orders");
+
+    expect(
+      screen.getByRole("button", { name: "sidebar.viewSchema" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "sidebar.generateSQL" }),
+    ).toBeDisabled();
+  });
+
+  it("disables trigger definition without trigger metadata", () => {
+    databaseState.triggers = [
+      {
+        name: "orphan_trigger",
+        event: "INSERT",
+        timing: "AFTER",
+      } as typeof trigger,
+    ];
+    renderSidebar();
+    fireEvent.click(screen.getByText("sidebar.triggers (1)"));
+    fireEvent.contextMenu(screen.getByText("orphan_trigger"));
+
+    expect(
+      screen.getByRole("button", {
+        name: "sidebar.viewTriggerDefinition",
+      }),
+    ).toBeDisabled();
   });
 });

@@ -1998,6 +1998,7 @@
     "searchLabel": "Cerca comandi",
     "placeholder": "Cerca azioni...",
     "executionError": "Impossibile completare l’azione",
+    "objectsLoadError": "Impossibile caricare alcuni oggetti: {{names}}",
     "noResults": "Nessuna azione corrispondente",
     "navigationHint": "Naviga",
     "escapeHint": "Chiudi",

@@ -2,7 +2,7 @@ import type { CommandScope } from "../types/commands";
 import type { TableTarget } from "../types/databaseObjects";
 import type { PaletteItem } from "../types/palette";
 import {
-  createQueryableObjectRequests,
+  createTableCountRequest,
   createTableConsoleRequest,
 } from "./databaseObjectActions";
 import { PINNED_PALETTE_RELEVANCE } from "./paletteItems";
@@ -85,12 +85,6 @@ export function createBuiltInCommandItems(
 
   if (scope.table) {
     const table = scope.table;
-    const requests = createQueryableObjectRequests({
-      connectionId: table.connectionId,
-      driver: scope.driver,
-      objectName: table.tableName,
-      schema: table.schema,
-    });
 
     items.push(
       {
@@ -156,7 +150,17 @@ export function createBuiltInCommandItems(
         primaryAction: {
           id: "table.count-rows",
           label: labels.countRows,
-          execute: () => scope.runtime.openEditor(requests.count),
+          execute: () =>
+            scope.runtime.openEditor(
+              createTableCountRequest(
+                {
+                  connectionId: table.connectionId,
+                  objectName: table.tableName,
+                  schema: table.schema,
+                },
+                scope.driver,
+              ),
+            ),
         },
       },
     );

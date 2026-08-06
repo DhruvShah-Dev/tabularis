@@ -1996,6 +1996,7 @@
     "searchLabel": "Befehle suchen",
     "placeholder": "Aktionen suchen...",
     "executionError": "Die Aktion konnte nicht ausgeführt werden",
+    "objectsLoadError": "Einige Objekte konnten nicht geladen werden: {{names}}",
     "noResults": "Keine passenden Aktionen gefunden",
     "navigationHint": "Navigieren",
     "escapeHint": "Schließen",

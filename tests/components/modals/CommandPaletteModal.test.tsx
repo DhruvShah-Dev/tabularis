@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -81,16 +87,30 @@ vi.mock("../../../src/hooks/useDatabase", () => ({
 vi.mock("../../../src/components/modals/GenerateSQLModal", () => ({
   GenerateSQLModal: ({
     target,
+    openEditor,
   }: {
     target: {
       connectionId: string;
       tableName: string;
       schema?: string;
     };
+    openEditor?: (request: unknown) => void;
   }) => (
     <div>
       Generate SQL for {target.connectionId}/{target.schema}/
       {target.tableName}
+      <button
+        type="button"
+        onClick={() =>
+          openEditor?.({
+            kind: "console",
+            initialQuery: "SELECT 1",
+            targetConnectionId: target.connectionId,
+          })
+        }
+      >
+        run in console
+      </button>
     </div>
   ),
 }));
@@ -149,10 +169,13 @@ describe("CommandPaletteModal", () => {
     showAlertMock.mockReset();
     setActiveTableMock.mockReset();
     databaseState.activeConnectionId = "connection-1";
+    connectionData.capabilities = {};
     connectionData.tables = [{ name: "users" }];
     connectionData.views = [];
     connectionData.routines = [];
     connectionData.triggers = [];
+    connectionData.schemas = [];
+    connectionData.schemaDataMap = {};
   });
 
   it("should use the shared palette to filter action items", () => {
@@ -243,19 +266,51 @@ describe("CommandPaletteModal", () => {
     expect(input).toHaveFocus();
   });
 
-  it("should keep row actions out of the tab order", () => {
+  it("should keep grouped quick actions out of the listbox accessibility tree", () => {
+    connectionData.capabilities = { schemas: true };
+    connectionData.tables = [];
+    connectionData.schemas = ["public"];
+    connectionData.schemaDataMap = {
+      public: {
+        tables: [{ name: "users" }],
+        views: [],
+        routines: [],
+        triggers: [],
+        isLoading: false,
+        isLoaded: true,
+      },
+    };
     renderPalette({ state: { activePalette: "objects" } });
 
-    const rowActions = screen
-      .getAllByRole("option")
-      .flatMap((option) =>
-        Array.from(option.querySelectorAll("button")),
-      );
-
-    expect(rowActions.length).toBeGreaterThan(0);
+    expect(screen.getByText("public")).toHaveAttribute(
+      "role",
+      "presentation",
+    );
+    // Rows carry no buttons of their own; the actions live in one group below
+    // the list, reachable by Tab.
     expect(
-      rowActions.every((button) => button.tabIndex === -1),
-    ).toBe(true);
+      screen.getByRole("option", { name: /users/i }).querySelector("button"),
+    ).toBeNull();
+    expect(
+      within(screen.getByRole("listbox")).queryAllByRole("button"),
+    ).toHaveLength(0);
+
+    const actionGroup = screen.getByRole("group", { name: "users" });
+    expect(actionGroup).not.toBe(screen.getByRole("listbox"));
+    expect(
+      within(actionGroup).getByRole("button", {
+        name: "editor.quickNavigator.actions.generateSql",
+      }),
+    ).not.toHaveAttribute("tabindex", "-1");
+  });
+
+  it("should render the empty status outside the listbox", () => {
+    connectionData.tables = [];
+    renderPalette({ state: { activePalette: "objects" } });
+
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("editor.quickNavigator.noResults");
+    expect(status.closest('[role="listbox"]')).toBeNull();
   });
 
   it("should keep the palette open and show execution errors", async () => {
@@ -300,6 +355,26 @@ describe("CommandPaletteModal", () => {
     expect(
       await screen.findByText("Inspect connection-1/public/users"),
     ).toBeInTheDocument();
+  });
+
+  it("should run generated SQL through the active scope runtime", async () => {
+    renderPalette();
+    const input = screen.getByRole("combobox");
+
+    fireEvent.change(input, {
+      target: { value: "quickNavigator.actions.generateSql" },
+    });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "run in console" }),
+    );
+
+    expect(openEditorMock).toHaveBeenCalledWith({
+      kind: "console",
+      initialQuery: "SELECT 1",
+      targetConnectionId: "connection-1",
+    });
   });
 
   it("should render database objects through the same palette", () => {

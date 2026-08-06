@@ -2067,6 +2067,7 @@
     "searchLabel": "Поиск команд",
     "placeholder": "Искать действия...",
     "executionError": "Не удалось выполнить действие",
+    "objectsLoadError": "Не удалось загрузить некоторые объекты: {{names}}",
     "noResults": "Подходящие действия не найдены",
     "navigationHint": "Навигация",
     "escapeHint": "Закрыть",

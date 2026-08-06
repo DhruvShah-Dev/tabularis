@@ -80,6 +80,7 @@ export const PaletteResults = ({
   onExecute,
 }: PaletteResultsProps) => {
   const listRef = useRef<HTMLDivElement>(null);
+  const activeItem = items[activeIndex];
 
   useEffect(() => {
     listRef.current
@@ -103,14 +104,7 @@ export const PaletteResults = ({
         role="listbox"
         className="flex-1 overflow-y-auto py-1"
       >
-        {items.length === 0 ? (
-          <div
-            role="status"
-            className="px-4 py-8 text-center text-sm text-muted"
-          >
-            {noResults}
-          </div>
-        ) : (
+        {items.length > 0 &&
           items.map((item, index) => {
             const showGroup =
               !!item.group && item.group !== items[index - 1]?.group;
@@ -119,7 +113,10 @@ export const PaletteResults = ({
             return (
               <Fragment key={item.id}>
                 {showGroup && (
-                  <div className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted first:pt-2">
+                  <div
+                    role="presentation"
+                    className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted first:pt-2"
+                  >
                     {item.group}
                   </div>
                 )}
@@ -131,7 +128,7 @@ export const PaletteResults = ({
                   data-active={isActive}
                   onMouseEnter={() => onSelect(index)}
                   onClick={() => onExecute(item.primaryAction)}
-                  className={`group flex cursor-pointer items-center transition-colors ${
+                  className={`flex cursor-pointer items-center transition-colors ${
                     isActive
                       ? "bg-surface-secondary text-primary"
                       : "text-secondary hover:bg-surface-secondary hover:text-primary"
@@ -151,32 +148,6 @@ export const PaletteResults = ({
                     </span>
                   </div>
 
-                  {!!item.actions?.length && (
-                    <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      {item.actions.map((action) => (
-                        <button
-                          key={action.id}
-                          type="button"
-                          // Keyboard users drive the palette through the
-                          // listbox, so these stay out of the tab order.
-                          tabIndex={-1}
-                          aria-label={action.label}
-                          title={action.label}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onExecute(action);
-                          }}
-                          className="rounded p-1 text-muted transition-colors hover:bg-surface-tertiary hover:text-primary"
-                        >
-                          <PaletteItemIcon
-                            icon={action.icon ?? "command"}
-                            size={12}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
                   {item.badge && (
                     <span className="mr-4 shrink-0 rounded border border-default/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">
                       {item.badge}
@@ -185,9 +156,43 @@ export const PaletteResults = ({
                 </div>
               </Fragment>
             );
-          })
-        )}
+          })}
       </div>
+      {items.length === 0 && (
+        <div
+          role="status"
+          className="flex-1 px-4 py-8 text-center text-sm text-muted"
+        >
+          {noResults}
+        </div>
+      )}
+      {!!activeItem?.actions?.length && (
+        <div
+          role="group"
+          aria-label={activeItem.title}
+          // Arrow keys keep driving the listbox, so this is a plain group
+          // rather than a toolbar; `SpotlightPalette` reads the marker to stop
+          // selection from moving out from under a focused action.
+          data-palette-actions=""
+          className="flex shrink-0 items-center gap-1 border-t border-default px-4 py-2"
+        >
+          {activeItem.actions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              aria-label={action.label}
+              title={action.label}
+              onClick={() => onExecute(action)}
+              className="rounded p-1.5 text-muted transition-colors hover:bg-surface-tertiary hover:text-primary focus-visible:bg-surface-tertiary focus-visible:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <PaletteItemIcon
+                icon={action.icon ?? "command"}
+                size={14}
+              />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

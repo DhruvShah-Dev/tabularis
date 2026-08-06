@@ -2014,6 +2014,7 @@
     "searchLabel": "コマンドを検索",
     "placeholder": "アクションを検索...",
     "executionError": "アクションを実行できませんでした",
+    "objectsLoadError": "一部のオブジェクトを読み込めませんでした: {{names}}",
     "noResults": "一致するアクションがありません",
     "navigationHint": "移動",
     "escapeHint": "閉じる",

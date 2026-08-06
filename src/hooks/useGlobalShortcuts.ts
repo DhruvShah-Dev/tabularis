@@ -19,7 +19,7 @@ export function useGlobalShortcuts() {
   const navigate = useNavigate();
   const { matchesShortcut, isMac } = useKeybindings();
   const { openConnections, handleSwitch } = useConnectionManager();
-  const { openPalette } = useCommandPaletteDispatch();
+  const { togglePalette } = useCommandPaletteDispatch();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -69,13 +69,13 @@ export function useGlobalShortcuts() {
 
       if (matchesShortcut(e, "quick_navigator")) {
         e.preventDefault();
-        openPalette("objects");
+        togglePalette("objects");
         return;
       }
 
       if (matchesShortcut(e, "command_palette_actions")) {
         e.preventDefault();
-        openPalette("actions");
+        togglePalette("actions");
         return;
       }
 
@@ -117,6 +117,6 @@ export function useGlobalShortcuts() {
     navigate,
     openConnections,
     handleSwitch,
-    openPalette,
+    togglePalette,
   ]);
 }

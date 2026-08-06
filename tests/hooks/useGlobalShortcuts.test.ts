@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGlobalShortcuts } from "../../src/hooks/useGlobalShortcuts";
 
 const navigateMock = vi.fn();
-const openPaletteMock = vi.fn();
+const togglePaletteMock = vi.fn();
 let activeShortcutId = "command_palette_actions";
 const matchesShortcutMock = vi.fn(
   (_event: KeyboardEvent, id: string) => id === activeShortcutId,
@@ -29,13 +29,15 @@ vi.mock("../../src/hooks/useConnectionManager", () => ({
 }));
 
 vi.mock("../../src/hooks/useCommandPalette", () => ({
-  useCommandPaletteDispatch: () => ({ openPalette: openPaletteMock }),
+  useCommandPaletteDispatch: () => ({
+    togglePalette: togglePaletteMock,
+  }),
 }));
 
 describe("useGlobalShortcuts", () => {
   beforeEach(() => {
     navigateMock.mockClear();
-    openPaletteMock.mockClear();
+    togglePaletteMock.mockClear();
     matchesShortcutMock.mockClear();
     activeShortcutId = "command_palette_actions";
   });
@@ -52,7 +54,7 @@ describe("useGlobalShortcuts", () => {
       shiftKey: true,
     });
 
-    expect(openPaletteMock).toHaveBeenCalledWith("actions");
+    expect(togglePaletteMock).toHaveBeenCalledWith("actions");
     input.remove();
   });
 
@@ -65,6 +67,6 @@ describe("useGlobalShortcuts", () => {
       metaKey: true,
     });
 
-    expect(openPaletteMock).toHaveBeenCalledWith("objects");
+    expect(togglePaletteMock).toHaveBeenCalledWith("objects");
   });
 });

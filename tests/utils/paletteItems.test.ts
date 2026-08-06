@@ -69,4 +69,22 @@ describe("createPaletteSearch", () => {
       createPaletteSearch(items)("").map((item) => item.id),
     ).toEqual(["schema-b", "schema-a"]);
   });
+
+  it("should keep fuzzy search results from the same group contiguous", () => {
+    const search = createPaletteSearch([
+      createItem({ id: "public-user", title: "user", group: "public" }),
+      createItem({ id: "sales-user", title: "user", group: "sales" }),
+      createItem({
+        id: "public-user-roles",
+        title: "user_roles_mapping",
+        group: "public",
+      }),
+    ]);
+
+    expect(search("user").map((item) => item.id)).toEqual([
+      "public-user",
+      "public-user-roles",
+      "sales-user",
+    ]);
+  });
 });

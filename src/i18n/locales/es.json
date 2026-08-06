@@ -1918,6 +1918,7 @@
     "searchLabel": "Buscar comandos",
     "placeholder": "Buscar acciones...",
     "executionError": "No se pudo completar la acción",
+    "objectsLoadError": "No se pudieron cargar algunos objetos: {{names}}",
     "noResults": "No se encontraron acciones coincidentes",
     "navigationHint": "Navegar",
     "escapeHint": "Cerrar",

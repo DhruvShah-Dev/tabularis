@@ -1,4 +1,10 @@
-import { useEffect, useMemo } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import type { TableTarget } from "../types/databaseObjects";
@@ -11,6 +17,13 @@ import { getNavigatorItems } from "../utils/quickNavigator";
 import { useActiveCommandPaletteScope } from "./useCommandPaletteScope";
 import { useDatabase } from "./useDatabase";
 import { useDatabaseObjectActionRuntime } from "./useDatabaseObjectActionRuntime";
+
+/**
+ * A failed load resets the entry to neither loading nor loaded, which the effect
+ * below would read as "still needs fetching" forever. Capping the attempts keeps
+ * a broken schema from looping the backend; the failure surfaces in the palette.
+ */
+const MAX_OBJECT_LOAD_ATTEMPTS = 2;
 
 export function useCommandPaletteObjectItems(
   onGenerateSql: (target: TableTarget) => void,
@@ -29,6 +42,22 @@ export function useCommandPaletteObjectItems(
   } = useDatabase();
 
   const connectionId = scope?.connectionId ?? null;
+  const requestDatabaseData = useEffectEvent(loadDatabaseData);
+  const requestSchemaData = useEffectEvent(loadSchemaData);
+  const loadAttemptsRef = useRef(new Map<string, number>());
+  const [failedTargets, setFailedTargets] = useState<string[]>([]);
+  const markFailed = (name: string) =>
+    setFailedTargets((previous) =>
+      previous.includes(name) ? previous : [...previous, name],
+    );
+  // Returning the previous array when nothing changes keeps this out of the
+  // render loop the effect below would otherwise start.
+  const clearFailed = (name: string) =>
+    setFailedTargets((previous) =>
+      previous.includes(name)
+        ? previous.filter((target) => target !== name)
+        : previous,
+    );
   const runtime = useMemo<ObjectPaletteRuntime>(
     () => ({
       ...baseRuntime,
@@ -77,24 +106,54 @@ export function useCommandPaletteObjectItems(
 
     if (hasSchemas) {
       connectionData?.schemas.forEach((schema) => {
-        void loadSchemaData(schema, connectionId);
+        const schemaData = connectionData.schemaDataMap[schema];
+        const requestKey = `schema:${connectionId}:${schema}`;
+        if (schemaData?.isLoaded) {
+          loadAttemptsRef.current.delete(requestKey);
+          clearFailed(schema);
+          return;
+        }
+        if (schemaData?.isLoading) return;
+
+        const attempts = loadAttemptsRef.current.get(requestKey) ?? 0;
+        if (attempts >= MAX_OBJECT_LOAD_ATTEMPTS) {
+          markFailed(schema);
+          return;
+        }
+        loadAttemptsRef.current.set(requestKey, attempts + 1);
+        void requestSchemaData(schema, connectionId);
       });
       return;
     }
 
     if (isMultiDatabase) {
       configuredDatabases.forEach((database) => {
-        void loadDatabaseData(database, connectionId);
+        const databaseData = connectionData?.databaseDataMap[database];
+        const requestKey = `database:${connectionId}:${database}`;
+        if (databaseData?.isLoaded) {
+          loadAttemptsRef.current.delete(requestKey);
+          clearFailed(database);
+          return;
+        }
+        if (databaseData?.isLoading) return;
+
+        const attempts = loadAttemptsRef.current.get(requestKey) ?? 0;
+        if (attempts >= MAX_OBJECT_LOAD_ATTEMPTS) {
+          markFailed(database);
+          return;
+        }
+        loadAttemptsRef.current.set(requestKey, attempts + 1);
+        void requestDatabaseData(database, connectionId);
       });
     }
   }, [
     configuredDatabases,
+    connectionData?.databaseDataMap,
+    connectionData?.schemaDataMap,
     connectionData?.schemas,
     connectionId,
     hasSchemas,
     isMultiDatabase,
-    loadDatabaseData,
-    loadSchemaData,
   ]);
 
   const navigatorItems = useMemo(
@@ -129,7 +188,7 @@ export function useCommandPaletteObjectItems(
     ],
   );
 
-  return useMemo(() => {
+  const items = useMemo(() => {
     if (!connectionId) return [];
 
     return createObjectPaletteItems({
@@ -165,4 +224,16 @@ export function useCommandPaletteObjectItems(
     runtime,
     t,
   ]);
+
+  return useMemo(
+    () => ({
+      items,
+      error: failedTargets.length
+        ? t("commandPalette.objectsLoadError", {
+            names: failedTargets.join(", "),
+          })
+        : null,
+    }),
+    [failedTargets, items, t],
+  );
 }

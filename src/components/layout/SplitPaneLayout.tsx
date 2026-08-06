@@ -71,10 +71,8 @@ export const SplitPaneLayout = ({ layout, connectionIds }: SplitView) => {
       deactivateSplit();
       if (remaining.length === 1) switchConnection(remaining[0]);
     } else {
+      // `removeConnectionFromSplit` owns handing focus to a surviving panel.
       removeConnectionFromSplit(connId);
-      if (explorerConnectionId === connId) {
-        setExplorerConnectionId(remaining[0]);
-      }
     }
   };
 

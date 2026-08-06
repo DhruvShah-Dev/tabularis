@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useCommandPaletteState } from "../../hooks/useCommandPalette";
 import { useCommandPaletteActionItems } from "../../hooks/useCommandPaletteActionItems";
 import { useCommandPaletteObjectItems } from "../../hooks/useCommandPaletteObjectItems";
+import { useActiveCommandPaletteScope } from "../../hooks/useCommandPaletteScope";
 import { GenerateSQLModal } from "./GenerateSQLModal";
 import { SchemaModal } from "./SchemaModal";
 import {
@@ -49,7 +50,10 @@ const ObjectPalette = ({
   onInspect,
 }: ObjectPaletteProps) => {
   const { t } = useTranslation();
-  const items = useCommandPaletteObjectItems(onGenerateSql, onInspect);
+  const { items, error } = useCommandPaletteObjectItems(
+    onGenerateSql,
+    onInspect,
+  );
   const labels: PaletteLabels = {
     ariaLabel: t("commandPalette.objectsTitle"),
     searchLabel: t("editor.quickNavigator.placeholder"),
@@ -63,11 +67,12 @@ const ObjectPalette = ({
         : t("editor.quickNavigator.count_other", { count }),
   };
 
-  return <Palette labels={labels} items={items} />;
+  return <Palette labels={labels} items={items} error={error} />;
 };
 
 export const CommandPaletteModal = () => {
   const { activePalette } = useCommandPaletteState();
+  const scope = useActiveCommandPaletteScope();
   const [generateSQLTarget, setGenerateSQLTarget] =
     useState<TableTarget | null>(null);
   const [inspectTarget, setInspectTarget] =
@@ -91,6 +96,7 @@ export const CommandPaletteModal = () => {
         <GenerateSQLModal
           isOpen
           target={generateSQLTarget}
+          openEditor={scope?.runtime.openEditor}
           onClose={() => setGenerateSQLTarget(null)}
         />
       )}

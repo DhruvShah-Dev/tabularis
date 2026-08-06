@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useCommandPaletteDispatch } from "../../../hooks/useCommandPalette";
@@ -25,6 +25,8 @@ export interface PaletteLabels {
 interface PaletteProps {
   labels: PaletteLabels;
   items: PaletteItem[];
+  /** Surfaced when the item list itself is incomplete, e.g. a schema failed to load. */
+  error?: string | null;
 }
 
 const KEY_CAP =
@@ -47,14 +49,9 @@ const PaletteHint = ({
   </span>
 );
 
-export const Palette = ({ labels, items }: PaletteProps) => {
+export const Palette = ({ labels, items, error }: PaletteProps) => {
   const { t } = useTranslation();
   const { closePalette } = useCommandPaletteDispatch();
-  const previousFocusRef = useRef<HTMLElement | null>(
-    document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null,
-  );
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -69,15 +66,6 @@ export const Palette = ({ labels, items }: PaletteProps) => {
     Math.max(results.length - 1, 0),
   );
 
-  const restoreFocus = () => {
-    window.requestAnimationFrame(() => previousFocusRef.current?.focus());
-  };
-
-  const handleClose = () => {
-    closePalette();
-    restoreFocus();
-  };
-
   const handleExecute = async (action: PaletteAction) => {
     if (isExecuting) return;
     setExecutionError(null);
@@ -85,7 +73,6 @@ export const Palette = ({ labels, items }: PaletteProps) => {
     try {
       await action.execute();
       closePalette();
-      restoreFocus();
     } catch (error) {
       setExecutionError(
         `${t("commandPalette.executionError")}: ${toErrorMessage(error)}`,
@@ -104,7 +91,7 @@ export const Palette = ({ labels, items }: PaletteProps) => {
       query={query}
       itemCount={results.length}
       selectedIndex={activeIndex}
-      onClose={handleClose}
+      onClose={closePalette}
       onQueryChange={(nextQuery) => {
         setQuery(nextQuery);
         setExecutionError(null);
@@ -135,7 +122,7 @@ export const Palette = ({ labels, items }: PaletteProps) => {
       <PaletteResults
         items={results}
         activeIndex={activeIndex}
-        executionError={executionError}
+        executionError={executionError ?? error ?? null}
         noResults={labels.noResults}
         onSelect={setSelectedIndex}
         onExecute={(action) => void handleExecute(action)}

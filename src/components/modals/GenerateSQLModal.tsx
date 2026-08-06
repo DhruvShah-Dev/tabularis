@@ -16,18 +16,25 @@ import {
 } from "../../utils/sqlGenerator";
 import { toBindParamName } from "../../utils/queryParameters";
 import type { TableTarget } from "../../types/databaseObjects";
-import { openEditor } from "../../utils/editorNavigation";
+import type { CommandRuntime } from "../../types/commands";
+import { openEditor as navigateToEditor } from "../../utils/editorNavigation";
 
 interface GenerateSQLModalProps {
   isOpen: boolean;
   onClose: () => void;
   target: TableTarget;
+  /**
+   * Set when the palette opens this from a split panel: that panel owns its
+   * editor, and the routed one this would otherwise navigate is unmounted.
+   */
+  openEditor?: CommandRuntime["openEditor"];
 }
 
 export const GenerateSQLModal = ({
   isOpen,
   onClose,
   target,
+  openEditor,
 }: GenerateSQLModalProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -35,6 +42,12 @@ export const GenerateSQLModal = ({
   const { showAlert } = useAlert();
   const { connectionId, tableName, schema } = target;
   const connectionData = connectionDataMap[connectionId];
+  const dialect =
+    connectionData?.capabilities ?? connectionData?.driver;
+  const dialectError =
+    isOpen && connectionId && tableName && !dialect
+      ? t("generateSQL.unknownDialect")
+      : null;
   type SqlTab = "create" | "select-all" | "select-fields" | "update" | "delete";
   const [tab, setTab] = useState<SqlTab>("create");
   const [sql, setSql] = useState<string>("");
@@ -45,14 +58,8 @@ export const GenerateSQLModal = ({
   useEffect(() => {
     if (!isOpen || !connectionId || !tableName) return;
 
-    const dialect =
-      connectionData?.capabilities ?? connectionData?.driver;
     if (!dialect) {
       // Guessing a dialect here silently emits SQL for the wrong database.
-      showAlert(t("generateSQL.unknownDialect"), {
-        title: t("common.error"),
-        kind: "error",
-      });
       return;
     }
 
@@ -100,8 +107,7 @@ export const GenerateSQLModal = ({
     isOpen,
     connectionId,
     tableName,
-    connectionData?.capabilities,
-    connectionData?.driver,
+    dialect,
     t,
     schema,
     showAlert,
@@ -135,14 +141,20 @@ export const GenerateSQLModal = ({
   const displayedSql = getTabSql(tab);
 
   const handleRunInConsole = () => {
-    openEditor(navigate, {
+    const request = {
       kind: "console",
       initialQuery: displayedSql,
       queryName: `${tableName} – ${tab}`,
       preventAutoRun: true,
       schema,
       targetConnectionId: connectionId,
-    });
+    } as const;
+
+    if (openEditor) {
+      openEditor(request);
+    } else {
+      navigateToEditor(navigate, request);
+    }
     onClose();
   };
 
@@ -224,7 +236,14 @@ export const GenerateSQLModal = ({
 
         {/* Content */}
         <div className="flex-1 p-6 overflow-hidden flex flex-col">
-          {loading ? (
+          {dialectError ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-400"
+            >
+              {dialectError}
+            </div>
+          ) : loading ? (
             <div className="text-center py-8 text-muted">
               <Loader2 size={24} className="animate-spin mx-auto mb-2" />
               <span>{t("generateSQL.loading")}</span>
@@ -244,7 +263,7 @@ export const GenerateSQLModal = ({
         </div>
 
         {/* Footer */}
-        {!loading && (
+        {!loading && !dialectError && (
           <div className="p-4 border-t border-default bg-base/50 flex justify-end gap-3">
             <button
               onClick={handleRunInConsole}

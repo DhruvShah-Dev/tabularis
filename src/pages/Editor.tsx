@@ -1382,6 +1382,15 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
   const executeEditorNavigationIntent = useCallback(
     (intent: EditorNavigationIntent) => {
+      // Split panels call this directly, bypassing the route-state check, and a
+      // mismatch here would run the query against the wrong connection.
+      if (
+        intent.targetConnectionId &&
+        intent.targetConnectionId !== activeConnectionId
+      ) {
+        return;
+      }
+
       const tabId = addTab(intent.addTabInput);
       if (!tabId) return;
 
@@ -1398,7 +1407,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         delete pendingExecutionsRef.current[tabId];
       }
     },
-    [addTab, runAutoQuery, updateTab],
+    [activeConnectionId, addTab, runAutoQuery, updateTab],
   );
 
   const openEditorInScope = useCallback(

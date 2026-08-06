@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { memo } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -187,6 +187,32 @@ describe("CommandPaletteProvider", () => {
     expect(palette!.state.activePalette).toBe("objects");
   });
 
+  it("should restore focus when the palette is closed through its dispatch", async () => {
+    const trigger = document.createElement("button");
+    const paletteInput = document.createElement("input");
+    document.body.append(trigger, paletteInput);
+    trigger.focus();
+    let palette: PaletteContexts | undefined;
+
+    render(
+      <CommandPaletteProvider>
+        <PaletteTestHarness
+          onContexts={(contexts) => {
+            palette = contexts;
+          }}
+        />
+      </CommandPaletteProvider>,
+    );
+
+    act(() => palette!.dispatch.openPalette("actions"));
+    paletteInput.focus();
+    act(() => palette!.dispatch.closePalette());
+
+    await waitFor(() => expect(trigger).toHaveFocus());
+    trigger.remove();
+    paletteInput.remove();
+  });
+
   it("should keep object search closed without an active connection", () => {
     databaseState.activeConnectionId = null;
     let palette: PaletteContexts | undefined;
@@ -262,6 +288,29 @@ describe("CommandPaletteProvider", () => {
       </CommandPaletteProvider>,
     );
 
+    expect(onRender).toHaveBeenCalledTimes(1);
+  });
+
+  it("should keep dispatch consumers stable while toggling palette state", () => {
+    const onRender = vi.fn();
+    let palette: PaletteContexts | undefined;
+    render(
+      <CommandPaletteProvider>
+        <DispatchAndStateConsumer
+          onContexts={(contexts) => {
+            palette = contexts;
+          }}
+        />
+        <DispatchConsumer onRender={onRender} />
+      </CommandPaletteProvider>,
+    );
+
+    act(() => palette!.dispatch.togglePalette("actions"));
+    expect(palette!.state.activePalette).toBe("actions");
+    expect(onRender).toHaveBeenCalledTimes(1);
+
+    act(() => palette!.dispatch.togglePalette("actions"));
+    expect(palette!.state.activePalette).toBeNull();
     expect(onRender).toHaveBeenCalledTimes(1);
   });
 });

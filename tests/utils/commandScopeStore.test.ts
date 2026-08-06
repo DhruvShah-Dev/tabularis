@@ -20,19 +20,6 @@ function createScope(connectionId: string): CommandScope {
 }
 
 describe("createCommandScopeStore", () => {
-  it("should keep the latest scope when an older registration unmounts", () => {
-    const store = createCommandScopeStore();
-    const oldScope = createScope("old");
-    const newScope = createScope("new");
-
-    const unregisterOldScope = store.registerScope("panel", oldScope);
-    store.registerScope("panel", newScope);
-
-    unregisterOldScope();
-
-    expect(store.getScope("panel")).toBe(newScope);
-  });
-
   it("should ignore a stale unregister after the scope was replaced", () => {
     const store = createCommandScopeStore();
     const oldScope = createScope("old");
@@ -43,6 +30,7 @@ describe("createCommandScopeStore", () => {
       oldScope,
     );
     store.registerScope(ROOT_COMMAND_SCOPE_ID, newScope);
+
     unregisterOldScope();
 
     expect(store.getScope(ROOT_COMMAND_SCOPE_ID)).toBe(newScope);

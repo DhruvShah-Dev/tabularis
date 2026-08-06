@@ -46,6 +46,16 @@ export const SpotlightPalette = ({
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // Moving the selection would unmount the action the user is standing on and
+    // drop focus to the body, so arrows are inert inside the action group.
+    if (
+      (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+      event.target instanceof Element &&
+      event.target.closest("[data-palette-actions]")
+    ) {
+      return;
+    }
+
     if (event.key === "ArrowDown") {
       event.preventDefault();
       onSelectedIndexChange(
@@ -67,7 +77,7 @@ export const SpotlightPalette = ({
     if (event.key === "Tab") {
       const focusableElements = Array.from(
         dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])',
         ) ?? [],
       );
       const firstElement = focusableElements[0];
