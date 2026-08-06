@@ -253,6 +253,20 @@ describe("CommandPaletteModal", () => {
     );
   });
 
+  it("should not hand the selection to whatever the cursor rests on", () => {
+    renderPalette();
+    const options = screen.getAllByRole("option");
+
+    // Opening the palette under a resting cursor fires enter on its own.
+    fireEvent.mouseEnter(options[1]);
+
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.mouseMove(options[1]);
+
+    expect(options[1]).toHaveAttribute("aria-selected", "true");
+  });
+
   it("should keep keyboard focus inside the dialog", () => {
     renderPalette();
     const input = screen.getByRole("combobox");

@@ -126,12 +126,18 @@ export const PaletteResults = ({
                   aria-selected={isActive}
                   aria-label={item.title}
                   data-active={isActive}
-                  onMouseEnter={() => onSelect(index)}
+                  // Not onMouseEnter: opening the palette under a resting
+                  // cursor fires enter without the user moving the mouse, which
+                  // would steal the selection from the first result.
+                  onMouseMove={() => onSelect(index)}
                   onClick={() => onExecute(item.primaryAction)}
+                  // No `hover:` styling — `onMouseMove` already routes the
+                  // pointer through `activeIndex`, and a CSS hover would paint a
+                  // second row in the selected colour on top of it.
                   className={`flex cursor-pointer items-center transition-colors ${
                     isActive
                       ? "bg-surface-secondary text-primary"
-                      : "text-secondary hover:bg-surface-secondary hover:text-primary"
+                      : "text-secondary"
                   }`}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-2.5 text-left">
