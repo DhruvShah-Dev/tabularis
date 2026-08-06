@@ -13,7 +13,7 @@ pub(crate) fn normalize_sqlite_path(raw_path: &str) -> Result<PathBuf, String> {
         return Err("Choose a file name for the SQLite database.".to_string());
     }
 
-    let mut path = PathBuf::from(trimmed);
+    let mut path = expand_sqlite_filename(trimmed);
     if path.file_name().is_none() {
         return Err("Choose a valid SQLite database file name.".to_string());
     }
@@ -34,6 +34,22 @@ pub(crate) fn normalize_sqlite_path(raw_path: &str) -> Result<PathBuf, String> {
     }
 
     Ok(path)
+}
+
+pub(crate) fn expand_sqlite_filename(value: &str) -> PathBuf {
+    let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+    expand_sqlite_filename_with_home(value, home.as_deref())
+}
+
+pub(crate) fn expand_sqlite_filename_with_home(value: &str, home: Option<&Path>) -> PathBuf {
+    let home_relative = value
+        .strip_prefix("~/")
+        .or_else(|| value.strip_prefix("~\\"));
+
+    match (home_relative, home) {
+        (Some(relative), Some(home)) => home.join(relative),
+        _ => PathBuf::from(value),
+    }
 }
 
 fn connection_name(path: &Path) -> Result<String, String> {

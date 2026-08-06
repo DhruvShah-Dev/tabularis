@@ -2270,7 +2270,11 @@ pub async fn test_connection<R: Runtime>(
 
     // For file-based drivers, verify the database file exists before attempting connection
     if drv.manifest().capabilities.file_based {
-        let db_path = std::path::Path::new(resolved_params.database.primary());
+        let db_path = if resolved_params.driver == "sqlite" {
+            crate::sqlite_database::expand_sqlite_filename(resolved_params.database.primary())
+        } else {
+            PathBuf::from(resolved_params.database.primary())
+        };
         if !db_path.exists() {
             return Err(format!(
                 "Database file not found: {}",
