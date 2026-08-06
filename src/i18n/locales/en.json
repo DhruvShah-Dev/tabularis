@@ -2159,7 +2159,14 @@
     "notInstalled": "This driver isn't installed yet. Install it to configure a connection.",
     "installVersion": "Install v{{version}}",
     "installingVersion": "Installing v{{version}}…",
-    "retryInstall": "Retry install"
+    "retryInstall": "Retry install",
+    "viewDetails": "More details",
+    "installTitle": "Install driver",
+    "readmeSubtitle": "Plugin README",
+    "readmeLoading": "Loading README…",
+    "readmeUnavailable": "No README is available for this plugin.",
+    "readmeFallbackLocale": "This README isn't available in your language yet — showing “{{locale}}”.",
+    "openDocumentation": "Open full documentation"
   },
   "connectionErrors": {
     "ssh-auth": {

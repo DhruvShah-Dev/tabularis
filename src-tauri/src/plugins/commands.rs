@@ -376,6 +376,26 @@ pub async fn fetch_tabularium_plugin_preview(
     Ok(with_status)
 }
 
+/// Fetches a plugin's README from the Tabularium registry, locale-aware.
+/// `locale` is the app UI language mapped to a registry locale; the registry
+/// falls back on its own (usually to English) and reports the locale it
+/// actually served. Legacy static registries have no README endpoint, so this
+/// simply errors there and the frontend degrades to its no-README state.
+#[tauri::command]
+pub async fn fetch_plugin_readme(
+    app: AppHandle,
+    slug: String,
+    locale: Option<String>,
+    registry_url: Option<String>,
+) -> Result<registry::PluginReadme, String> {
+    let config = crate::config::load_config_internal(&app);
+    let base = registry_url
+        .as_deref()
+        .map(str::to_string)
+        .unwrap_or_else(|| registry_base_url(&config).to_string());
+    crate::plugins::tabularium::fetch_plugin_readme(&base, &slug, locale.as_deref()).await
+}
+
 /// Reads a file from an installed plugin's directory.
 /// The `file_path` must be a relative path with no `..` components.
 #[tauri::command]
