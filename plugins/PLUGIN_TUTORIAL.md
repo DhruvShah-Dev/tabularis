@@ -36,7 +36,7 @@ What the flags mean:
 |------|-----|
 | `--db-type=api` | Google Sheets is a REST API, not a network DB. Sets `no_connection_required: true` in the manifest. |
 | `--dir <path>` | Scaffold somewhere outside this tutorial's reading order. |
-| `google-sheets` | The plugin id. Used for the crate name, binary name, manifest `id`, and the install directory. |
+| `google-sheets` | The plugin id. Used for the crate name, binary name, manifest `name` (the registry slug), and the install directory. |
 
 Expected output:
 
@@ -96,6 +96,7 @@ Edit `.tabularium`. The scaffold gives you this:
 {
   "$schema": "https://registry.tabularis.dev/manifest.schema.json?kind=driver",
   "name": "google-sheets",
+  "version": "0.1.0",
   "kind": "driver",
   "engine": "google-sheets",
   "paradigms": ["relational"],
@@ -595,7 +596,8 @@ That's it.
 
 Ruthlessly cut for the 20-minute budget:
 
-- **Release packaging** — the scaffold ships `.github/workflows/release.yml` with a 5-platform matrix. Tag `v0.1.0`, push, collect artifacts. Not reading-order critical.
+- **Release packaging** — the scaffold ships `.github/workflows/release.yml` with a 5-platform matrix. Tag `v0.1.0`, push, collect artifacts. The tag stripped of `v` must equal the manifest `version`, and `.tabularium` must be uploaded as a standalone release asset (GitHub renames it to `default.tabularium` — the registry accepts both). Not reading-order critical.
+- **Publishing to the registry** — submit at [registry.tabularis.dev/submit](https://registry.tabularis.dev/submit); an invalid manifest is rejected with HTTP 422. Full walkthrough: [docs.tabularium.wiki/publishing](https://docs.tabularium.wiki/publishing/).
 - **CRUD via the row editor UI** — covered in the implementation but not explained. Enable by filling in `handlers/crud.rs` (done in step 5) and setting `capabilities.readonly: false` (we did). Once you can edit rows, look at the `row-editor-sidebar.field.after` slot for per-field UI extensions.
 - **DDL generation for the SQL preview** — `get_create_table_sql` is the only one you can implement meaningfully for Sheets. The rest are explicit `-32601` with a clear message.
 - **Typed UI via `@tabularis/plugin-api`** — the scaffold's `--with-ui` mode sets this up with a hello-world button in `data-grid.toolbar.actions`. Worth trying when your second plugin doesn't need two slots.

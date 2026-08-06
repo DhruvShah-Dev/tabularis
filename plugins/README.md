@@ -2,7 +2,7 @@
 
 This directory contains the official plugin registry and documentation for the Tabularis external plugin system.
 
-> 📚 The canonical, browsable plugin documentation lives on the website: [tabularis.dev/wiki/plugins](https://tabularis.dev/wiki/plugins) (protocol reference) and [tabularis.dev/wiki/building-plugins](https://tabularis.dev/wiki/building-plugins) (walkthrough). The files here are the in-repo working copies.
+> 📚 The canonical, browsable plugin documentation lives on the website: [tabularis.dev/wiki/plugins](https://tabularis.dev/wiki/plugins) (protocol reference) and [tabularis.dev/wiki/building-plugins](https://tabularis.dev/wiki/building-plugins) (walkthrough). Registry and manifest docs live at [docs.tabularium.wiki](https://docs.tabularium.wiki) (`/manifest/`, `/publishing/`, `/consuming/`). The files here are the in-repo working copies.
 
 ## Quick start — build a plugin
 
@@ -133,9 +133,9 @@ Omit a platform key if your plugin does not support that platform. The app will 
 To add your plugin to the official registry:
 
 1. Build and release your plugin as a `.zip` file for each supported platform. The ZIP must extract to a directory containing the `.tabularium` manifest and the executable.
-2. Host the release assets (e.g., GitHub Releases).
-3. Open a pull request adding your plugin entry to `registry.json`.
-4. Ensure your manifest matches the format described in [PLUGIN_GUIDE.md](./PLUGIN_GUIDE.md) — or skip the PR entirely and submit at [registry.tabularis.dev/submit](https://registry.tabularis.dev/submit), the preferred path for new plugins.
+2. Host the release assets (e.g., GitHub Releases) and upload `.tabularium` as a **standalone release asset** too — GitHub renames the dotfile to `default.tabularium`; the registry accepts both.
+3. Submit at [registry.tabularis.dev/submit](https://registry.tabularis.dev/submit). Manifest validation is enforced: a manifest that fails the schema is rejected with **HTTP 422**. Format reference: [PLUGIN_GUIDE.md](./PLUGIN_GUIDE.md) and [docs.tabularium.wiki/manifest](https://docs.tabularium.wiki/manifest/).
+4. Legacy path: a pull request adding your plugin entry to `registry.json` still works during the transition, but new plugins should use the hosted registry.
 
 ---
 

@@ -44,7 +44,7 @@ plugins/
 
 ### The `.tabularium` manifest
 
-One manifest tells Tabularis everything about your plugin — and, when you publish, tells the Tabularium registry how to list it. Its canonical name is **`.tabularium`**; the host still reads a legacy `manifest.json` as a fallback. In a `.tabularium`, `name` is the lowercase slug that identifies the plugin (legacy manifests may keep a separate `id` and a display `name`).
+One manifest tells Tabularis everything about your plugin — and, when you publish, tells the Tabularium registry how to list it. Its canonical name is **`.tabularium`**; the host still reads a legacy `manifest.json` as a fallback. In a `.tabularium`, `name` is the lowercase slug that identifies the plugin (legacy manifests may keep a separate `id` and a display `name`). When publishing, the registry resolves the manifest from your **release assets** — upload `.tabularium` as a standalone asset (GitHub silently renames the dotfile to `default.tabularium`; the registry accepts both names).
 
 > **JSON Schema available:** point `$schema` at the registry's live merged schema (as below) for IDE autocompletion and validation, or at the local [`plugins/manifest.schema.json`](./manifest.schema.json) for legacy `manifest.json` files.
 
@@ -86,10 +86,10 @@ One manifest tells Tabularis everything about your plugin — and, when you publ
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | string | Lowercase slug identifying the plugin (e.g., `"duckdb"`). Must match the folder name. |
-| `id` | string | Legacy identifier from `manifest.json`-era plugins. Optional — when absent, identity falls back to `name`. Omit in new `.tabularium` manifests. |
-| `version` | string | Plugin version (semver). |
-| `description` | string | Short description shown in the plugins list. |
+| `name` | string | Lowercase slug identifying the plugin (e.g., `"duckdb"`). Must match the folder name and the registry pattern `^[a-z][a-z0-9-]*$`; it becomes the registry slug and is pinned at first submit. |
+| `id` | string | Legacy identifier from `manifest.json`-era plugins. Optional — when absent, identity falls back to `name`. Omit in new `.tabularium` manifests; the registry ignores it. |
+| `version` | string | Plugin version (semver, **no leading `v`**). Must equal the release tag with any `v` prefix stripped — the registry rejects tag/manifest mismatches. |
+| `description` | string | Short description shown in the plugins list. Optional for the registry; max **280 chars**. |
 | `default_port` | number \| null | Default TCP port. Use `null` for file-based databases. |
 | `executable` | string | Relative path to the executable inside the plugin folder. |
 | `capabilities` | object | Feature flags (see below). |
@@ -1357,8 +1357,9 @@ To make your plugin available in the official registry:
 
 1. Build release binaries for all supported platforms.
 2. Package each platform binary with your `.tabularium` into a `.zip` file (the scaffolded release workflow does this).
-3. Create a GitHub Release with the ZIP files attached.
-4. Submit your plugin at [registry.tabularis.dev/submit](https://registry.tabularis.dev/submit) — ownership is verified via OAuth against your linked repository, and CI can pre-validate the manifest via `POST /api/manifest/validate`. The registry's [plugin development page](https://registry.tabularis.dev/docs/plugin-development) documents every `.tabularium` field.
+3. Create a GitHub Release with the ZIP files attached — **plus `.tabularium` as a standalone asset** (GitHub renames it to `default.tabularium`; the registry accepts both). The registry resolves the manifest from release assets, and the tag stripped of `v` must equal the manifest `version`.
+4. Submit your plugin at [registry.tabularis.dev/submit](https://registry.tabularis.dev/submit) — ownership is verified via OAuth against your linked repository, and CI can pre-validate the manifest via `POST /api/manifest/validate`. A manifest that fails validation is rejected with **HTTP 422** — there is no silent fallback. The registry's [plugin development page](https://registry.tabularis.dev/docs/plugin-development) documents every `.tabularium` field; the full author docs live at [docs.tabularium.wiki](https://docs.tabularium.wiki/manifest/).
+5. Installs are verified client-side: Tabularis checks the registry's JWS signature and the download's SHA-256 before anything runs.
 
 The legacy path — a pull request adding an entry to `plugins/registry.json` (format in [README.md](./README.md)) — still works during the transition; new plugins should submit to the registry directly.
 
