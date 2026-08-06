@@ -166,7 +166,7 @@ const VisualQueryBuilderContent = () => {
       orderBy,
       groupBy,
       limit,
-      activeDriver
+      activeDriver,
     );
 
     if (sql) {

@@ -164,6 +164,15 @@ pub struct SshTestParams {
     pub allow_passphrase_prompt: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
+    /// Id of the saved database connection whose inline SSH secrets should be
+    /// used as a fallback: they live in the keychain under the DB connection
+    /// id, not in the SSH connections file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub db_connection_id: Option<String>,
+    /// When set, the test emits "connection-test-progress" events tagged with
+    /// this id so the caller can render a step log.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -253,6 +262,14 @@ pub struct ConnectionParams {
     /// pool hands out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub startup_script: Option<String>,
+    /// Opaque, plugin-specific connection fields. The host does not interpret
+    /// these — they are persisted verbatim and forwarded to the driver plugin
+    /// as part of `params`, so plugins can carry custom connection settings
+    /// (e.g. an AWS region for DynamoDB) without core schema changes.
+    /// Rendered by plugins through the `connection-modal.extra_fields` slot.
+    /// Absent from the JSON when empty.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub extra: HashMap<String, String>,
     // Connection ID for stable pooling (not persisted, set at runtime)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
@@ -288,6 +305,25 @@ pub struct SavedConnection {
     pub detect_json_in_text_columns: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub appearance: Option<ConnectionAppearance>,
+    /// Ids of [`ConnectionTag`]s attached to this connection. Unknown ids
+    /// (e.g. after a partial import) are ignored by the UI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag_ids: Option<Vec<String>>,
+    /// Deployment environment: `"development"`, `"staging"` or
+    /// `"production"`. `None` means unclassified. Production drives the
+    /// write-confirmation warning and the visual identity in the UI.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment: Option<String>,
+}
+
+/// A user-defined colored label. Tags are purely organizational: a
+/// connection can carry any number of them and they never drive behavior.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct ConnectionTag {
+    pub id: String,
+    pub name: String,
+    /// CSS hex color, e.g. `"#f97316"`.
+    pub color: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
@@ -310,6 +346,8 @@ pub struct ConnectionsFile {
     pub groups: Vec<ConnectionGroup>,
     #[serde(default)]
     pub connections: Vec<SavedConnection>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<ConnectionTag>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -361,6 +399,8 @@ pub struct ExportPayload {
     pub ssh_connections: Vec<SshConnection>,
     #[serde(default)]
     pub k8s_connections: Vec<K8sConnection>,
+    #[serde(default)]
+    pub tags: Vec<ConnectionTag>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -368,6 +408,10 @@ pub struct TestConnectionRequest {
     pub params: ConnectionParams,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
+    /// When set, the test emits "connection-test-progress" events tagged with
+    /// this id so the caller can render a live step log.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -557,6 +601,41 @@ pub struct TriggerInfo {
     pub event: String,   // e.g. "INSERT", "UPDATE", "DELETE", "INSERT OR UPDATE"
     pub timing: String,  // "BEFORE", "AFTER", "INSTEAD OF"
     pub definition: Option<String>,
+}
+
+/// One database account as listed by the server (MySQL/MariaDB:
+/// `mysql.user` rows, identified by the `user`@`host` pair).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DbUserInfo {
+    pub user: String,
+    pub host: String,
+    /// Account is locked (`ALTER USER ... ACCOUNT LOCK`); `false` when the
+    /// server does not expose the flag.
+    pub locked: bool,
+}
+
+/// The privilege keywords a driver accepts in `apply_db_user_privileges`,
+/// split by scope. Sent to the frontend so the privilege editor renders the
+/// dialect's own catalog instead of hardcoding one.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct DbPrivilegeCatalog {
+    /// Privileges valid at the database scope (and also globally).
+    pub database: Vec<String>,
+    /// Privileges valid only at the global scope.
+    pub global: Vec<String>,
+    /// Privileges valid at the table scope.
+    pub table: Vec<String>,
+}
+
+/// One account's privileges on one scope, parsed from the server's grant
+/// metadata (MySQL: one `SHOW GRANTS` line). `database == None` is the
+/// global scope; `table` is only ever `Some` when `database` is.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct DbUserGrantSet {
+    pub database: Option<String>,
+    pub table: Option<String>,
+    /// Canonical privilege keywords, `GRANT OPTION` included as an entry.
+    pub privileges: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
