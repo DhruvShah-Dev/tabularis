@@ -325,6 +325,15 @@ export const DataGrid = React.memo(
       );
     }, [columnMetadata]);
 
+    const generatedColumns = useMemo(() => {
+      if (!columnMetadata) return null;
+      return new Set(
+        columnMetadata
+          .filter((col) => col.is_generated)
+          .map((col) => col.name.toLowerCase()),
+      );
+    }, [columnMetadata]);
+
     // Precompute the result-coloring class per column once (the type is fixed
     // per column), so rows don't reclassify every cell on each render. `null`
     // when the feature is off, which makes rows skip the wrapper entirely.
@@ -674,6 +683,7 @@ export const DataGrid = React.memo(
             name: colName,
             type: meta?.data_type,
             characterMaximumLength: meta?.character_maximum_length,
+            isGenerated: meta?.is_generated,
           };
         });
 
@@ -794,6 +804,10 @@ export const DataGrid = React.memo(
 
       const colName = columns[colIndex];
 
+      if (generatedColumns?.has(colName.toLowerCase())) {
+        return;
+      }
+
       // For existing rows we must be able to build a safe UPDATE. Two guards,
       // each running whenever the data it depends on is available, so they
       // don't silently no-op when a driver omits result metadata:
@@ -906,6 +920,7 @@ export const DataGrid = React.memo(
         columnTypeMap,
         columnLengthMap,
         columnMetadata,
+        generatedColumns,
         isJsonCellTarget,
         openInSidebar,
         openJsonViewerWindow,

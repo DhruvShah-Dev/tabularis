@@ -332,6 +332,7 @@ pub async fn get_columns(
                 is_pk: key == "PRI",
                 is_nullable: null_str == "YES",
                 is_auto_increment,
+                is_generated: false,
                 default_value,
                 character_maximum_length,
             }
@@ -441,6 +442,7 @@ pub async fn get_all_columns_batch(
             is_pk: key == "PRI",
             is_nullable: null_str == "YES",
             is_auto_increment,
+            is_generated: false,
             default_value,
             character_maximum_length,
         };
@@ -1111,6 +1113,7 @@ pub async fn get_view_columns(
                 is_pk: key == "PRI",
                 is_nullable: null_str == "YES",
                 is_auto_increment,
+                is_generated: false,
                 default_value,
                 character_maximum_length,
             }

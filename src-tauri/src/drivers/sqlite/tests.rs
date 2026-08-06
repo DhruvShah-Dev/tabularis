@@ -1,7 +1,7 @@
 use super::sqlite_push_pk_where;
 use super::{
-    alter_view, create_view, drop_view, get_indexes, get_view_columns, get_view_definition,
-    get_views, parse_sqlite_index_columns,
+    alter_view, create_view, drop_view, get_all_columns_batch, get_columns, get_indexes,
+    get_view_columns, get_view_definition, get_views, parse_sqlite_index_columns,
 };
 use crate::models::{ConnectionParams, DatabaseSelection};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
@@ -187,7 +187,7 @@ async fn test_view_lifecycle() {
 }
 
 #[tokio::test]
-async fn test_get_view_columns_includes_generated_table_columns() {
+async fn test_get_columns_includes_generated_table_columns() {
     let (params, _file) = setup_test_db().await;
 
     let path = params.database.primary().to_string();
@@ -207,22 +207,27 @@ async fn test_get_view_columns_includes_generated_table_columns() {
     .await
     .expect("create generated column table");
 
-    sqlx::query("CREATE VIEW generated_dates_view AS SELECT * FROM generated_dates")
-        .execute(&pool)
-        .await
-        .expect("create generated column view");
-
     pool.close().await;
 
-    let cols = get_view_columns(&params, "generated_dates_view")
+    let cols = get_columns(&params, "generated_dates")
         .await
-        .expect("get view columns");
+        .expect("get table columns");
 
     let generated = cols
         .iter()
         .find(|col| col.name == "display_date")
-        .expect("generated column should be visible through the view");
+        .expect("generated column should be visible through table metadata");
     assert_eq!(generated.data_type, "TEXT");
+    assert!(generated.is_generated);
+
+    let batch = get_all_columns_batch(&params, &["generated_dates".to_string()])
+        .await
+        .expect("get batch columns");
+    let batch_generated = batch["generated_dates"]
+        .iter()
+        .find(|col| col.name == "display_date")
+        .expect("generated column should be visible through batch metadata");
+    assert!(batch_generated.is_generated);
 
     crate::pool_manager::close_pool(&params).await;
 }
