@@ -2127,6 +2127,7 @@
     "driverCount_other": "{{count}} drivers",
     "connectTo": "Connect to {{name}}",
     "unavailableOnPlatform": "Unavailable on your platform",
+    "unavailable": "Unavailable",
     "backToCatalogue": "Back to catalogue",
     "pickDriver": "Multiple drivers connect to {{name}}. Pick one:",
     "latestVersion": "Latest v{{version}}",

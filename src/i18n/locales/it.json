@@ -2040,6 +2040,7 @@
     "driverCount_other": "{{count}} driver",
     "connectTo": "Connetti a {{name}}",
     "unavailableOnPlatform": "Non disponibile sulla tua piattaforma",
+    "unavailable": "Non disponibile",
     "backToCatalogue": "Torna al catalogo",
     "pickDriver": "Più driver si connettono a {{name}}. Scegline uno:",
     "latestVersion": "Ultima v{{version}}",

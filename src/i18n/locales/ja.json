@@ -2056,6 +2056,7 @@
     "driverCount_other": "{{count}} 個のドライバー",
     "connectTo": "{{name}} に接続",
     "unavailableOnPlatform": "お使いのプラットフォームでは利用できません",
+    "unavailable": "利用不可",
     "backToCatalogue": "カタログに戻る",
     "pickDriver": "複数のドライバーが {{name}} に接続します。1つ選択してください：",
     "latestVersion": "最新 v{{version}}",
