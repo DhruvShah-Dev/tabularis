@@ -17,6 +17,10 @@ vi.mock("../../../src/components/layout/SplitPaneLayout", () => ({
   SplitPaneLayout: () => <div>Split pane</div>,
 }));
 
+vi.mock("../../../src/components/layout/ProductionBanner", () => ({
+  ProductionBanner: () => null,
+}));
+
 vi.mock("../../../src/components/layout/CommandPaletteScopeBridge", () => ({
   CommandPaletteScopeBridge: () => null,
 }));
