@@ -405,6 +405,22 @@
   "settings": {
     "title": "設定",
     "general": "一般",
+    "privacy": "プライバシー",
+    "columnMasking": "列のマスキング",
+    "columnMaskingDesc": "結果グリッドで機密列（パスワード、メール、トークンなど）の内容を非表示にします。コピーやエクスポートでは実際の値がそのまま使用されます。",
+    "columnMaskingEnabled": "機密列をマスク",
+    "columnMaskingEnabledDesc": "名前が機密パターンに一致する列に、実際の値の代わりにプレースホルダーを表示します。",
+    "maskingPatterns": "機密列名パターン",
+    "maskingPatternsDesc": "1行に1パターン。列名にいずれかのパターンが含まれるとマスクされます（大文字小文字を区別しません）。",
+    "maskingOverrides": "接続ごとの上書き",
+    "maskingOverridesDesc": "接続ごとに特定の列を必ずマスク（包含）またはマスクしない（除外）ように設定します。1行に1件、テーブル.列の形式。除外は包含とパターンより優先されます。",
+    "maskingConnection": "接続",
+    "maskingConnectionDesc": "これらの上書きを適用する接続を選択します。",
+    "maskingInclude": "常にマスク",
+    "maskingIncludeDesc": "この接続で常にマスクする列。名前がどのパターンにも一致しなくても適用されます。",
+    "maskingExclude": "マスクしない",
+    "maskingExcludeDesc": "この接続でマスクしない列。名前がパターンに一致しても適用されません。",
+    "maskingOverridePlaceholder": "例: users.password",
     "info": "情報",
     "dataEditor": "データエディタ",
     "pageSize": "結果ページサイズ (上限)",
@@ -991,6 +1007,9 @@
     "waiting": "セキュリティキーを待っています — タッチして確認してください。"
   },
   "dataGrid": {
+    "noRowIdentity": "行を編集できません: \"{{table}}\" には主キーがないため、編集には結果にテーブルの全列が含まれている必要があります。すべての列を選択する(例: SELECT *)か、主キーを追加してください。",
+    "keylessRowNotFound": "\"{{column}}\" の更新時に元の値に一致する行が見つかりませんでした。テーブルに主キーがなく、データが変更された可能性があります。再読み込みして再試行してください。",
+    "keylessDeleteNotFound": "削除時に元の値に一致する行が見つかりませんでした。テーブルに主キーがなく、データが変更された可能性があります。再読み込みして再試行してください。",
     "noData": "表示するデータがありません",
     "editRow": "行を編集",
     "deleteRow": "行を削除",
@@ -1034,7 +1053,11 @@
     "setEmpty": "EMPTY に設定",
     "setServerNow": "現在のタイムスタンプを挿入",
     "previewReferenced": "関連レコードをプレビュー",
-    "openReferenced": "{{table}} で参照行を開く"
+    "openReferenced": "{{table}} で参照行を開く",
+    "revealCell": "セルを表示",
+    "maskCell": "セルをマスク",
+    "revealColumn": "列を表示",
+    "maskColumn": "列をマスク"
   },
   "editRow": {
     "title": "行を編集",
@@ -2053,6 +2076,7 @@
     "driverCount_other": "{{count}} 個のドライバー",
     "connectTo": "{{name}} に接続",
     "unavailableOnPlatform": "お使いのプラットフォームでは利用できません",
+    "unavailable": "利用不可",
     "backToCatalogue": "カタログに戻る",
     "pickDriver": "複数のドライバーが {{name}} に接続します。1つ選択してください：",
     "latestVersion": "最新 v{{version}}",

@@ -381,6 +381,22 @@
   "settings": {
     "title": "Configurações",
     "general": "Geral",
+    "privacy": "Privacidade",
+    "columnMasking": "Mascaramento de colunas",
+    "columnMaskingDesc": "Oculta o conteúdo de colunas sensíveis (senhas, e-mails, tokens…) na grade de resultados. Copiar e exportar continuam usando os valores reais.",
+    "columnMaskingEnabled": "Mascarar colunas sensíveis",
+    "columnMaskingEnabledDesc": "Mostra um placeholder em vez do valor real para colunas cujo nome corresponde a um padrão sensível.",
+    "maskingPatterns": "Padrões de nomes de colunas sensíveis",
+    "maskingPatternsDesc": "Um padrão por linha. Uma coluna é mascarada quando seu nome contém qualquer padrão (sem distinção de maiúsculas).",
+    "maskingOverrides": "Substituições por conexão",
+    "maskingOverridesDesc": "Força o mascaramento (incluir) ou o não mascaramento (excluir) de colunas específicas de uma conexão. Uma entrada tabela.coluna por linha; as exclusões têm prioridade sobre inclusões e padrões.",
+    "maskingConnection": "Conexão",
+    "maskingConnectionDesc": "Escolha a qual conexão essas substituições se aplicam.",
+    "maskingInclude": "Sempre mascarar",
+    "maskingIncludeDesc": "Colunas sempre mascaradas nesta conexão, mesmo que o nome não corresponda a nenhum padrão.",
+    "maskingExclude": "Nunca mascarar",
+    "maskingExcludeDesc": "Colunas nunca mascaradas nesta conexão, mesmo que o nome corresponda a um padrão.",
+    "maskingOverridePlaceholder": "ex. usuarios.password",
     "info": "Informações",
     "dataEditor": "Editor de Dados",
     "pageSize": "Tamanho da Página de Resultados (Limite)",
@@ -990,6 +1006,9 @@
     "waiting": "Aguardando sua chave de segurança — toque nela para confirmar."
   },
   "dataGrid": {
+    "noRowIdentity": "Não é possível editar as linhas: \"{{table}}\" não tem chave primária, então a edição exige que o resultado inclua todas as colunas da tabela. Selecione todas as colunas (ex.: SELECT *) ou adicione uma chave primária.",
+    "keylessRowNotFound": "Nenhuma linha correspondeu aos valores originais ao atualizar \"{{column}}\". A tabela não tem chave primária e os dados podem ter mudado: atualize e tente novamente.",
+    "keylessDeleteNotFound": "Nenhuma linha correspondeu aos valores originais ao excluir. A tabela não tem chave primária e os dados podem ter mudado: atualize e tente novamente.",
     "newRow": "NOVO",
     "noData": "Nenhum dado para exibir",
     "editRow": "Editar Linha",
@@ -1038,7 +1057,11 @@
     "setEmpty": "Definir VAZIO",
     "setServerNow": "Inserir Data/Hora Atual",
     "previewReferenced": "Pré-visualizar registro relacionado",
-    "openReferenced": "Abrir linha referenciada em {{table}}"
+    "openReferenced": "Abrir linha referenciada em {{table}}",
+    "revealCell": "Revelar célula",
+    "maskCell": "Mascarar célula",
+    "revealColumn": "Revelar coluna",
+    "maskColumn": "Mascarar coluna"
   },
   "editRow": {
     "title": "Editar Linha",
@@ -2086,6 +2109,7 @@
     "driverCount_other": "{{count}} drivers",
     "connectTo": "Conectar a {{name}}",
     "unavailableOnPlatform": "Indisponível na sua plataforma",
+    "unavailable": "Indisponível",
     "backToCatalogue": "Voltar ao catálogo",
     "pickDriver": "Vários drivers se conectam a {{name}}. Escolha um:",
     "latestVersion": "Mais recente v{{version}}",

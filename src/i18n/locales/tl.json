@@ -410,6 +410,22 @@
   "settings": {
     "title": "Mga Setting",
     "general": "Pangkalahatan",
+    "privacy": "Privacy",
+    "columnMasking": "Pag-mask ng mga column",
+    "columnMaskingDesc": "Itinatago ang nilalaman ng mga sensitibong column (mga password, email, token…) sa results grid. Gumagamit pa rin ng totoong mga value ang pag-copy at pag-export.",
+    "columnMaskingEnabled": "I-mask ang mga sensitibong column",
+    "columnMaskingEnabledDesc": "Nagpapakita ng placeholder sa halip na totoong value para sa mga column na tumutugma ang pangalan sa sensitibong pattern.",
+    "maskingPatterns": "Mga pattern ng pangalan ng sensitibong column",
+    "maskingPatternsDesc": "Isang pattern bawat linya. Nama-mask ang column kapag naglalaman ang pangalan nito ng alinmang pattern (hindi case-sensitive).",
+    "maskingOverrides": "Mga override bawat connection",
+    "maskingOverridesDesc": "Pilit na i-mask (include) o huwag i-mask (exclude) ang mga partikular na column para sa isang connection. Isang entry na table.column bawat linya; may prayoridad ang exclude kaysa sa include at mga pattern.",
+    "maskingConnection": "Connection",
+    "maskingConnectionDesc": "Piliin kung aling connection ang pinapatawan ng mga override na ito.",
+    "maskingInclude": "Laging i-mask",
+    "maskingIncludeDesc": "Mga column na laging naka-mask para sa connection na ito, kahit hindi tumutugma ang pangalan sa anumang pattern.",
+    "maskingExclude": "Huwag kailanman i-mask",
+    "maskingExcludeDesc": "Mga column na hindi kailanman nama-mask para sa connection na ito, kahit tumutugma ang pangalan sa isang pattern.",
+    "maskingOverridePlaceholder": "hal. users.password",
     "info": "Impormasyon",
     "dataEditor": "Data Editor",
     "pageSize": "Laki ng Result Page (Limit)",
@@ -1007,6 +1023,9 @@
     "waiting": "Naghihintay sa iyong security key — hawakan ito para kumpirmahin."
   },
   "dataGrid": {
+    "noRowIdentity": "Hindi ma-edit ang mga row: walang primary key ang \"{{table}}\", kaya kailangang kasama sa resulta ang lahat ng column ng table. Piliin ang lahat ng column (hal. SELECT *) o magdagdag ng primary key.",
+    "keylessRowNotFound": "Walang row na tumugma sa mga orihinal na value habang ina-update ang \"{{column}}\". Walang primary key ang table at maaaring nagbago ang data — i-refresh at subukang muli.",
+    "keylessDeleteNotFound": "Walang row na tumugma sa mga orihinal na value habang nagde-delete. Walang primary key ang table at maaaring nagbago ang data — i-refresh at subukang muli.",
     "newRow": "BAGO",
     "noData": "Walang data na ipapakita",
     "editRow": "I-edit ang Row",
@@ -1053,7 +1072,11 @@
     "setEmpty": "I-set ang EMPTY",
     "setServerNow": "Ipasok ang Kasalukuyang Timestamp",
     "previewReferenced": "I-preview ang kaugnay na record",
-    "openReferenced": "Buksan ang naka-reference na row sa {{table}}"
+    "openReferenced": "Buksan ang naka-reference na row sa {{table}}",
+    "revealCell": "Ipakita ang cell",
+    "maskCell": "I-mask ang cell",
+    "revealColumn": "Ipakita ang column",
+    "maskColumn": "I-mask ang column"
   },
   "editRow": {
     "title": "I-edit ang Row",

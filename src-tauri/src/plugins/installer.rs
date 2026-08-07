@@ -150,7 +150,7 @@ pub async fn download_and_install(
 
     // Verify SHA-256 if the registry advertised one. The Tabularium
     // registry signs releases with a sha256 in the integrity envelope
-    // (see https://tabularium.wiki/docs/#/consuming) — refusing to install
+    // (see https://docs.tabularium.wiki/consuming/) — refusing to install
     // on mismatch is what protects users from a tampered upstream asset.
     // The legacy GitHub-hosted registry doesn't publish hashes, so this
     // check is opt-in per call.

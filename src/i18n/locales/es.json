@@ -417,6 +417,22 @@
   "settings": {
     "title": "Configuración",
     "general": "General",
+    "privacy": "Privacidad",
+    "columnMasking": "Enmascaramiento de columnas",
+    "columnMaskingDesc": "Oculta el contenido de las columnas sensibles (contraseñas, correos, tokens…) en la cuadrícula de resultados. Copiar y exportar siguen usando los valores reales.",
+    "columnMaskingEnabled": "Enmascarar columnas sensibles",
+    "columnMaskingEnabledDesc": "Muestra un marcador de posición en lugar del valor real para las columnas cuyo nombre coincide con un patrón sensible.",
+    "maskingPatterns": "Patrones de nombres de columnas sensibles",
+    "maskingPatternsDesc": "Un patrón por línea. Una columna se enmascara cuando su nombre contiene algún patrón (sin distinción de mayúsculas).",
+    "maskingOverrides": "Excepciones por conexión",
+    "maskingOverridesDesc": "Obliga a enmascarar (incluir) o a no enmascarar (excluir) columnas concretas de una conexión. Una entrada tabla.columna por línea; las exclusiones prevalecen sobre inclusiones y patrones.",
+    "maskingConnection": "Conexión",
+    "maskingConnectionDesc": "Elige a qué conexión se aplican estas excepciones.",
+    "maskingInclude": "Enmascarar siempre",
+    "maskingIncludeDesc": "Columnas siempre enmascaradas en esta conexión, aunque su nombre no coincida con ningún patrón.",
+    "maskingExclude": "No enmascarar nunca",
+    "maskingExcludeDesc": "Columnas nunca enmascaradas en esta conexión, aunque su nombre coincida con un patrón.",
+    "maskingOverridePlaceholder": "p. ej. usuarios.password",
     "info": "Info",
     "dataEditor": "Editor de Datos",
     "pageSize": "Tamaño de Página de Resultados (Límite)",
@@ -1003,6 +1019,9 @@
     "waiting": "Esperando tu llave de seguridad — tócala para confirmar."
   },
   "dataGrid": {
+    "noRowIdentity": "No se pueden editar las filas: \"{{table}}\" no tiene clave primaria, por lo que la edición requiere que el resultado incluya todas las columnas de la tabla. Selecciona todas las columnas (p. ej. SELECT *) o añade una clave primaria.",
+    "keylessRowNotFound": "Ninguna fila coincidió con los valores originales al actualizar \"{{column}}\". La tabla no tiene clave primaria y los datos pueden haber cambiado: actualiza y vuelve a intentarlo.",
+    "keylessDeleteNotFound": "Ninguna fila coincidió con los valores originales al eliminar. La tabla no tiene clave primaria y los datos pueden haber cambiado: actualiza y vuelve a intentarlo.",
     "newRow": "NUEVA",
     "noData": "No hay datos para mostrar",
     "editRow": "Editar Fila",
@@ -1041,7 +1060,11 @@
     "duplicateRow": "Duplicar Fila",
     "setServerNow": "Insertar marca de tiempo actual",
     "previewReferenced": "Vista previa del registro relacionado",
-    "openReferenced": "Abrir fila referenciada en {{table}}"
+    "openReferenced": "Abrir fila referenciada en {{table}}",
+    "revealCell": "Mostrar celda",
+    "maskCell": "Enmascarar celda",
+    "revealColumn": "Mostrar columna",
+    "maskColumn": "Enmascarar columna"
   },
   "editRow": {
     "title": "Editar Fila",
@@ -1957,6 +1980,7 @@
     "driverCount_other": "{{count}} controladores",
     "connectTo": "Conectar a {{name}}",
     "unavailableOnPlatform": "No disponible en tu plataforma",
+    "unavailable": "No disponible",
     "backToCatalogue": "Volver al catálogo",
     "pickDriver": "Varios controladores se conectan a {{name}}. Elige uno:",
     "latestVersion": "Última v{{version}}",

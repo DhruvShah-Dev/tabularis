@@ -410,6 +410,22 @@
   "settings": {
     "title": "Settings",
     "general": "General",
+    "privacy": "Privacy",
+    "columnMasking": "Column masking",
+    "columnMaskingDesc": "Hide the contents of sensitive columns (passwords, emails, tokens…) in the results grid. Copying and exporting still use the real values.",
+    "columnMaskingEnabled": "Mask sensitive columns",
+    "columnMaskingEnabledDesc": "Show a placeholder instead of the real value for columns whose name matches a sensitive pattern.",
+    "maskingPatterns": "Sensitive column name patterns",
+    "maskingPatternsDesc": "One pattern per line. A column is masked when its name contains any pattern (case-insensitive).",
+    "maskingOverrides": "Per-connection overrides",
+    "maskingOverridesDesc": "Force specific columns to be masked (include) or never masked (exclude) for a connection. One table.column entry per line; exclude wins over include and patterns.",
+    "maskingConnection": "Connection",
+    "maskingConnectionDesc": "Choose which connection these overrides apply to.",
+    "maskingInclude": "Always mask",
+    "maskingIncludeDesc": "Columns that are always masked for this connection, even if their name matches no pattern.",
+    "maskingExclude": "Never mask",
+    "maskingExcludeDesc": "Columns that are never masked for this connection, even if their name matches a pattern.",
+    "maskingOverridePlaceholder": "e.g. users.password",
     "info": "Info",
     "dataEditor": "Data Editor",
     "pageSize": "Result Page Size (Limit)",
@@ -1022,6 +1038,9 @@
     "waiting": "Waiting for your security key — touch it to confirm."
   },
   "dataGrid": {
+    "noRowIdentity": "Rows can't be edited: \"{{table}}\" has no primary key, so editing requires the result to include all table columns. Select all columns (e.g. SELECT *) or add a primary key.",
+    "keylessRowNotFound": "No row matched the original values while updating \"{{column}}\". The table has no primary key and its data may have changed — refresh and retry.",
+    "keylessDeleteNotFound": "No row matched the original values while deleting. The table has no primary key and its data may have changed — refresh and retry.",
     "newRow": "NEW",
     "noData": "No data to display",
     "editRow": "Edit Row",
@@ -1070,7 +1089,11 @@
     "setEmpty": "Set EMPTY",
     "setServerNow": "Insert Current Timestamp",
     "previewReferenced": "Preview related record",
-    "openReferenced": "Open referenced row in {{table}}"
+    "openReferenced": "Open referenced row in {{table}}",
+    "revealCell": "Reveal cell",
+    "maskCell": "Mask cell",
+    "revealColumn": "Reveal column",
+    "maskColumn": "Mask column"
   },
   "editRow": {
     "title": "Edit Row",
@@ -2124,6 +2147,7 @@
     "driverCount_other": "{{count}} drivers",
     "connectTo": "Connect to {{name}}",
     "unavailableOnPlatform": "Unavailable on your platform",
+    "unavailable": "Unavailable",
     "backToCatalogue": "Back to catalogue",
     "pickDriver": "Multiple drivers connect to {{name}}. Pick one:",
     "latestVersion": "Latest v{{version}}",
