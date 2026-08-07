@@ -29,6 +29,7 @@ import {
   Boxes,
   Search,
   Home,
+  FolderOpen,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSettings } from "../../hooks/useSettings";
@@ -671,6 +672,12 @@ export function PluginsTab({
       });
   }, []);
 
+  const openPluginsFolder = useCallback(() => {
+    invoke("open_plugins_dir").catch(() => {
+      /* best-effort — the folder may still be reachable manually */
+    });
+  }, []);
+
   const handleOpenPluginSettings = useCallback(
     (pluginId: string) => {
       onOpenPluginSettings?.(pluginId);
@@ -957,14 +964,24 @@ export function PluginsTab({
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={() => refreshRegistry()}
-              className="mb-px flex items-center gap-1 text-xs text-muted transition-colors hover:text-primary"
-            >
-              <RefreshCw size={12} />
-              {t("settings.plugins.refresh")}
-            </button>
+            <div className="mb-px flex items-center gap-4">
+              <button
+                type="button"
+                onClick={openPluginsFolder}
+                className="flex items-center gap-1 text-xs text-muted transition-colors hover:text-primary"
+              >
+                <FolderOpen size={12} />
+                {t("settings.plugins.openFolder")}
+              </button>
+              <button
+                type="button"
+                onClick={() => refreshRegistry()}
+                className="flex items-center gap-1 text-xs text-muted transition-colors hover:text-primary"
+              >
+                <RefreshCw size={12} />
+                {t("settings.plugins.refresh")}
+              </button>
+            </div>
           </div>
 
           <div className="pt-4">
@@ -1480,6 +1497,10 @@ export function PluginsTab({
         pluginId={pluginInstallError?.pluginId ?? ""}
         error={pluginInstallError?.error ?? ""}
         operation={pluginInstallError?.operation ?? "install"}
+        onOpenPluginsFolder={openPluginsFolder}
+        onReload={async () => {
+          await Promise.all([refreshDrivers(), refreshRegistry()]);
+        }}
       />
       <PluginRemoveModal
         isOpen={pluginRemoveConfirm !== null}

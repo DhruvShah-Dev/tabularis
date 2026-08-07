@@ -1,4 +1,5 @@
 use crate::models::ConnectionParams;
+use crate::sqlite_database::expand_sqlite_filename;
 use deadpool_postgres::{Hook as PgHook, HookError as PgHookError, Manager as PgPoolManager, Pool as PgPool};
 use once_cell::sync::Lazy;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
@@ -652,7 +653,7 @@ impl ServerCertVerifier for VerifyCaCertVerifier {
 }
 
 fn build_sqlite_connectoptions(params: &ConnectionParams) -> SqliteConnectOptions {
-    SqliteConnectOptions::new().filename(params.database.to_string())
+    SqliteConnectOptions::new().filename(expand_sqlite_filename(params.database.primary()))
 }
 
 /// Return the connection's startup script if it is set and not blank.

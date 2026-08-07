@@ -14,4 +14,3 @@ export const ENVIRONMENT_BADGE_CLASSES: Record<ConnectionEnvironment, string> = 
 export function environmentLabelKey(env: ConnectionEnvironment): string {
   return `environment.short.${env}`;
 }
-

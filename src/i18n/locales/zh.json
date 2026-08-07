@@ -391,6 +391,22 @@
   "settings": {
     "title": "设置",
     "general": "通用",
+    "privacy": "隐私",
+    "columnMasking": "列掩码",
+    "columnMaskingDesc": "在结果网格中隐藏敏感列（密码、邮箱、令牌等）的内容。复制和导出仍使用真实值。",
+    "columnMaskingEnabled": "掩码敏感列",
+    "columnMaskingEnabledDesc": "对名称匹配敏感模式的列显示占位符而非真实值。",
+    "maskingPatterns": "敏感列名模式",
+    "maskingPatternsDesc": "每行一个模式。列名包含任一模式时即被掩码（不区分大小写）。",
+    "maskingOverrides": "按连接覆盖",
+    "maskingOverridesDesc": "对某个连接强制掩码（包含）或从不掩码（排除）指定列。每行一条“表.列”；排除优先于包含和模式。",
+    "maskingConnection": "连接",
+    "maskingConnectionDesc": "选择这些覆盖规则应用的连接。",
+    "maskingInclude": "始终掩码",
+    "maskingIncludeDesc": "在此连接中始终掩码的列，即使其名称不匹配任何模式。",
+    "maskingExclude": "从不掩码",
+    "maskingExcludeDesc": "在此连接中从不掩码的列，即使其名称匹配某个模式。",
+    "maskingOverridePlaceholder": "例如 users.password",
     "info": "信息",
     "dataEditor": "数据编辑器",
     "pageSize": "结果页面大小（限制）",
@@ -618,12 +634,14 @@
       "confirmRemove": "确定要移除 \"{{name}}\" 吗？这将删除插件文件。",
       "enabled": "已启用",
       "disabled": "已禁用",
+      "openFolder": "打开插件文件夹",
       "installError": {
         "title": "安装失败",
         "subtitle": "安装插件时发生错误。请参阅下面的详细信息。",
         "details": "错误详情",
         "copy": "复制",
-        "copied": "已复制！"
+        "copied": "已复制！",
+        "reload": "重新加载插件"
       },
       "uninstallError": {
         "title": "卸载失败",
@@ -992,7 +1010,11 @@
     "setEmpty": "设为空",
     "setServerNow": "插入当前时间戳",
     "previewReferenced": "预览相关记录",
-    "openReferenced": "在 {{table}} 中打开引用的行"
+    "openReferenced": "在 {{table}} 中打开引用的行",
+    "revealCell": "显示单元格",
+    "maskCell": "掩码单元格",
+    "revealColumn": "显示列",
+    "maskColumn": "掩码列"
   },
   "editRow": {
     "title": "编辑行",

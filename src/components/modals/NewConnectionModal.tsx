@@ -24,6 +24,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ConnectionAppearance } from "../../contexts/DatabaseContext";
 import { AppearanceSection } from "./NewConnectionModal/AppearanceSection";
+import { MaskingOverridesEditor } from "../settings/MaskingOverridesEditor";
 import { TagSelector } from "./NewConnectionModal/TagSelector";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
@@ -353,7 +354,14 @@ export const NewConnectionModal = ({
 
   // ── tab ──
   const [activeTab, setActiveTab] = useState<
-    "general" | "databases" | "ssh" | "ssl" | "k8s" | "advanced" | "appearance"
+    | "general"
+    | "databases"
+    | "ssh"
+    | "ssl"
+    | "k8s"
+    | "advanced"
+    | "appearance"
+    | "privacy"
   >("general");
 
   // ── Tab bar horizontal scroll affordance ──
@@ -2677,6 +2685,21 @@ export const NewConnectionModal = ({
     </div>
   );
 
+  // ── rendered Privacy tab content (per-connection masking overrides, #485) ──
+  // Only meaningful for saved connections: the override lists are keyed by
+  // the connection id, which new connections only get on save.
+  const privacyTabContent = initialConnection ? (
+    <div className="space-y-4">
+      <p className="text-sm text-secondary leading-relaxed">
+        {t("settings.maskingOverridesDesc")}
+      </p>
+      <MaskingOverridesEditor
+        key={initialConnection.id}
+        connectionId={initialConnection.id}
+      />
+    </div>
+  ) : null;
+
   // ── rendered Advanced tab content (driver-specific options + startup SQL) ──
   const advancedTabContent = (
     <div className="space-y-4">
@@ -4033,6 +4056,11 @@ export const NewConnectionModal = ({
                       defaultValue: "Appearance",
                     }),
                   },
+                  // Masking overrides are keyed by the saved connection id,
+                  // so the Privacy tab only exists when editing.
+                  ...(isEditing
+                    ? [{ id: "privacy", label: t("settings.privacy") }]
+                    : []),
                 ] as {
                   id:
                     | "general"
@@ -4041,7 +4069,8 @@ export const NewConnectionModal = ({
                     | "ssl"
                     | "k8s"
                     | "advanced"
-                    | "appearance";
+                    | "appearance"
+                    | "privacy";
                   label: string;
                 }[]
               ).map((tab) => (
@@ -4111,7 +4140,9 @@ export const NewConnectionModal = ({
                         ? sshTabContent
                         : activeTab === "advanced"
                           ? advancedTabContent
-                          : appearanceTabContent}
+                          : activeTab === "privacy"
+                            ? privacyTabContent
+                            : appearanceTabContent}
             </div>
           </div>
         )}

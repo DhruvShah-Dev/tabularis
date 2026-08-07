@@ -3,10 +3,11 @@
  * Pure functions for generating SQL from visual query state
  */
 
-import { formatSqlIdentifier } from "./identifiers";
+import { formatSqlIdentifier, quoteTableRef } from "./identifiers";
 
 export interface TableNodeData {
   label: string;
+  schema?: string | null;
   columns: { name: string; type: string }[];
   selectedColumns: Record<string, boolean>;
   columnAggregations?: Record<string, ColumnAggregation>;
@@ -105,9 +106,18 @@ export function collectTableAliases(nodes: QueryNode[]): Record<string, string> 
 /**
  * Generates table list with aliases
  */
-export function generateTableList(nodes: QueryNode[], aliases: Record<string, string>): string[] {
+function formatNodeTableRef(data: TableNodeData, driver?: string | null): string {
+  if (!data.schema) return formatTableRef(data.label, driver);
+  return quoteTableRef(data.label, driver, data.schema);
+}
+
+export function generateTableList(
+  nodes: QueryNode[],
+  aliases: Record<string, string>,
+  driver?: string | null,
+): string[] {
   return nodes.map((node) => {
-    const tableName = node.data.label;
+    const tableName = formatNodeTableRef(node.data, driver);
     const alias = aliases[node.id];
     return `${tableName} ${alias}`;
   });
@@ -201,10 +211,7 @@ export function generateFromClause(
 ): string {
   if (nodes.length === 0) return '';
 
-  const tableList = nodes.map((node) => {
-    const tableName = formatTableRef(node.data.label, driver);
-    return `${tableName} ${aliases[node.id]}`;
-  });
+  const tableList = generateTableList(nodes, aliases, driver);
 
   if (edges.length === 0) {
     return '\nFROM\n  ' + tableList.join(',\n  ');
@@ -214,7 +221,7 @@ export function generateFromClause(
   const firstData = firstNode.data;
   const processedNodes = new Set<string>([firstNode.id]);
 
-  let sql = `\nFROM\n  ${formatTableRef(firstData.label, driver)} ${aliases[firstNode.id]}`;
+  let sql = `\nFROM\n  ${formatNodeTableRef(firstData, driver)} ${aliases[firstNode.id]}`;
 
   const edgesToProcess = [...edges];
   let madeProgress = true;
@@ -235,7 +242,7 @@ export function generateFromClause(
           const sourceAlias = aliases[edge.source];
           const edgeData = edge.data;
           const joinType = edgeData?.joinType || 'INNER';
-          sql += `\n${joinType} JOIN ${formatTableRef(targetData.label, driver)} ${targetAlias} ON ${formatColumnRef(sourceAlias, edge.sourceHandle ?? '', driver)} = ${formatColumnRef(targetAlias, edge.targetHandle ?? '', driver)}`;
+          sql += `\n${joinType} JOIN ${formatNodeTableRef(targetData, driver)} ${targetAlias} ON ${formatColumnRef(sourceAlias, edge.sourceHandle ?? '', driver)} = ${formatColumnRef(targetAlias, edge.targetHandle ?? '', driver)}`;
           processedNodes.add(edge.target);
           edgesToProcess.splice(i, 1);
           madeProgress = true;
@@ -249,7 +256,7 @@ export function generateFromClause(
           const targetAlias = aliases[edge.target];
           const edgeData = edge.data;
           const joinType = edgeData?.joinType || 'INNER';
-          sql += `\n${joinType} JOIN ${formatTableRef(sourceData.label, driver)} ${sourceAlias} ON ${formatColumnRef(sourceAlias, edge.sourceHandle ?? '', driver)} = ${formatColumnRef(targetAlias, edge.targetHandle ?? '', driver)}`;
+          sql += `\n${joinType} JOIN ${formatNodeTableRef(sourceData, driver)} ${sourceAlias} ON ${formatColumnRef(sourceAlias, edge.sourceHandle ?? '', driver)} = ${formatColumnRef(targetAlias, edge.targetHandle ?? '', driver)}`;
           processedNodes.add(edge.source);
           edgesToProcess.splice(i, 1);
           madeProgress = true;
@@ -266,7 +273,7 @@ export function generateFromClause(
   nodes.forEach((node) => {
     if (!processedNodes.has(node.id)) {
       const data = node.data;
-      sql += `,\n  ${formatTableRef(data.label, driver)} ${aliases[node.id]}`;
+      sql += `,\n  ${formatNodeTableRef(data, driver)} ${aliases[node.id]}`;
     }
   });
 

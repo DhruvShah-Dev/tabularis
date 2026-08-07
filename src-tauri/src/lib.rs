@@ -618,6 +618,7 @@ pub fn run() {
             plugins::commands::enable_plugin,
             plugins::commands::get_plugin_manifest,
             plugins::commands::get_plugin_dir,
+            plugins::commands::open_plugins_dir,
             plugins::commands::read_plugin_file,
             plugins::commands::fetch_tabularium_plugin_preview,
             plugins::deep_link::consume_pending_deep_link_install,
