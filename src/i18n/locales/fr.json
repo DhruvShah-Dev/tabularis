@@ -701,12 +701,14 @@
       "confirmRemove": "Voulez-vous vraiment supprimer \"{{name}}\" ? Cela supprimera les fichiers du plugin.",
       "enabled": "Activé",
       "disabled": "Désactivé",
+      "openFolder": "Ouvrir le dossier des plugins",
       "installError": {
         "title": "Échec de l’installation",
         "subtitle": "Une erreur s’est produite lors de l’installation du plugin. Voir les détails ci-dessous.",
         "details": "Détails de l’erreur",
         "copy": "Copier",
-        "copied": "Copié !"
+        "copied": "Copié !",
+        "reload": "Recharger les plugins"
       },
       "uninstallError": {
         "title": "Échec de la désinstallation",
