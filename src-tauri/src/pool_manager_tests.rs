@@ -977,6 +977,42 @@ mod postgres_tls_connector_tests {
 }
 
 #[cfg(test)]
+mod sqlite_path_tests {
+    use crate::sqlite_database::expand_sqlite_filename_with_home;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn expands_sqlite_home_prefixes() {
+        let home = PathBuf::from("/home/dev");
+
+        assert_eq!(
+            expand_sqlite_filename_with_home("~/db.sqlite", Some(&home)),
+            home.join("db.sqlite")
+        );
+        assert_eq!(
+            expand_sqlite_filename_with_home("~\\db.sqlite", Some(&home)),
+            home.join("db.sqlite")
+        );
+    }
+
+    #[test]
+    fn leaves_non_home_sqlite_paths_unchanged() {
+        assert_eq!(
+            expand_sqlite_filename_with_home("relative/db.sqlite", None),
+            PathBuf::from("relative/db.sqlite")
+        );
+        assert_eq!(
+            expand_sqlite_filename_with_home("~", Some(Path::new("/home/dev"))),
+            PathBuf::from("~")
+        );
+        assert_eq!(
+            expand_sqlite_filename_with_home("~user/db.sqlite", Some(Path::new("/home/dev"))),
+            PathBuf::from("~user/db.sqlite")
+        );
+    }
+}
+
+#[cfg(test)]
 mod startup_script_tests {
     use crate::models::{ConnectionParams, DatabaseSelection};
     use crate::pool_manager::{close_pool_with_id, get_sqlite_pool_with_id};
