@@ -202,24 +202,17 @@ pub async fn install_plugin(
                 }
             }
         };
-    installer::download_and_install(&plugin_id, &download_url, expected_sha256.as_deref()).await?;
-
-    // Verify the installed manifest matches what the registry advertised. The
-    // canonical schema uses `name` as the identity, so `installed_plugin.id`
-    // falls back to the manifest `name` when no legacy `id` is present.
-    let installed_plugin = installer::read_installed_plugin(&plugin_id)?;
-    if installed_plugin.id != plugin_id {
-        return Err(format!(
-            "Plugin archive mismatch: registry expected id '{}' but installed manifest reports '{}'",
-            plugin_id, installed_plugin.id
-        ));
-    }
-    if installed_plugin.version != target_version {
-        return Err(format!(
-            "Plugin archive version mismatch: registry expected version '{}' but installed manifest reports '{}'. The published asset appears inconsistent.",
-            target_version, installed_plugin.version
-        ));
-    }
+    // Identity/version verification against what the registry advertised
+    // happens inside download_and_install, while the bundle is still in its
+    // temp dir — a mismatching archive is discarded without ever touching an
+    // existing installation.
+    installer::download_and_install(
+        &plugin_id,
+        &download_url,
+        expected_sha256.as_deref(),
+        Some(&target_version),
+    )
+    .await?;
 
     // Hot-register the new driver (no restart needed)
     let plugin_cfg = config.plugins.as_ref().and_then(|m| m.get(&plugin_id));
@@ -318,6 +311,18 @@ pub fn get_plugin_dir(plugin_id: String) -> Result<String, String> {
         .to_str()
         .ok_or_else(|| "Plugin path contains invalid UTF-8".to_string())
         .map(|s| s.to_string())
+}
+
+/// Opens the plugins directory in the OS file manager so the user can manage
+/// plugin bundles manually (e.g. when an uninstall fails because the folder
+/// on disk no longer matches what the app expects).
+#[tauri::command]
+pub fn open_plugins_dir(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let plugins_dir = installer::get_plugins_dir()?;
+    app.opener()
+        .open_path(plugins_dir.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| format!("Failed to open plugins directory: {}", e))
 }
 
 /// Fetches a rich plugin preview from a Tabularium registry, used by the

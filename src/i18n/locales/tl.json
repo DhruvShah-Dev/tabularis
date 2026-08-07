@@ -701,12 +701,14 @@
       "confirmRemove": "Sigurado ka bang gusto mong alisin ang \"{{name}}\"? Mabubura ang mga plugin file.",
       "enabled": "Naka-enable",
       "disabled": "Naka-disable",
+      "openFolder": "Buksan ang folder ng mga plugin",
       "installError": {
         "title": "Nabigo ang Pag-install",
         "subtitle": "May error habang ini-install ang plugin. Tingnan ang mga detalye sa ibaba.",
         "details": "Mga Detalye ng Error",
         "copy": "Kopyahin",
-        "copied": "Nakopya!"
+        "copied": "Nakopya!",
+        "reload": "I-reload ang mga plugin"
       },
       "uninstallError": {
         "title": "Nabigo ang Pag-uninstall",

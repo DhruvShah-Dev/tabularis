@@ -710,12 +710,14 @@
       "confirmRemove": "Are you sure you want to remove \"{{name}}\"? This will delete the plugin files.",
       "enabled": "Enabled",
       "disabled": "Disabled",
+      "openFolder": "Open plugins folder",
       "installError": {
         "title": "Installation Failed",
         "subtitle": "An error occurred while installing the plugin. See the details below.",
         "details": "Error Details",
         "copy": "Copy",
-        "copied": "Copied!"
+        "copied": "Copied!",
+        "reload": "Reload plugins"
       },
       "uninstallError": {
         "title": "Uninstallation failed",

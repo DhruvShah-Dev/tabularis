@@ -682,12 +682,14 @@
       "confirmRemove": "「{{name}}」を削除してもよろしいですか？プラグインファイルが削除されます。",
       "enabled": "有効",
       "disabled": "無効",
+      "openFolder": "プラグインフォルダーを開く",
       "installError": {
         "title": "インストール失敗",
         "subtitle": "プラグインのインストール中にエラーが発生しました。詳細は下記を参照してください。",
         "details": "エラーの詳細",
         "copy": "コピー",
-        "copied": "コピーしました！"
+        "copied": "コピーしました！",
+        "reload": "プラグインを再読み込み"
       },
       "uninstallError": {
         "title": "アンインストール失敗",

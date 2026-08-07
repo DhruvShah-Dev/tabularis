@@ -693,12 +693,14 @@
       "confirmRemove": "Sei sicuro di voler rimuovere \"{{name}}\"? I file del plugin verranno eliminati.",
       "enabled": "Abilitato",
       "disabled": "Disabilitato",
+      "openFolder": "Apri cartella plugin",
       "installError": {
         "title": "Installazione fallita",
         "subtitle": "Si è verificato un errore durante l'installazione del plugin. Vedi i dettagli qui sotto.",
         "details": "Dettagli errore",
         "copy": "Copia",
-        "copied": "Copiato!"
+        "copied": "Copiato!",
+        "reload": "Ricarica plugin"
       },
       "uninstallError": {
         "title": "Disinstallazione fallita",
