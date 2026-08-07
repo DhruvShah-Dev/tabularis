@@ -1998,6 +1998,7 @@
     "driverCount_other": "{{count}} 个驱动程序",
     "connectTo": "连接到 {{name}}",
     "unavailableOnPlatform": "在您的平台上不可用",
+    "unavailable": "不可用",
     "backToCatalogue": "返回目录",
     "pickDriver": "多个驱动程序可连接到 {{name}}。请选择一个：",
     "latestVersion": "最新 v{{version}}",

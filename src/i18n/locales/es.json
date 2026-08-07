@@ -1980,6 +1980,7 @@
     "driverCount_other": "{{count}} controladores",
     "connectTo": "Conectar a {{name}}",
     "unavailableOnPlatform": "No disponible en tu plataforma",
+    "unavailable": "No disponible",
     "backToCatalogue": "Volver al catálogo",
     "pickDriver": "Varios controladores se conectan a {{name}}. Elige uno:",
     "latestVersion": "Última v{{version}}",

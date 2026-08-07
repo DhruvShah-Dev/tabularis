@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { CatalogueDriver } from "../../../utils/connectionCatalogue";
+import { RegistryDriverIcon } from "./RegistryDriverIcon";
 
 export type InstallStatus = "idle" | "installing" | "error";
 
@@ -31,7 +32,7 @@ function accentFor(driver: CatalogueDriver): string {
 function renderIcon(driver: CatalogueDriver) {
   const icon = driver.icon ?? "";
   if (/^https?:\/\//.test(icon) || icon.startsWith("data:")) {
-    return <img src={icon} alt="" className="h-8 w-8 rounded object-contain" />;
+    return <RegistryDriverIcon src={icon} size={32} fallback={<Database size={26} />} />;
   }
   return <Database size={26} />;
 }

@@ -2058,6 +2058,7 @@
     "driverCount_other": "{{count}} Treiber",
     "connectTo": "Mit {{name}} verbinden",
     "unavailableOnPlatform": "Auf deiner Plattform nicht verfügbar",
+    "unavailable": "Nicht verfügbar",
     "backToCatalogue": "Zurück zum Katalog",
     "pickDriver": "Mehrere Treiber verbinden sich mit {{name}}. Wähle einen:",
     "latestVersion": "Neueste v{{version}}",

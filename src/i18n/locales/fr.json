@@ -2136,6 +2136,7 @@
     "driverCount_other": "{{count}} pilotes",
     "connectTo": "Se connecter à {{name}}",
     "unavailableOnPlatform": "Indisponible sur votre plateforme",
+    "unavailable": "Indisponible",
     "backToCatalogue": "Retour au catalogue",
     "pickDriver": "Plusieurs pilotes se connectent à {{name}}. Choisissez-en un :",
     "latestVersion": "Dernière v{{version}}",

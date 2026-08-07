@@ -140,7 +140,7 @@ export interface RegistryPluginWithStatus {
   tags?: string[];
   category?: string | null;
   downloads?: number | null;
-  /** Base URL of the registry that served this plugin (e.g. https://registry.spitzli.dev). */
+  /** Base URL of the registry that served this plugin (e.g. https://registry.tabularis.dev). */
   registry_base_url?: string | null;
   /** Concrete database the driver connects to (registry manifest extensions.engine). */
   engine?: string | null;
