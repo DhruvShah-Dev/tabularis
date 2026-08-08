@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, Check, Copy, X } from "lucide-react";
 import { Modal } from "../ui/Modal";
+import { copyTextToClipboard } from "../../utils/clipboard";
 
 interface ErrorModalProps {
   isOpen: boolean;
@@ -10,6 +12,13 @@ interface ErrorModalProps {
 
 export const ErrorModal = ({ isOpen, onClose, message }: ErrorModalProps) => {
   const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await copyTextToClipboard(message);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
@@ -32,10 +41,19 @@ export const ErrorModal = ({ isOpen, onClose, message }: ErrorModalProps) => {
         </div>
 
         <div className="p-6 overflow-y-auto">
-          <p className="text-sm text-secondary break-words">{message}</p>
+          <pre className="text-sm text-secondary whitespace-pre-wrap break-words select-text font-mono">
+            {message}
+          </pre>
         </div>
 
-        <div className="p-4 border-t border-default bg-base/50 flex justify-end">
+        <div className="p-4 border-t border-default bg-base/50 flex justify-end gap-3">
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-2 px-4 py-2 text-secondary hover:text-primary border border-strong rounded-lg text-sm font-medium transition-colors"
+          >
+            {copied ? <Check size={15} className="text-green-400" /> : <Copy size={15} />}
+            {copied ? t("dataGrid.copied") : t("common.copy")}
+          </button>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"

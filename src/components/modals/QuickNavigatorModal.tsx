@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useDatabase } from "../../hooks/useDatabase";
 import { useAlert } from "../../hooks/useAlert";
 import { quoteTableRef } from "../../utils/identifiers";
-import { isMultiDatabaseCapable, getDatabaseList } from "../../utils/database";
+import { isMultiDatabaseCapable, usesMultiDatabaseLayout } from "../../utils/database";
 import { getNavigatorItems, filterNavigatorItems } from "../../utils/quickNavigator";
 import { newConsoleForTable } from "../../utils/newConsole";
 import type { RoutineInfo, TriggerInfo } from "../../contexts/DatabaseContext";
@@ -39,54 +39,43 @@ export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql, onInspect 
     schemas,
     loadSchemaData,
     loadDatabaseData,
-    connections,
+    selectedDatabases,
   } = useDatabase();
 
   const [search, setSearch] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
-
-  // Find the active connection configuration
-  const activeConn = useMemo(() => {
-    return connections.find((c) => c.id === activeConnectionId);
-  }, [connections, activeConnectionId]);
-
-  // Resolve the configured database list for the connection
-  const configuredDatabases = useMemo(() => {
-    if (!activeConn) return [];
-    return getDatabaseList(activeConn.params.database);
-  }, [activeConn]);
 
   // Load metadata for all schemas/databases in the background when the modal is open
   useEffect(() => {
     if (!isOpen || !activeConnectionId) return;
 
     const loadAll = async () => {
-      const isMultiDb = isMultiDatabaseCapable(activeCapabilities);
+      const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
       const hasSchemas = activeCapabilities?.schemas;
 
       if (hasSchemas && schemas) {
         schemas.forEach((schema) => {
           loadSchemaData(schema);
         });
-      } else if (isMultiDb && configuredDatabases) {
-        configuredDatabases.forEach((db) => {
+      } else if (isMultiDb) {
+        selectedDatabases.forEach((db) => {
           loadDatabaseData(db);
         });
       }
     };
 
     loadAll();
-  }, [isOpen, activeConnectionId, activeCapabilities, schemas, configuredDatabases, loadSchemaData, loadDatabaseData]);
+  }, [isOpen, activeConnectionId, activeCapabilities, schemas, selectedDatabases, loadSchemaData, loadDatabaseData]);
 
   // Gather all schema items based on database capabilities
   const items = useMemo(() => {
     return getNavigatorItems({
       activeConnectionId,
       hasSchemas: !!activeCapabilities?.schemas,
-      isMultiDb: isMultiDatabaseCapable(activeCapabilities),
+      isMultiDb: usesMultiDatabaseLayout(activeCapabilities, selectedDatabases),
       schemas,
       schemaDataMap,
-      configuredDatabases,
+      configuredDatabases: selectedDatabases,
       databaseDataMap,
       tables,
       views,
@@ -97,9 +86,9 @@ export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql, onInspect 
   }, [
     activeConnectionId,
     activeCapabilities,
+    selectedDatabases,
     schemas,
     schemaDataMap,
-    configuredDatabases,
     databaseDataMap,
     tables,
     views,
@@ -110,10 +99,10 @@ export const QuickNavigatorModal = ({ isOpen, onClose, onGenerateSql, onInspect 
 
   // Check if we have multiple databases/schemas to show group headers
   const showGroupHeaders = useMemo(() => {
-    const isMultiDb = isMultiDatabaseCapable(activeCapabilities);
+    const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
     const hasSchemas = activeCapabilities?.schemas;
     return !!(hasSchemas || isMultiDb);
-  }, [activeCapabilities]);
+  }, [activeCapabilities, selectedDatabases]);
 
   // Dynamically filter items as user types
   const filteredItems = useMemo(() => {
