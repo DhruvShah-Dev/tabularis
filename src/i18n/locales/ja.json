@@ -2088,7 +2088,14 @@
     "notInstalled": "このドライバーはまだインストールされていません。接続を設定するにはインストールしてください。",
     "installVersion": "v{{version}} をインストール",
     "installingVersion": "v{{version}} をインストール中…",
-    "retryInstall": "インストールを再試行"
+    "retryInstall": "インストールを再試行",
+    "viewDetails": "詳細を見る",
+    "installTitle": "ドライバーをインストール",
+    "readmeSubtitle": "プラグインのREADME",
+    "readmeLoading": "READMEを読み込み中…",
+    "readmeUnavailable": "このプラグインにはREADMEがありません。",
+    "readmeFallbackLocale": "このREADMEはまだお使いの言語では利用できません — “{{locale}}”で表示しています。",
+    "openDocumentation": "完全なドキュメントを開く"
   },
   "connectionErrors": {
     "ssh-auth": {

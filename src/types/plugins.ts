@@ -116,6 +116,21 @@ export interface UIExtensionManifestEntry {
   driver?: string;
 }
 
+/**
+ * Locale-aware README payload from the `fetch_plugin_readme` command.
+ * `html` is the registry's server-rendered README; `locale` is the locale
+ * actually served, which can differ from the requested one when the plugin
+ * has no translation for it.
+ */
+export interface PluginReadme {
+  html: string | null;
+  locale: string | null;
+  available_locales?: string[];
+  documentation_url?: string | null;
+  /** Repository URL, used to resolve relative image/link paths in the README. */
+  repo_url?: string | null;
+}
+
 export interface RegistryReleaseWithStatus {
   version: string;
   min_tabularis_version: string | null;

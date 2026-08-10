@@ -2148,7 +2148,14 @@
     "notInstalled": "Ce pilote n'est pas encore installé. Installez-le pour configurer une connexion.",
     "installVersion": "Installer v{{version}}",
     "installingVersion": "Installation de v{{version}}…",
-    "retryInstall": "Réessayer l'installation"
+    "retryInstall": "Réessayer l'installation",
+    "viewDetails": "Plus de détails",
+    "installTitle": "Installer le pilote",
+    "readmeSubtitle": "README du plugin",
+    "readmeLoading": "Chargement du README…",
+    "readmeUnavailable": "Aucun README n'est disponible pour ce plugin.",
+    "readmeFallbackLocale": "Ce README n'est pas encore disponible dans votre langue — affiché en « {{locale}} ».",
+    "openDocumentation": "Ouvrir la documentation complète"
   },
   "connectionErrors": {
     "ssh-auth": {
