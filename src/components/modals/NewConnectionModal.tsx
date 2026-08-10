@@ -3792,7 +3792,15 @@ export const NewConnectionModal = ({
       >
         {/* ── Top bar: step-aware title / name + progress + close ── */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-default bg-base">
-          {step === "form" ? (
+          {step === "form" && activeDriverNotInstalled ? (
+            /* Install gate: there is no connection to name or classify yet,
+               so the header shows a plain title instead of name/environment. */
+            <h2 className="flex-1 truncate text-base font-semibold text-primary">
+              {t("connectionCatalogue.installTitle", {
+                defaultValue: "Install driver",
+              })}
+            </h2>
+          ) : step === "form" ? (
             <>
               <div
                 className="w-2 h-2 rounded-full shrink-0"
@@ -3832,7 +3840,7 @@ export const NewConnectionModal = ({
             </h2>
           )}
 
-          {step === "form" && (
+          {step === "form" && !activeDriverNotInstalled && (
             <>
               <select
                 value={environment}

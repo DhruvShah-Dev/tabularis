@@ -1,8 +1,10 @@
-import { AlertTriangle, Database, Loader2 } from "lucide-react";
+import { AlertTriangle, BookOpen, Database, Loader2 } from "lucide-react";
 import type { CSSProperties } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { CatalogueDriver } from "../../../utils/connectionCatalogue";
+import { PluginReadmeModal } from "../PluginReadmeModal";
 import { RegistryDriverIcon } from "./RegistryDriverIcon";
 
 export type InstallStatus = "idle" | "installing" | "error";
@@ -39,6 +41,7 @@ function renderIcon(driver: CatalogueDriver) {
 
 export function InstallGate({ driver, status, error, onInstall, onBack }: InstallGateProps) {
   const { t } = useTranslation();
+  const [showReadme, setShowReadme] = useState(false);
   const accent = accentFor(driver);
   const unsupported = !driver.platformSupported;
   const installing = status === "installing";
@@ -108,6 +111,17 @@ export function InstallGate({ driver, status, error, onInstall, onBack }: Instal
         </div>
       )}
 
+      {!driver.isBuiltin && (
+        <button
+          type="button"
+          onClick={() => setShowReadme(true)}
+          className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-blue-400 transition-colors hover:text-blue-300"
+        >
+          <BookOpen size={13} />
+          {t("connectionCatalogue.viewDetails", { defaultValue: "More details" })}
+        </button>
+      )}
+
       <button
         type="button"
         onClick={onBack}
@@ -115,6 +129,13 @@ export function InstallGate({ driver, status, error, onInstall, onBack }: Instal
       >
         ← {t("newConnection.changeDatabase", { defaultValue: "Change database" })}
       </button>
+
+      <PluginReadmeModal
+        isOpen={showReadme}
+        onClose={() => setShowReadme(false)}
+        slug={driver.slug}
+        pluginName={driver.name}
+      />
     </div>
   );
 }
