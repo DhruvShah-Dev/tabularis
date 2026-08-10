@@ -1444,6 +1444,7 @@ impl DatabaseDriver for SqliteDriver {
 
     async fn get_create_foreign_key_sql(
         &self,
+        _params: &crate::models::ConnectionParams,
         _table: &str,
         _fk_name: &str,
         _column: &str,

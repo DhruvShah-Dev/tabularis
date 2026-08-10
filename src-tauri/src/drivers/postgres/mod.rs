@@ -2424,6 +2424,7 @@ impl DatabaseDriver for PostgresDriver {
 
     async fn get_create_foreign_key_sql(
         &self,
+        _params: &crate::models::ConnectionParams,
         table: &str,
         fk_name: &str,
         column: &str,
