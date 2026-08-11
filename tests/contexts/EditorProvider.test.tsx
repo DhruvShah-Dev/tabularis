@@ -506,3 +506,112 @@ describe("EditorProvider", () => {
     expect(resultConn2.current.tabs).toHaveLength(0);
   });
 });
+
+describe("EditorProvider connection switching (#292)", () => {
+  const storage: Record<
+    string,
+    { tabs: Record<string, unknown>[]; active_tab_id: string | null } | null
+  > = {};
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    for (const key of Object.keys(storage)) delete storage[key];
+    vi.mocked(invoke).mockImplementation(
+      (cmd: string, args?: { connectionId?: string }) => {
+        if (cmd === "load_editor_preferences") {
+          return Promise.resolve(
+            args?.connectionId ? (storage[args.connectionId] ?? null) : null,
+          );
+        }
+        if (cmd === "save_editor_preferences") {
+          return Promise.resolve(undefined);
+        }
+        return Promise.resolve(null);
+      },
+    );
+  });
+
+  it("keeps query results when switching away and back to a connection", async () => {
+    storage["conn-1"] = {
+      tabs: [
+        {
+          id: "tab-1",
+          title: "Console",
+          type: "console",
+          query: "select * from users",
+          page: 1,
+          activeTable: null,
+          pkColumns: null,
+          connectionId: "conn-1",
+        },
+      ],
+      active_tab_id: "tab-1",
+    };
+
+    const conn = { current: "conn-1" };
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        DatabaseContext.Provider,
+        {
+          value: {
+            activeConnectionId: conn.current,
+            activeDriver: "mysql",
+            activeTable: null,
+            activeConnectionName: "Test Connection",
+            activeDatabaseName: "testdb",
+            tables: [],
+            isLoadingTables: false,
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+            setActiveTable: vi.fn(),
+            refreshTables: vi.fn(),
+          },
+        },
+        React.createElement(EditorProvider, null, children),
+      );
+
+    const { result, rerender } = renderHook(() => useEditor(), { wrapper });
+
+    // Storage load brings in conn-1's tab (result-stripped, as persisted).
+    await waitFor(() => expect(result.current.tabs).toHaveLength(1));
+    expect(result.current.tabs[0].id).toBe("tab-1");
+
+    // Running the query fills in the live result.
+    const liveResult = {
+      columns: ["id"],
+      rows: [[1]],
+      affected_rows: 0,
+    };
+    act(() => {
+      result.current.updateTab("tab-1", { result: liveResult });
+    });
+    expect(result.current.tabs[0].result).toBe(liveResult);
+
+    // Switch to another connection; its initial tab gets created.
+    conn.current = "conn-2";
+    rerender();
+    await waitFor(() =>
+      expect(
+        result.current.tabs.some((t) => t.connectionId === "conn-2"),
+      ).toBe(true),
+    );
+
+    // Switching back must not reload conn-1's result-stripped storage copy.
+    conn.current = "conn-1";
+    rerender();
+
+    const tab1 = result.current.tabs.find((t) => t.id === "tab-1");
+    expect(tab1?.query).toBe("select * from users");
+    expect(tab1?.result).toBe(liveResult);
+
+    // The storage loader never ran for conn-1 a second time.
+    const conn1Loads = vi
+      .mocked(invoke)
+      .mock.calls.filter(
+        ([cmd, args]) =>
+          cmd === "load_editor_preferences" &&
+          (args as { connectionId?: string })?.connectionId === "conn-1",
+      );
+    expect(conn1Loads).toHaveLength(1);
+  });
+});
