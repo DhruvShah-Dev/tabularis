@@ -71,19 +71,31 @@ export function useConnectionLayout(): ConnectionLayoutState {
     setExplorerConnectionId(null);
   }, []);
 
+  // ponytail: reads `splitView` from the closure because the next layout is
+  // needed outside the updater to settle visibility and focus too. Both callers
+  // are single user gestures; batch two removals in one tick and the second is
+  // lost — move the three fields into one reducer if that ever happens.
   const removeConnectionFromSplit = useCallback((connectionId: string) => {
-    setSplitView(prev => {
-      if (!prev) return null;
-      const next = makeSplitView(removeFromLayout(prev.layout, connectionId));
-      // A split needs at least two panels to stay alive
-      if (!next || next.connectionIds.length < 2) {
-        setIsSplitVisible(false);
-        return null;
-      }
-      return next;
-    });
-    setExplorerConnectionId(prev => (prev === connectionId ? null : prev));
-  }, []);
+    const next = splitView
+      ? makeSplitView(removeFromLayout(splitView.layout, connectionId))
+      : null;
+
+    // A split needs at least two panels to stay alive
+    if (!next || next.connectionIds.length < 2) {
+      setSplitView(null);
+      setIsSplitVisible(false);
+      setExplorerConnectionId(null);
+      return;
+    }
+
+    setSplitView(next);
+    // The command palette resolves its scope from the focused connection, and
+    // a null one while the split still renders sends editor commands to the
+    // unmounted routed editor. Hand the focus to a surviving panel instead.
+    setExplorerConnectionId(prev =>
+      prev === connectionId ? next.connectionIds[0] : prev,
+    );
+  }, [splitView]);
 
   const addConnectionToSplit = useCallback((connectionId: string) => {
     setSplitView(prev => (prev ? addToSplit(prev, connectionId) : prev));

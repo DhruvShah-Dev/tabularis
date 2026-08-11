@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from "react";
+import React, { useRef, useCallback, useContext, useEffect } from "react";
 import MonacoEditor, { type OnMount, type BeforeMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import { useEditorTheme } from "../../hooks/useEditorTheme";
@@ -6,6 +6,7 @@ import { loadMonacoTheme } from "../../themes/themeUtils";
 import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useSettings } from "../../hooks/useSettings";
 import { useKeybindings } from "../../hooks/useKeybindings";
+import { CommandPaletteDispatchContext } from "../../contexts/CommandPaletteContext";
 import { getFontCSS } from "../../utils/settings";
 import {
   splitStatements,
@@ -35,6 +36,14 @@ interface SqlEditorWrapperProps {
    * the button with its actual target. Requires `dialect`.
    */
   onRunContextChange?: (context: RunContext) => void;
+}
+
+function isLinux(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } })
+      .userAgentData?.platform ?? navigator.platform;
+  return platform.toUpperCase().includes("LINUX");
 }
 
 // Internal component that resets when key changes
@@ -73,8 +82,11 @@ const SqlEditorInternal = ({
   const editorTheme = useEditorTheme();
   const { settings } = useSettings();
   const { matchesShortcut } = useKeybindings();
+  const commandPaletteDispatch = useContext(CommandPaletteDispatchContext);
   const matchesShortcutRef = useRef(matchesShortcut);
   matchesShortcutRef.current = matchesShortcut;
+  const togglePaletteRef = useRef(commandPaletteDispatch?.togglePalette);
+  togglePaletteRef.current = commandPaletteDispatch?.togglePalette;
 
   // Dispose editor on unmount to prevent "domNode" errors from ResizeObserver
   // firing after the DOM container is removed (e.g., cell deletion/movement)
@@ -108,6 +120,27 @@ const SqlEditorInternal = ({
       loadMonacoTheme(editorTheme, monacoRef.current);
     }
   }, [editorTheme]);
+
+  // Monaco measures glyph widths once and does not re-measure when a webfont
+  // finishes loading, so a freshly selected bundled font renders with stale
+  // fallback metrics until forced. Remeasure once the font is ready.
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    if (!monaco) return;
+    monaco.editor.remeasureFonts();
+    const fonts = typeof document !== "undefined" ? document.fonts : undefined;
+    if (!fonts) return;
+    let cancelled = false;
+    fonts
+      .load(`16px "${settings.editorFontFamily ?? "JetBrains Mono"}"`)
+      .then(() => {
+        if (!cancelled) monaco.editor.remeasureFonts();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.editorFontFamily]);
 
   // All editors stay mounted (hidden tabs use display:none) and a hidden
   // editor's notifications are dropped, so on becoming the active tab the
@@ -209,6 +242,10 @@ const SqlEditorInternal = ({
     const handleEditorMount: OnMount = (editor, monaco) => {
       editorRef.current = editor;
       monacoRef.current = monaco;
+
+      if (typeof document !== "undefined" && document.fonts) {
+        document.fonts.ready.then(() => monaco.editor.remeasureFonts());
+      }
 
       // Register custom Cut/Copy/Paste actions using the Tauri clipboard API.
       // Monaco's built-ins rely on document.execCommand, which silently fails
@@ -339,14 +376,35 @@ const SqlEditorInternal = ({
         },
       });
 
-      // Force the suggestion widget via the user-configurable shortcut
+      // Monaco binds Ctrl+Shift+A to block comments on Linux. Handle the
+      // user-configurable palette shortcut before Monaco consumes it.
       editor.onKeyDown((e) => {
+        const togglePalette = togglePaletteRef.current;
+        if (
+          togglePalette &&
+          matchesShortcutRef.current(e.browserEvent, "command_palette_actions")
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          togglePalette("actions");
+          return;
+        }
+
         if (matchesShortcutRef.current(e.browserEvent, "trigger_suggestions")) {
           e.preventDefault();
           e.stopPropagation();
           editor.trigger("keyboard", "editor.action.triggerSuggest", {});
         }
       });
+
+      // Keep block comments reachable after Ctrl+Shift+A is reserved for the
+      // palette on Linux, matching Monaco's shortcut on macOS and Windows.
+      if (togglePaletteRef.current && isLinux()) {
+        editor.addCommand(
+          monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyA,
+          () => editor.trigger("keyboard", "editor.action.blockComment", {}),
+        );
+      }
 
       // Highlight the statement the cursor is currently inside (no
       // highlight while there's an active selection). Opt-in via the
