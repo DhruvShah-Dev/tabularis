@@ -2529,30 +2529,27 @@ export const NewConnectionModal = ({
           )}
 
           {!isUriPassthrough && (
-            <>
-              {/* Host + Port */}
-              <div
-                className={clsx(
-                  "grid gap-3",
-                  driver === "postgres" ? "grid-cols-4" : "grid-cols-3",
-                )}
-              >
-                <FieldInput
-                  className="col-span-2"
-                  label={t("newConnection.host")}
-                  value={formData.host}
-                  onChange={(v) => updateField("host", v)}
-                  placeholder="localhost"
-                />
-                <FieldInput
-                  label={t("newConnection.port")}
-                  value={formData.port}
-                  onChange={(v) => updateField("port", v)}
-                  type="number"
-                  placeholder={driver === "mysql" ? "3306" : "5432"}
-                />
-              </div>
-            </>
+            <div
+              className={clsx(
+                "grid gap-3",
+                driver === "postgres" ? "grid-cols-4" : "grid-cols-3",
+              )}
+            >
+              <FieldInput
+                className="col-span-2"
+                label={t("newConnection.host")}
+                value={formData.host}
+                onChange={(v) => updateField("host", v)}
+                placeholder="localhost"
+              />
+              <FieldInput
+                label={t("newConnection.port")}
+                value={formData.port}
+                onChange={(v) => updateField("port", v)}
+                type="number"
+                placeholder={driver === "mysql" ? "3306" : "5432"}
+              />
+            </div>
           )}
 
           {/* Plugin-owned extra connection fields (opaque `extra` map) */}
