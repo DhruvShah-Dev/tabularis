@@ -348,7 +348,7 @@
       "previewSubtitle": "Suriin ang mga koneksyon mula sa {{source}}",
       "notInstalled": "Hindi naka-install",
       "chooseFile": "Pumili ng export file na ii-import",
-      "chooseConfigPath": "Choose the app config folder to import",
+      "chooseConfigPath": "Piliin ang folder ng configuration ng app na ii-import",
       "connectionsFound_one": "1 koneksyon ang nahanap",
       "connectionsFound_other": "{{count}} koneksyon ang nahanap",
       "includePasswords": "Isama ang mga password",

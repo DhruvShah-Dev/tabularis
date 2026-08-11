@@ -136,6 +136,11 @@ export const ImportFromAppModal = ({
   }, [isOpen, reset]);
 
   const selectedSource = sources.find((s) => s.id === selectedId) ?? null;
+  const canContinueFromPicker =
+    !!selectedSource &&
+    (selectedSource.available ||
+      selectedSource.needsFile ||
+      selectedSource.manualPathSupported);
 
   // Seed the preview step from a returned ImportPreview: import everything,
   // skip duplicates, and default each item's group to its source folder
@@ -541,7 +546,7 @@ export const ImportFromAppModal = ({
             {step === "picker" ? (
               <button
                 onClick={handleContinue}
-                disabled={!selectedSource?.available || loading}
+                disabled={!canContinueFromPicker || loading}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {t("common.continue", { defaultValue: "Continue" })}
