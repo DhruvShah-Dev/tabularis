@@ -210,6 +210,16 @@
     "overridable": true
   },
   {
+    "id": "command_palette_actions",
+    "category": "navigation",
+    "defaultMac": "⌘+Shift+A",
+    "defaultWin": "Ctrl+Shift+A",
+    "macMatch": { "metaKey": true, "shiftKey": true, "key": "a" },
+    "winMatch": { "ctrlKey": true, "shiftKey": true, "key": "a" },
+    "i18nKey": "settings.shortcuts.commandPaletteActions",
+    "overridable": true
+  },
+  {
     "id": "trigger_suggestions",
     "category": "editor",
     "defaultMac": "⌘+I",
