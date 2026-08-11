@@ -1426,6 +1426,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rpc_driver_forwards_params_to_get_create_foreign_key_sql() {
+        let uri = "libsql://db.example.invalid?authToken=tok";
+        let expected = uri.to_string();
+        let driver = test_driver(move |request| {
+            assert_eq!(request.method, "get_create_foreign_key_sql");
+            assert_eq!(request.params["params"]["connection_uri"], expected);
+            assert_eq!(request.params["table"], "orders");
+            json!(["ALTER TABLE ..."])
+        });
+        let mut params = test_connection_params();
+        params.connection_uri = Some(uri.to_string());
+
+        let sql = driver
+            .get_create_foreign_key_sql(
+                &params,
+                "orders",
+                "fk_user",
+                "user_id",
+                "users",
+                "id",
+                Some("CASCADE"),
+                Some("CASCADE"),
+                None,
+            )
+            .await
+            .expect("fk sql");
+        assert_eq!(sql, vec!["ALTER TABLE ...".to_string()]);
+    }
+
+    #[tokio::test]
     async fn rpc_driver_builds_ai_schema_context_from_standard_metadata_as_fallback() {
         let driver = test_driver_result(|request| match request.method.as_str() {
             "get_ai_schema_context" => Err("Method not found (-32601)".to_string()),
