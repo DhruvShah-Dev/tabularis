@@ -13,7 +13,8 @@ const TYPING_SAFE_SHORTCUTS = [
 
 /**
  * Registers global keyboard shortcuts for navigation.
- * Must be called inside a component that is a child of KeybindingsProvider and BrowserRouter.
+ * Must be called inside a component that is a child of KeybindingsProvider,
+ * BrowserRouter and CommandPaletteProvider.
  */
 export function useGlobalShortcuts() {
   const navigate = useNavigate();
