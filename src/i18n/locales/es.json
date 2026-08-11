@@ -693,12 +693,14 @@
       "confirmRemove": "¿Estás seguro de que deseas eliminar \"{{name}}\"? Los archivos del plugin serán eliminados.",
       "enabled": "Habilitado",
       "disabled": "Deshabilitado",
+      "openFolder": "Abrir carpeta de plugins",
       "installError": {
         "title": "Instalación fallida",
         "subtitle": "Ocurrió un error al instalar el plugin. Consulta los detalles a continuación.",
         "details": "Detalles del error",
         "copy": "Copiar",
-        "copied": "¡Copiado!"
+        "copied": "¡Copiado!",
+        "reload": "Recargar plugins"
       },
       "uninstallError": {
         "title": "Desinstalación fallida",
@@ -1990,7 +1992,14 @@
     "notInstalled": "Este controlador aún no está instalado. Instálalo para configurar una conexión.",
     "installVersion": "Instalar v{{version}}",
     "installingVersion": "Instalando v{{version}}…",
-    "retryInstall": "Reintentar instalación"
+    "retryInstall": "Reintentar instalación",
+    "viewDetails": "Más detalles",
+    "installTitle": "Instalar controlador",
+    "readmeSubtitle": "README del plugin",
+    "readmeLoading": "Cargando README…",
+    "readmeUnavailable": "No hay README disponible para este plugin.",
+    "readmeFallbackLocale": "Este README aún no está disponible en tu idioma — se muestra en “{{locale}}”.",
+    "openDocumentation": "Abrir la documentación completa"
   },
   "connectionErrors": {
     "ssh-auth": {

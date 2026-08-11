@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { confirm } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
 import { Check, Pencil, Plus, Settings2, Trash2, X } from "lucide-react";
 import { useConnectionTags } from "../../../hooks/useConnectionTags";
 import type { ConnectionTag } from "../../../types/tags";
 import { toErrorMessage } from "../../../utils/errors";
+import { ConfirmModal } from "../ConfirmModal";
 import { PALETTE } from "./palette";
 
 /** Mirrors MAX_TAG_NAME_CHARS enforced by the backend. */
@@ -61,6 +61,7 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState(PALETTE[9]);
   const [error, setError] = useState<string | null>(null);
+  const [deletingTag, setDeletingTag] = useState<ConnectionTag | null>(null);
 
   // Async handlers (create/delete) resolve after the user may have toggled
   // other chips; reading through the ref avoids clobbering those newer
@@ -109,12 +110,10 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
     }
   };
 
-  const handleDelete = async (tag: ConnectionTag) => {
-    const ok = await confirm(t("tags.deleteConfirm", { name: tag.name }), {
-      title: t("tags.deleteTitle"),
-      kind: "warning",
-    });
-    if (!ok) return;
+  const handleDeleteConfirm = async () => {
+    if (!deletingTag) return;
+    const tag = deletingTag;
+    setDeletingTag(null);
     setError(null);
     try {
       await deleteTag(tag.id);
@@ -295,7 +294,7 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void handleDelete(tag)}
+                  onClick={() => setDeletingTag(tag)}
                   aria-label={t("common.delete")}
                   className="p-1 rounded-md text-muted hover:text-red-400 transition-colors"
                 >
@@ -308,6 +307,16 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
       )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}
+
+      <ConfirmModal
+        isOpen={deletingTag !== null}
+        onClose={() => setDeletingTag(null)}
+        title={t("tags.deleteTitle")}
+        message={t("tags.deleteConfirm", { name: deletingTag?.name ?? "" })}
+        variant="danger"
+        onConfirm={() => void handleDeleteConfirm()}
+        overlayClassName="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] backdrop-blur-sm"
+      />
     </div>
   );
 }

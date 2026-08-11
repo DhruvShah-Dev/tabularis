@@ -26,6 +26,7 @@ import type { ConnectionAppearance } from "../../contexts/DatabaseContext";
 import { AppearanceSection } from "./NewConnectionModal/AppearanceSection";
 import { MaskingOverridesEditor } from "../settings/MaskingOverridesEditor";
 import { TagSelector } from "./NewConnectionModal/TagSelector";
+import { EnvironmentSelect } from "./NewConnectionModal/EnvironmentSelect";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
 import { SshConnectionsModal } from "./SshConnectionsModal";
@@ -3792,7 +3793,15 @@ export const NewConnectionModal = ({
       >
         {/* ── Top bar: step-aware title / name + progress + close ── */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-default bg-base">
-          {step === "form" ? (
+          {step === "form" && activeDriverNotInstalled ? (
+            /* Install gate: there is no connection to name or classify yet,
+               so the header shows a plain title instead of name/environment. */
+            <h2 className="flex-1 truncate text-base font-semibold text-primary">
+              {t("connectionCatalogue.installTitle", {
+                defaultValue: "Install driver",
+              })}
+            </h2>
+          ) : step === "form" ? (
             <>
               <div
                 className="w-2 h-2 rounded-full shrink-0"
@@ -3832,32 +3841,9 @@ export const NewConnectionModal = ({
             </h2>
           )}
 
-          {step === "form" && (
+          {step === "form" && !activeDriverNotInstalled && (
             <>
-              <select
-                value={environment}
-                onChange={(e) => setEnvironment(e.target.value)}
-                aria-label={t("environment.label")}
-                className={clsx(
-                  "text-xs bg-surface-secondary border border-strong rounded-full px-2 py-0.5 font-medium outline-none cursor-pointer",
-                  environment === "production"
-                    ? "text-red-400 border-red-400/40"
-                    : environment === "staging"
-                      ? "text-amber-400 border-amber-400/40"
-                      : environment === "development"
-                        ? "text-emerald-400 border-emerald-400/40"
-                        : "text-muted",
-                )}
-              >
-                <option value="">{t("environment.none")}</option>
-                <option value="development">
-                  {t("environment.development")}
-                </option>
-                <option value="staging">{t("environment.staging")}</option>
-                <option value="production">
-                  {t("environment.production")}
-                </option>
-              </select>
+              <EnvironmentSelect value={environment} onChange={setEnvironment} />
               <span className="text-xs text-muted bg-surface-secondary px-2 py-0.5 rounded-full font-medium capitalize">
                 {activeDriver?.name ?? driver}
               </span>

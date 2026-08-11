@@ -646,12 +646,14 @@
       "confirmRemove": "\"{{name}}\"을(를) 제거하시겠습니까? 플러그인 파일이 삭제됩니다.",
       "enabled": "활성화됨",
       "disabled": "비활성화됨",
+      "openFolder": "플러그인 폴더 열기",
       "installError": {
         "title": "설치 실패",
         "subtitle": "플러그인을 설치하는 중 오류가 발생했습니다. 아래 세부 정보를 확인하세요.",
         "details": "오류 세부 정보",
         "copy": "복사",
-        "copied": "복사됨!"
+        "copied": "복사됨!",
+        "reload": "플러그인 새로고침"
       },
       "uninstallError": {
         "title": "제거 실패",

@@ -682,12 +682,14 @@
       "confirmRemove": "「{{name}}」を削除してもよろしいですか？プラグインファイルが削除されます。",
       "enabled": "有効",
       "disabled": "無効",
+      "openFolder": "プラグインフォルダーを開く",
       "installError": {
         "title": "インストール失敗",
         "subtitle": "プラグインのインストール中にエラーが発生しました。詳細は下記を参照してください。",
         "details": "エラーの詳細",
         "copy": "コピー",
-        "copied": "コピーしました！"
+        "copied": "コピーしました！",
+        "reload": "プラグインを再読み込み"
       },
       "uninstallError": {
         "title": "アンインストール失敗",
@@ -2086,7 +2088,14 @@
     "notInstalled": "このドライバーはまだインストールされていません。接続を設定するにはインストールしてください。",
     "installVersion": "v{{version}} をインストール",
     "installingVersion": "v{{version}} をインストール中…",
-    "retryInstall": "インストールを再試行"
+    "retryInstall": "インストールを再試行",
+    "viewDetails": "詳細を見る",
+    "installTitle": "ドライバーをインストール",
+    "readmeSubtitle": "プラグインのREADME",
+    "readmeLoading": "READMEを読み込み中…",
+    "readmeUnavailable": "このプラグインにはREADMEがありません。",
+    "readmeFallbackLocale": "このREADMEはまだお使いの言語では利用できません — “{{locale}}”で表示しています。",
+    "openDocumentation": "完全なドキュメントを開く"
   },
   "connectionErrors": {
     "ssh-auth": {

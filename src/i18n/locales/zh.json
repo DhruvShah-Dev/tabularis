@@ -634,12 +634,14 @@
       "confirmRemove": "确定要移除 \"{{name}}\" 吗？这将删除插件文件。",
       "enabled": "已启用",
       "disabled": "已禁用",
+      "openFolder": "打开插件文件夹",
       "installError": {
         "title": "安装失败",
         "subtitle": "安装插件时发生错误。请参阅下面的详细信息。",
         "details": "错误详情",
         "copy": "复制",
-        "copied": "已复制！"
+        "copied": "已复制！",
+        "reload": "重新加载插件"
       },
       "uninstallError": {
         "title": "卸载失败",
@@ -2008,7 +2010,14 @@
     "notInstalled": "此驱动程序尚未安装。请安装以配置连接。",
     "installVersion": "安装 v{{version}}",
     "installingVersion": "正在安装 v{{version}}…",
-    "retryInstall": "重试安装"
+    "retryInstall": "重试安装",
+    "viewDetails": "更多详情",
+    "installTitle": "安装驱动程序",
+    "readmeSubtitle": "插件 README",
+    "readmeLoading": "正在加载 README…",
+    "readmeUnavailable": "此插件没有可用的 README。",
+    "readmeFallbackLocale": "此 README 尚不支持您的语言 — 以“{{locale}}”显示。",
+    "openDocumentation": "打开完整文档"
   },
   "connectionErrors": {
     "ssh-auth": {

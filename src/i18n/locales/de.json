@@ -668,12 +668,14 @@
       "confirmRemove": "Möchtest du \"{{name}}\" wirklich entfernen? Dadurch werden die Plugin-Dateien gelöscht.",
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",
+      "openFolder": "Plugin-Ordner öffnen",
       "installError": {
         "title": "Installation fehlgeschlagen",
         "subtitle": "Bei der Installation des Plugins ist ein Fehler aufgetreten. Siehe Details unten.",
         "details": "Fehlerdetails",
         "copy": "Kopieren",
-        "copied": "Kopiert!"
+        "copied": "Kopiert!",
+        "reload": "Plugins neu laden"
       },
       "uninstallError": {
         "title": "Deinstallation fehlgeschlagen",
@@ -2068,7 +2070,14 @@
     "notInstalled": "Dieser Treiber ist noch nicht installiert. Installiere ihn, um eine Verbindung einzurichten.",
     "installVersion": "v{{version}} installieren",
     "installingVersion": "v{{version}} wird installiert…",
-    "retryInstall": "Installation wiederholen"
+    "retryInstall": "Installation wiederholen",
+    "viewDetails": "Mehr Details",
+    "installTitle": "Treiber installieren",
+    "readmeSubtitle": "Plugin-README",
+    "readmeLoading": "README wird geladen…",
+    "readmeUnavailable": "Für dieses Plugin ist kein README verfügbar.",
+    "readmeFallbackLocale": "Dieses README ist in deiner Sprache noch nicht verfügbar — angezeigt in „{{locale}}“.",
+    "openDocumentation": "Vollständige Dokumentation öffnen"
   },
   "connectionErrors": {
     "ssh-auth": {
