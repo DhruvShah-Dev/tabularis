@@ -878,6 +878,7 @@
     "nameRequired": "Il nome della connessione è richiesto",
     "dbNameRequired": "Il nome del database è richiesto",
     "connectionUriRequiresKeychain": "Gli URI di connessione devono essere salvati nel Portachiavi di sistema. Attiva “Salva password nel Portachiavi” per continuare.",
+    "connectionUriRequired": "L'URI di connessione è richiesto",
     "dbType": "Tipo Database",
     "host": "Host",
     "port": "Porta",

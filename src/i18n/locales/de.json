@@ -853,6 +853,7 @@
     "nameRequired": "Verbindungsname ist erforderlich",
     "dbNameRequired": "Datenbankname ist erforderlich",
     "connectionUriRequiresKeychain": "Verbindungs-URIs müssen im Keychain des Betriebssystems gespeichert werden. Aktiviere „Passwörter im Keychain speichern“, um fortzufahren.",
+    "connectionUriRequired": "Verbindungs-URI ist erforderlich",
     "dbType": "Datenbanktyp",
     "host": "Host",
     "port": "Port",

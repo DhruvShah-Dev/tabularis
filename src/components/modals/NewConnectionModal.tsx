@@ -2108,6 +2108,12 @@ export const NewConnectionModal = ({
         setTestResult("error");
         return;
       }
+      if (isUriPassthrough && !hasConnectionUri) {
+        setStatus("error");
+        setMessage(t("newConnection.connectionUriRequired"));
+        setTestResult("error");
+        return;
+      }
       if (isMultiDb) {
         if (!loadAllDatabases && selectedDatabasesState.length === 0) {
           setStatus("error");
