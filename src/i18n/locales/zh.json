@@ -334,6 +334,7 @@
       "previewSubtitle": "Review connections from {{source}}",
       "notInstalled": "Not installed",
       "chooseFile": "Choose an export file to import",
+      "chooseConfigPath": "Choose the app config folder to import",
       "connectionsFound_one": "1 connection found",
       "connectionsFound_other": "{{count}} connections found",
       "includePasswords": "Include passwords",

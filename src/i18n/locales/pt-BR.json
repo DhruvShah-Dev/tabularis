@@ -319,6 +319,7 @@
       "previewSubtitle": "Revisar conexões de {{source}}",
       "notInstalled": "Não instalado",
       "chooseFile": "Escolha um arquivo de exportação para importar",
+      "chooseConfigPath": "Choose the app config folder to import",
       "connectionsFound_one": "1 conexão encontrada",
       "connectionsFound_other": "{{count}} conexões encontradas",
       "includePasswords": "Incluir senhas",

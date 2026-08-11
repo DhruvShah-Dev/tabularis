@@ -35,6 +35,8 @@ pub struct ImportSourceInfo {
     pub reads_passwords_from_keychain: bool,
     /// True when the importer reads a user-picked export file (none today).
     pub needs_file: bool,
+    /// True when auto-discovery can be replaced by a user-selected config path.
+    pub manual_path_supported: bool,
 }
 
 /// List every known source app with availability and connection counts.
@@ -55,6 +57,7 @@ pub async fn list_connection_import_sources() -> Result<Vec<ImportSourceInfo>, S
             connection_count,
             reads_passwords_from_keychain: importer.reads_passwords_from_keychain(),
             needs_file: importer.import_file_types().is_some(),
+            manual_path_supported: importer.supports_manual_path(),
         });
     }
     Ok(sources)
