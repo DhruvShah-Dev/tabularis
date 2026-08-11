@@ -34,13 +34,3 @@ plugins/**/target
 .pi/
 .atl/
 .opencode/
-
-# foglamp scan (scan.lock.json contains a secret edit token)
-.foglamp/
-
-.grove/
-.groverc.json
-.pnpm-store/
-skills-lock.json
-tasks/
-*.local.md
