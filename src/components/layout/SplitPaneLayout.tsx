@@ -71,10 +71,8 @@ export const SplitPaneLayout = ({ layout, connectionIds }: SplitView) => {
       deactivateSplit();
       if (remaining.length === 1) switchConnection(remaining[0]);
     } else {
+      // `removeConnectionFromSplit` owns handing focus to a surviving panel.
       removeConnectionFromSplit(connId);
-      if (explorerConnectionId === connId) {
-        setExplorerConnectionId(remaining[0]);
-      }
     }
   };
 
@@ -220,7 +218,7 @@ export const SplitPaneLayout = ({ layout, connectionIds }: SplitView) => {
             <div className="flex-1 overflow-hidden min-h-0">
               <PanelDatabaseProvider connectionId={connId}>
                 <EditorProvider>
-                  <Editor />
+                  <Editor commandScopeId={connId} />
                 </EditorProvider>
               </PanelDatabaseProvider>
             </div>
