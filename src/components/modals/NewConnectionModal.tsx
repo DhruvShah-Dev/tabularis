@@ -72,6 +72,7 @@ import { getDriverIcon, getDriverColorStyle } from "../../utils/driverUI";
 import {
   parseConnectionString,
   toConnectionParams,
+  uriPassthroughEnabled,
 } from "../../utils/connectionStringParser";
 import { useConnectionCatalogue } from "../../hooks/useConnectionCatalogue";
 import { ConnectionCatalogue } from "./connection/ConnectionCatalogue";
@@ -589,10 +590,7 @@ export const NewConnectionModal = ({
   // Drivers with the `connection_uri` capability consume the raw URI verbatim:
   // host/port/username/database all derive from it, so the form only asks for
   // the connection string and an optional token (password) field.
-  const isUriPassthrough =
-    activeDriver?.capabilities?.connection_uri ??
-    activeDriver?.capabilities?.connectionUri ??
-    false;
+  const isUriPassthrough = uriPassthroughEnabled(activeDriver?.capabilities);
   const isNetworkDriver =
     !noConnectionRequired &&
     activeDriver?.capabilities?.file_based === false &&
