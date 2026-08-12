@@ -24,6 +24,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ConnectionAppearance } from "../../contexts/DatabaseContext";
 import { AppearanceSection } from "./NewConnectionModal/AppearanceSection";
+import { MaskingOverridesEditor } from "../settings/MaskingOverridesEditor";
+import { TagSelector } from "./NewConnectionModal/TagSelector";
+import { EnvironmentSelect } from "./NewConnectionModal/EnvironmentSelect";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import clsx from "clsx";
 import { SshConnectionsModal } from "./SshConnectionsModal";
@@ -70,6 +73,7 @@ import { getDriverIcon, getDriverColorStyle } from "../../utils/driverUI";
 import {
   parseConnectionString,
   toConnectionParams,
+  uriPassthroughEnabled,
 } from "../../utils/connectionStringParser";
 import { useConnectionCatalogue } from "../../hooks/useConnectionCatalogue";
 import { ConnectionCatalogue } from "./connection/ConnectionCatalogue";
@@ -153,6 +157,8 @@ interface SavedConnection {
   params: ConnectionParams;
   detect_json_in_text_columns?: boolean;
   appearance?: ConnectionAppearance;
+  tag_ids?: string[];
+  environment?: "development" | "staging" | "production";
 }
 
 interface NewConnectionModalProps {
@@ -350,7 +356,14 @@ export const NewConnectionModal = ({
 
   // ── tab ──
   const [activeTab, setActiveTab] = useState<
-    "general" | "databases" | "ssh" | "ssl" | "k8s" | "advanced" | "appearance"
+    | "general"
+    | "databases"
+    | "ssh"
+    | "ssl"
+    | "k8s"
+    | "advanced"
+    | "appearance"
+    | "privacy"
   >("general");
 
   // ── Tab bar horizontal scroll affordance ──
@@ -502,6 +515,16 @@ export const NewConnectionModal = ({
   const [appearance, setAppearance] = useState<ConnectionAppearance>(
     initialConnection?.appearance ?? {},
   );
+
+  // ── tags ──
+  const [tagIds, setTagIds] = useState<string[]>(
+    initialConnection?.tag_ids ?? [],
+  );
+
+  // ── environment ── ("" = unclassified)
+  const [environment, setEnvironment] = useState<string>(
+    initialConnection?.environment ?? "",
+  );
   // Stable UUID used as connectionId for icon uploads on new connections.
   // The backend mints its own id on save_connection, so we use this temp id
   // for the icon filename. After save, set_connection_appearance persists the
@@ -565,6 +588,10 @@ export const NewConnectionModal = ({
   // A raw URI is self-contained: it carries the database (or deliberately omits
   // it, as Atlas URIs do) and the credentials, so it replaces those form fields.
   const hasConnectionUri = !!formData.connection_uri?.trim();
+  // Drivers with the `connection_uri` capability consume the raw URI verbatim:
+  // host/port/username/database all derive from it, so the form only asks for
+  // the connection string and an optional token (password) field.
+  const isUriPassthrough = uriPassthroughEnabled(activeDriver?.capabilities);
   const isNetworkDriver =
     !noConnectionRequired &&
     activeDriver?.capabilities?.file_based === false &&
@@ -1635,6 +1662,8 @@ export const NewConnectionModal = ({
           initialConnection.detect_json_in_text_columns === true,
         );
         setAppearance(initialConnection.appearance ?? {});
+        setTagIds(initialConnection.tag_ids ?? []);
+        setEnvironment(initialConnection.environment ?? "");
         const db = initialConnection.params.database;
         setSshMode(
           initialConnection.params.ssh_connection_id ? "existing" : "inline",
@@ -1754,6 +1783,8 @@ export const NewConnectionModal = ({
         resetK8sPathOverrides();
         setDetectJsonInTextColumns(false);
         setAppearance({});
+        setTagIds([]);
+        setEnvironment("");
       }
 
       const nextSshConnections = await loadSshConnections();
@@ -2078,6 +2109,12 @@ export const NewConnectionModal = ({
         setTestResult("error");
         return;
       }
+      if (isUriPassthrough && !hasConnectionUri) {
+        setStatus("error");
+        setMessage(t("newConnection.connectionUriRequired"));
+        setTestResult("error");
+        return;
+      }
       if (isMultiDb) {
         if (!loadAllDatabases && selectedDatabasesState.length === 0) {
           setStatus("error");
@@ -2142,6 +2179,7 @@ export const NewConnectionModal = ({
       setErrorFeedback(null);
       setTestResult(null);
       try {
+        let savedConnectionId: string;
         if (initialConnection) {
           if (!params.password?.trim()) delete params.password;
           if (!params.ssh_password?.trim()) delete params.ssh_password;
@@ -2150,7 +2188,9 @@ export const NewConnectionModal = ({
             name,
             params,
             detectJsonInTextColumns: detectJsonInTextColumns ? true : null,
+            environment: environment || null,
           });
+          savedConnectionId = initialConnection.id;
           await invoke("set_connection_appearance", {
             id: initialConnection.id,
             appearance: appearancePayload ?? null,
@@ -2160,7 +2200,9 @@ export const NewConnectionModal = ({
             name,
             params,
             detectJsonInTextColumns: detectJsonInTextColumns ? true : null,
+            environment: environment || null,
           });
+          savedConnectionId = saved.id;
           if (appearancePayload) {
             await invoke("set_connection_appearance", {
               id: saved.id,
@@ -2168,6 +2210,11 @@ export const NewConnectionModal = ({
             });
           }
         }
+
+        await invoke("set_connection_tags", {
+          connectionId: savedConnectionId,
+          tagIds,
+        });
 
         if (
           activeActionRef.current !== actionId ||
@@ -2482,28 +2529,29 @@ export const NewConnectionModal = ({
             </div>
           )}
 
-          {/* Host + Port */}
-          <div
-            className={clsx(
-              "grid gap-3",
-              driver === "postgres" ? "grid-cols-4" : "grid-cols-3",
-            )}
-          >
-            <FieldInput
-              className="col-span-2"
-              label={t("newConnection.host")}
-              value={formData.host}
-              onChange={(v) => updateField("host", v)}
-              placeholder="localhost"
-            />
-            <FieldInput
-              label={t("newConnection.port")}
-              value={formData.port}
-              onChange={(v) => updateField("port", v)}
-              type="number"
-              placeholder={driver === "mysql" ? "3306" : "5432"}
-            />
-          </div>
+          {!isUriPassthrough && (
+            <div
+              className={clsx(
+                "grid gap-3",
+                driver === "postgres" ? "grid-cols-4" : "grid-cols-3",
+              )}
+            >
+              <FieldInput
+                className="col-span-2"
+                label={t("newConnection.host")}
+                value={formData.host}
+                onChange={(v) => updateField("host", v)}
+                placeholder="localhost"
+              />
+              <FieldInput
+                label={t("newConnection.port")}
+                value={formData.port}
+                onChange={(v) => updateField("port", v)}
+                type="number"
+                placeholder={driver === "mysql" ? "3306" : "5432"}
+              />
+            </div>
+          )}
 
           {/* Plugin-owned extra connection fields (opaque `extra` map) */}
           <SlotAnchor
@@ -2513,13 +2561,20 @@ export const NewConnectionModal = ({
           />
 
           {/* User + Password */}
-          <div className="grid grid-cols-2 gap-3">
-            <FieldInput
-              label={t("newConnection.username")}
-              value={formData.username}
-              onChange={(v) => updateField("username", v)}
-              placeholder={t("newConnection.usernamePlaceholder")}
-            />
+          <div
+            className={clsx(
+              "grid gap-3",
+              isUriPassthrough ? "grid-cols-1" : "grid-cols-2",
+            )}
+          >
+            {!isUriPassthrough && (
+              <FieldInput
+                label={t("newConnection.username")}
+                value={formData.username}
+                onChange={(v) => updateField("username", v)}
+                placeholder={t("newConnection.usernamePlaceholder")}
+              />
+            )}
             <FieldInput
               label={t("newConnection.password")}
               value={formData.password}
@@ -2537,7 +2592,7 @@ export const NewConnectionModal = ({
           </div>
 
           {/* Database (single) — only shown for non-multi-db drivers */}
-          {!isMultiDb && !singleDatabase && (
+          {!isUriPassthrough && !isMultiDb && !singleDatabase && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">
@@ -2637,15 +2692,33 @@ export const NewConnectionModal = ({
 
   // ── rendered Appearance tab content (per-connection icon + accent color) ──
   const appearanceTabContent = (
-    <AppearanceSection
-      value={appearance}
-      onChange={setAppearance}
-      connectionId={effectiveConnectionId}
-      driverManifest={activeDriver}
-      connectionName={name || t("newConnection.unnamedConnection", { defaultValue: "Unnamed connection" })}
-      onImageUploaded={handleImageUploaded}
-    />
+    <div className="space-y-5">
+      <AppearanceSection
+        value={appearance}
+        onChange={setAppearance}
+        connectionId={effectiveConnectionId}
+        driverManifest={activeDriver}
+        connectionName={name || t("newConnection.unnamedConnection", { defaultValue: "Unnamed connection" })}
+        onImageUploaded={handleImageUploaded}
+      />
+      <TagSelector selectedIds={tagIds} onChange={setTagIds} />
+    </div>
   );
+
+  // ── rendered Privacy tab content (per-connection masking overrides, #485) ──
+  // Only meaningful for saved connections: the override lists are keyed by
+  // the connection id, which new connections only get on save.
+  const privacyTabContent = initialConnection ? (
+    <div className="space-y-4">
+      <p className="text-sm text-secondary leading-relaxed">
+        {t("settings.maskingOverridesDesc")}
+      </p>
+      <MaskingOverridesEditor
+        key={initialConnection.id}
+        connectionId={initialConnection.id}
+      />
+    </div>
+  ) : null;
 
   // ── rendered Advanced tab content (driver-specific options + startup SQL) ──
   const advancedTabContent = (
@@ -3739,7 +3812,15 @@ export const NewConnectionModal = ({
       >
         {/* ── Top bar: step-aware title / name + progress + close ── */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-default bg-base">
-          {step === "form" ? (
+          {step === "form" && activeDriverNotInstalled ? (
+            /* Install gate: there is no connection to name or classify yet,
+               so the header shows a plain title instead of name/environment. */
+            <h2 className="flex-1 truncate text-base font-semibold text-primary">
+              {t("connectionCatalogue.installTitle", {
+                defaultValue: "Install driver",
+              })}
+            </h2>
+          ) : step === "form" ? (
             <>
               <div
                 className="w-2 h-2 rounded-full shrink-0"
@@ -3777,6 +3858,15 @@ export const NewConnectionModal = ({
                     defaultValue: "Choose a database",
                   })}
             </h2>
+          )}
+
+          {step === "form" && !activeDriverNotInstalled && (
+            <>
+              <EnvironmentSelect value={environment} onChange={setEnvironment} />
+              <span className="text-xs text-muted bg-surface-secondary px-2 py-0.5 rounded-full font-medium capitalize">
+                {activeDriver?.name ?? driver}
+              </span>
+            </>
           )}
 
           {/* Progress indicator (new connection only) */}
@@ -3825,7 +3915,6 @@ export const NewConnectionModal = ({
               </span>
             </div>
           )}
-
           <button
             onClick={handleClose}
             className="p-1.5 text-muted hover:text-primary hover:bg-surface-secondary rounded-md transition-colors cursor-pointer"
@@ -3972,6 +4061,11 @@ export const NewConnectionModal = ({
                       defaultValue: "Appearance",
                     }),
                   },
+                  // Masking overrides are keyed by the saved connection id,
+                  // so the Privacy tab only exists when editing.
+                  ...(isEditing
+                    ? [{ id: "privacy", label: t("settings.privacy") }]
+                    : []),
                 ] as {
                   id:
                     | "general"
@@ -3980,7 +4074,8 @@ export const NewConnectionModal = ({
                     | "ssl"
                     | "k8s"
                     | "advanced"
-                    | "appearance";
+                    | "appearance"
+                    | "privacy";
                   label: string;
                 }[]
               ).map((tab) => (
@@ -4050,7 +4145,9 @@ export const NewConnectionModal = ({
                         ? sshTabContent
                         : activeTab === "advanced"
                           ? advancedTabContent
-                          : appearanceTabContent}
+                          : activeTab === "privacy"
+                            ? privacyTabContent
+                            : appearanceTabContent}
             </div>
           </div>
         )}

@@ -23,6 +23,29 @@
     "fromPlaceholder": "mula",
     "toPlaceholder": "hanggang"
   },
+  "tags": {
+    "label": "Mga tag",
+    "new": "Bagong tag",
+    "add": "Idagdag",
+    "namePlaceholder": "Pangalan ng tag…",
+    "manage": "Pamahalaan ang mga tag",
+    "done": "Tapos na",
+    "deleteTitle": "Tanggalin ang tag",
+    "deleteConfirm": "Tanggalin ang tag na \"{{name}}\"? Aalisin ito sa lahat ng koneksyon."
+  },
+  "environment": {
+    "label": "Kapaligiran",
+    "none": "Walang kapaligiran",
+    "development": "Development",
+    "staging": "Staging",
+    "production": "Production",
+    "short": { "development": "DEV", "staging": "STAGING", "production": "PROD" },
+    "banner": "Production — {{name}}",
+    "warnTitle": "Production na database",
+    "warnMessage": "Malapit mo nang baguhin ang production data sa \"{{name}}\". Sigurado ka bang magpapatuloy?",
+    "warnConfirm": "Ituloy pa rin",
+    "warnSnooze": "Huwag nang itanong para sa koneksyong ito (ngayong session)"
+  },
   "common": {
     "save": "I-save",
     "close": "Isara",
@@ -387,6 +410,22 @@
   "settings": {
     "title": "Mga Setting",
     "general": "Pangkalahatan",
+    "privacy": "Privacy",
+    "columnMasking": "Pag-mask ng mga column",
+    "columnMaskingDesc": "Itinatago ang nilalaman ng mga sensitibong column (mga password, email, token…) sa results grid. Gumagamit pa rin ng totoong mga value ang pag-copy at pag-export.",
+    "columnMaskingEnabled": "I-mask ang mga sensitibong column",
+    "columnMaskingEnabledDesc": "Nagpapakita ng placeholder sa halip na totoong value para sa mga column na tumutugma ang pangalan sa sensitibong pattern.",
+    "maskingPatterns": "Mga pattern ng pangalan ng sensitibong column",
+    "maskingPatternsDesc": "Isang pattern bawat linya. Nama-mask ang column kapag naglalaman ang pangalan nito ng alinmang pattern (hindi case-sensitive).",
+    "maskingOverrides": "Mga override bawat connection",
+    "maskingOverridesDesc": "Pilit na i-mask (include) o huwag i-mask (exclude) ang mga partikular na column para sa isang connection. Isang entry na table.column bawat linya; may prayoridad ang exclude kaysa sa include at mga pattern.",
+    "maskingConnection": "Connection",
+    "maskingConnectionDesc": "Piliin kung aling connection ang pinapatawan ng mga override na ito.",
+    "maskingInclude": "Laging i-mask",
+    "maskingIncludeDesc": "Mga column na laging naka-mask para sa connection na ito, kahit hindi tumutugma ang pangalan sa anumang pattern.",
+    "maskingExclude": "Huwag kailanman i-mask",
+    "maskingExcludeDesc": "Mga column na hindi kailanman nama-mask para sa connection na ito, kahit tumutugma ang pangalan sa isang pattern.",
+    "maskingOverridePlaceholder": "hal. users.password",
     "info": "Impormasyon",
     "dataEditor": "Data Editor",
     "pageSize": "Laki ng Result Page (Limit)",
@@ -662,12 +701,14 @@
       "confirmRemove": "Sigurado ka bang gusto mong alisin ang \"{{name}}\"? Mabubura ang mga plugin file.",
       "enabled": "Naka-enable",
       "disabled": "Naka-disable",
+      "openFolder": "Buksan ang folder ng mga plugin",
       "installError": {
         "title": "Nabigo ang Pag-install",
         "subtitle": "May error habang ini-install ang plugin. Tingnan ang mga detalye sa ibaba.",
         "details": "Mga Detalye ng Error",
         "copy": "Kopyahin",
-        "copied": "Nakopya!"
+        "copied": "Nakopya!",
+        "reload": "I-reload ang mga plugin"
       },
       "uninstallError": {
         "title": "Nabigo ang Pag-uninstall",
@@ -744,7 +785,8 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "I-import mula sa Clipboard",
       "quickNavigator": "Quick Navigator",
-      "formatSql": "I-format ang SQL"
+      "formatSql": "I-format ang SQL",
+      "commandPaletteActions": "Maghanap ng mga aksyon"
     },
     "aiActivity": "AI Activity",
     "backup": {
@@ -842,6 +884,7 @@
     "nameRequired": "Kailangan ang pangalan ng connection",
     "dbNameRequired": "Kailangan ang pangalan ng database",
     "connectionUriRequiresKeychain": "Dapat i-save ang mga connection URI sa OS keychain. I-enable ang “I-save ang mga password sa Keychain” para magpatuloy.",
+    "connectionUriRequired": "Kailangan ang connection URI",
     "dbType": "Uri ng Database",
     "host": "Host",
     "port": "Port",
@@ -984,6 +1027,9 @@
     "waiting": "Naghihintay sa iyong security key — hawakan ito para kumpirmahin."
   },
   "dataGrid": {
+    "noRowIdentity": "Hindi ma-edit ang mga row: walang primary key ang \"{{table}}\", kaya kailangang kasama sa resulta ang lahat ng column ng table. Piliin ang lahat ng column (hal. SELECT *) o magdagdag ng primary key.",
+    "keylessRowNotFound": "Walang row na tumugma sa mga orihinal na value habang ina-update ang \"{{column}}\". Walang primary key ang table at maaaring nagbago ang data — i-refresh at subukang muli.",
+    "keylessDeleteNotFound": "Walang row na tumugma sa mga orihinal na value habang nagde-delete. Walang primary key ang table at maaaring nagbago ang data — i-refresh at subukang muli.",
     "newRow": "BAGO",
     "noData": "Walang data na ipapakita",
     "editRow": "I-edit ang Row",
@@ -1030,7 +1076,11 @@
     "setEmpty": "I-set ang EMPTY",
     "setServerNow": "Ipasok ang Kasalukuyang Timestamp",
     "previewReferenced": "I-preview ang kaugnay na record",
-    "openReferenced": "Buksan ang naka-reference na row sa {{table}}"
+    "openReferenced": "Buksan ang naka-reference na row sa {{table}}",
+    "revealCell": "Ipakita ang cell",
+    "maskCell": "I-mask ang cell",
+    "revealColumn": "Ipakita ang column",
+    "maskColumn": "I-mask ang column"
   },
   "editRow": {
     "title": "I-edit ang Row",
@@ -1133,8 +1183,6 @@
       "noResults": "Walang tumugmang elemento na nahanap",
       "count_one": "1 elemento",
       "count_other": "{{count}} elemento",
-      "navigationHint": "↑↓ para mag-navigate, Enter para buksan",
-      "escHint": "Esc para isara",
       "type_table": "table",
       "type_view": "view",
       "type_routine": "routine",
@@ -1450,7 +1498,8 @@
     "tabSelectAll": "Select *",
     "tabSelectFields": "Select [fields]",
     "tabUpdate": "Update",
-    "tabDelete": "Delete"
+    "tabDelete": "Delete",
+    "unknownDialect": "Hindi makabuo ng SQL: hindi alam ang dialect ng database para sa koneksyong ito."
   },
   "modifyColumn": {
     "titleAdd": "Magdagdag ng Column",
@@ -2011,6 +2060,27 @@
     "runButton": "Patakbuhin",
     "runTabPrefix": "Patakbuhin",
     "returnValue": "nagbabalik ng"
+  },
+  "commandPalette": {
+    "title": "Command Palette",
+    "objectsTitle": "Mga Object ng Database",
+    "searchLabel": "Maghanap ng mga command",
+    "placeholder": "Maghanap ng mga aksyon...",
+    "executionError": "Hindi makumpleto ang aksyon",
+    "objectsLoadError": "Hindi na-load ang ilang object: {{names}}",
+    "noResults": "Walang nakitang katugmang aksyon",
+    "navigationHint": "Mag-navigate",
+    "escapeHint": "Isara",
+    "categories": {
+      "navigation": "Navigation",
+      "connection": "Koneksyon",
+      "table": "Talahanayan"
+    },
+    "commands": {
+      "openSettings": "Buksan ang settings",
+      "openConnections": "Buksan ang connection manager",
+      "openTableInConsole": "Buksan ang kasalukuyang talahanayan sa SQL console"
+    }
   },
   "pagination": {
     "firstPage": "Unang pahina",

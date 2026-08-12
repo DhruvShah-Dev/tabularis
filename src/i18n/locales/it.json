@@ -23,6 +23,29 @@
     "fromPlaceholder": "da",
     "toPlaceholder": "a"
   },
+  "tags": {
+    "label": "Tag",
+    "new": "Nuovo tag",
+    "add": "Aggiungi",
+    "namePlaceholder": "Nome del tag…",
+    "manage": "Gestisci tag",
+    "done": "Fatto",
+    "deleteTitle": "Elimina tag",
+    "deleteConfirm": "Eliminare il tag \"{{name}}\"? Verrà rimosso da tutte le connessioni."
+  },
+  "environment": {
+    "label": "Ambiente",
+    "none": "Nessun ambiente",
+    "development": "Sviluppo",
+    "staging": "Staging",
+    "production": "Produzione",
+    "short": { "development": "DEV", "staging": "STAGING", "production": "PROD" },
+    "banner": "Produzione — {{name}}",
+    "warnTitle": "Database di produzione",
+    "warnMessage": "Stai per modificare dati di produzione su \"{{name}}\". Vuoi davvero continuare?",
+    "warnConfirm": "Esegui comunque",
+    "warnSnooze": "Non chiedere più per questa connessione (questa sessione)"
+  },
   "common": {
     "save": "Salva",
     "close": "Chiudi",
@@ -394,6 +417,22 @@
   "settings": {
     "title": "Impostazioni",
     "general": "Generali",
+    "privacy": "Privacy",
+    "columnMasking": "Mascheramento colonne",
+    "columnMaskingDesc": "Nasconde il contenuto delle colonne sensibili (password, email, token…) nella griglia dei risultati. La copia e l'esportazione usano comunque i valori reali.",
+    "columnMaskingEnabled": "Maschera colonne sensibili",
+    "columnMaskingEnabledDesc": "Mostra un segnaposto al posto del valore reale per le colonne il cui nome corrisponde a un pattern sensibile.",
+    "maskingPatterns": "Pattern dei nomi di colonna sensibili",
+    "maskingPatternsDesc": "Un pattern per riga. Una colonna viene mascherata quando il suo nome contiene un pattern (senza distinzione tra maiuscole e minuscole).",
+    "maskingOverrides": "Eccezioni per connessione",
+    "maskingOverridesDesc": "Forza il mascheramento (includi) o escludi colonne specifiche per una connessione. Una voce tabella.colonna per riga; le esclusioni hanno la precedenza su inclusioni e pattern.",
+    "maskingConnection": "Connessione",
+    "maskingConnectionDesc": "Scegli a quale connessione si applicano queste eccezioni.",
+    "maskingInclude": "Maschera sempre",
+    "maskingIncludeDesc": "Colonne sempre mascherate per questa connessione, anche se il nome non corrisponde a nessun pattern.",
+    "maskingExclude": "Non mascherare mai",
+    "maskingExcludeDesc": "Colonne mai mascherate per questa connessione, anche se il nome corrisponde a un pattern.",
+    "maskingOverridePlaceholder": "es. utenti.password",
     "info": "Info",
     "dataEditor": "Editor Dati",
     "pageSize": "Dimensione Pagina Risultati (Limite)",
@@ -654,12 +693,14 @@
       "confirmRemove": "Sei sicuro di voler rimuovere \"{{name}}\"? I file del plugin verranno eliminati.",
       "enabled": "Abilitato",
       "disabled": "Disabilitato",
+      "openFolder": "Apri cartella plugin",
       "installError": {
         "title": "Installazione fallita",
         "subtitle": "Si è verificato un errore durante l'installazione del plugin. Vedi i dettagli qui sotto.",
         "details": "Dettagli errore",
         "copy": "Copia",
-        "copied": "Copiato!"
+        "copied": "Copiato!",
+        "reload": "Ricarica plugin"
       },
       "uninstallError": {
         "title": "Disinstallazione fallita",
@@ -737,6 +778,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Importa dagli Appunti",
       "quickNavigator": "Navigatore rapido",
+      "commandPaletteActions": "Cerca azioni",
       "triggerSuggestions": "Mostra suggerimenti",
       "formatSql": "Formatta SQL",
       "refreshTable": "Aggiorna tabella"
@@ -837,6 +879,7 @@
     "nameRequired": "Il nome della connessione è richiesto",
     "dbNameRequired": "Il nome del database è richiesto",
     "connectionUriRequiresKeychain": "Gli URI di connessione devono essere salvati nel Portachiavi di sistema. Attiva “Salva password nel Portachiavi” per continuare.",
+    "connectionUriRequired": "L'URI di connessione è richiesto",
     "dbType": "Tipo Database",
     "host": "Host",
     "port": "Porta",
@@ -980,6 +1023,9 @@
     "waiting": "In attesa della security key — toccala per confermare."
   },
   "dataGrid": {
+    "noRowIdentity": "Impossibile modificare le righe: \"{{table}}\" non ha una chiave primaria, quindi la modifica richiede che il risultato includa tutte le colonne della tabella. Seleziona tutte le colonne (es. SELECT *) o aggiungi una chiave primaria.",
+    "keylessRowNotFound": "Nessuna riga corrisponde ai valori originali durante l'aggiornamento di \"{{column}}\". La tabella non ha una chiave primaria e i dati potrebbero essere cambiati: aggiorna e riprova.",
+    "keylessDeleteNotFound": "Nessuna riga corrisponde ai valori originali durante l'eliminazione. La tabella non ha una chiave primaria e i dati potrebbero essere cambiati: aggiorna e riprova.",
     "newRow": "NUOVA",
     "noData": "Nessun dato da visualizzare",
     "editRow": "Modifica riga",
@@ -1022,7 +1068,11 @@
     "setDefault": "Imposta DEFAULT",
     "setEmpty": "Imposta VUOTO",
     "previewReferenced": "Anteprima record correlato",
-    "openReferenced": "Apri la riga referenziata in {{table}}"
+    "openReferenced": "Apri la riga referenziata in {{table}}",
+    "revealCell": "Mostra cella",
+    "maskCell": "Maschera cella",
+    "revealColumn": "Mostra colonna",
+    "maskColumn": "Maschera colonna"
   },
   "editRow": {
     "title": "Modifica riga",
@@ -1124,8 +1174,6 @@
       "noResults": "Nessun elemento corrispondente trovato",
       "count_one": "1 elemento",
       "count_other": "{{count}} elementi",
-      "navigationHint": "↑↓ per navigare, Invio per aprire",
-      "escHint": "Esc per chiudere",
       "type_table": "tabella",
       "type_view": "vista",
       "type_routine": "routine",
@@ -1442,7 +1490,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [campi]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "Impossibile generare SQL: il dialetto del database di questa connessione è sconosciuto."
   },
   "modifyColumn": {
     "titleAdd": "Aggiungi Colonna",
@@ -1944,6 +1993,27 @@
     "runTabPrefix": "Esegui",
     "returnValue": "ritorna"
   },
+  "commandPalette": {
+    "title": "Tavolozza dei comandi",
+    "objectsTitle": "Oggetti del database",
+    "searchLabel": "Cerca comandi",
+    "placeholder": "Cerca azioni...",
+    "executionError": "Impossibile completare l’azione",
+    "objectsLoadError": "Impossibile caricare alcuni oggetti: {{names}}",
+    "noResults": "Nessuna azione corrispondente",
+    "navigationHint": "Naviga",
+    "escapeHint": "Chiudi",
+    "categories": {
+      "navigation": "Navigazione",
+      "connection": "Connessione",
+      "table": "Tabella"
+    },
+    "commands": {
+      "openSettings": "Apri impostazioni",
+      "openConnections": "Apri gestore connessioni",
+      "openTableInConsole": "Apri la tabella corrente nella console SQL"
+    }
+  },
   "pagination": {
     "firstPage": "Prima pagina",
     "previousPage": "Pagina precedente",
@@ -2014,6 +2084,7 @@
     "driverCount_other": "{{count}} driver",
     "connectTo": "Connetti a {{name}}",
     "unavailableOnPlatform": "Non disponibile sulla tua piattaforma",
+    "unavailable": "Non disponibile",
     "backToCatalogue": "Torna al catalogo",
     "pickDriver": "Più driver si connettono a {{name}}. Scegline uno:",
     "latestVersion": "Ultima v{{version}}",
@@ -2023,7 +2094,14 @@
     "notInstalled": "Questo driver non è ancora installato. Installalo per configurare una connessione.",
     "installVersion": "Installa v{{version}}",
     "installingVersion": "Installazione di v{{version}}…",
-    "retryInstall": "Riprova installazione"
+    "retryInstall": "Riprova installazione",
+    "viewDetails": "Maggiori dettagli",
+    "installTitle": "Installa driver",
+    "readmeSubtitle": "README del plugin",
+    "readmeLoading": "Caricamento del README…",
+    "readmeUnavailable": "Nessun README disponibile per questo plugin.",
+    "readmeFallbackLocale": "Questo README non è ancora disponibile nella tua lingua — mostrato in “{{locale}}”.",
+    "openDocumentation": "Apri la documentazione completa"
   },
   "connectionErrors": {
     "ssh-auth": {
