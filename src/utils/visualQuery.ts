@@ -91,6 +91,41 @@ function formatGeneratedColumnRef(
   return `${alias}.${formatSqlIdentifier(nameParts.join('.'), driver)}`;
 }
 
+function formatAggregateArgument(
+  argument: string,
+  driver: string | null | undefined,
+): string {
+  const trimmed = argument.trim();
+  if (
+    trimmed === '*' ||
+    trimmed.includes('"') ||
+    trimmed.includes('`') ||
+    trimmed.includes('/') ||
+    /[\s(),+\-*]/.test(trimmed)
+  ) {
+    return argument;
+  }
+
+  return argument.replace(trimmed, formatGeneratedColumnRef(trimmed, driver));
+}
+
+function formatHavingColumnRef(
+  column: string,
+  driver: string | null | undefined,
+): string {
+  const aggregateMatch = column.match(/^([A-Z_][A-Z0-9_]*)\((.*)\)$/i);
+  if (!aggregateMatch) return formatGeneratedColumnRef(column, driver);
+
+  const [, aggregateFunction, argument] = aggregateMatch;
+  const distinctMatch = argument.match(/^(\s*DISTINCT\s+)(.+)$/i);
+  if (distinctMatch) {
+    const [, distinctPrefix, distinctArgument] = distinctMatch;
+    return `${aggregateFunction}(${distinctPrefix}${formatAggregateArgument(distinctArgument, driver)})`;
+  }
+
+  return `${aggregateFunction}(${formatAggregateArgument(argument, driver)})`;
+}
+
 function formatAlias(
   alias: string,
   driver: string | null | undefined,
@@ -341,7 +376,7 @@ export function generateHavingClause(
   if (aggregateConditions.length === 0) return '';
 
   const clauses = aggregateConditions.map((c, idx) => {
-    const condition = `${formatGeneratedColumnRef(c.column, driver)} ${c.operator} ${c.value}`;
+    const condition = `${formatHavingColumnRef(c.column, driver)} ${c.operator} ${c.value}`;
     return idx === 0 ? condition : `${c.logicalOperator} ${condition}`;
   });
 

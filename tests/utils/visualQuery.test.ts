@@ -689,6 +689,27 @@ describe('visualQuery utils', () => {
         '\nHAVING\n  t1."AccountId" > 0',
       );
     });
+
+    it('should preserve COUNT(*) HAVING expressions for postgres', () => {
+      const conditions: WhereCondition[] = [
+        { id: '1', column: 'COUNT(*)', operator: '>', value: '0', logicalOperator: 'AND', isAggregate: true },
+      ];
+
+      expect(generateHavingClause(conditions, 'postgres')).toBe(
+        '\nHAVING\n  COUNT(*) > 0',
+      );
+    });
+
+    it('should preserve aggregate HAVING expressions while formatting postgres column refs', () => {
+      const conditions: WhereCondition[] = [
+        { id: '1', column: 'SUM(t1.amount)', operator: '>', value: '1000', logicalOperator: 'AND', isAggregate: true },
+        { id: '2', column: 'COUNT(t1.AccountId)', operator: '>', value: '0', logicalOperator: 'AND', isAggregate: true },
+      ];
+
+      expect(generateHavingClause(conditions, 'postgres')).toBe(
+        '\nHAVING\n  SUM(t1.amount) > 1000\n  AND COUNT(t1."AccountId") > 0',
+      );
+    });
   });
 
   describe('generateOrderByClause', () => {
@@ -900,14 +921,14 @@ describe('visualQuery utils', () => {
         },
       ];
       const whereConditions: WhereCondition[] = [
-        { id: '1', column: 't1.AccountId', operator: '>', value: '0', logicalOperator: 'AND', isAggregate: true },
+        { id: '1', column: 'COUNT(t1.AccountId)', operator: '>', value: '0', logicalOperator: 'AND', isAggregate: true },
       ];
 
       const result = generateVisualQuerySQL(nodes, [], whereConditions, [], [], '', 'postgres');
 
       expect(result).toContain('COUNT(t1."AccountId") AS "Total Count"');
       expect(result).toContain('FROM\n  "AccountEventLog" t1');
-      expect(result).toContain('HAVING\n  t1."AccountId" > 0');
+      expect(result).toContain('HAVING\n  COUNT(t1."AccountId") > 0');
     });
   });
 });
