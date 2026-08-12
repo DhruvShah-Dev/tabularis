@@ -4,7 +4,66 @@ import {
   quoteIdentifier,
   quoteTableRef,
   formatSqlIdentifier,
+  shouldQuoteIdentifiers,
 } from '../../src/utils/identifiers';
+import type { PluginManifest } from '../../src/types/plugins';
+
+/** Minimal PluginManifest fixture for a postgres-dialect plugin registered
+ * under a non-"postgres" id (issue #614's exact scenario). */
+function pluginManifest(
+  overrides: Partial<PluginManifest['capabilities']> = {},
+): PluginManifest {
+  return {
+    id: 'postgresql',
+    name: 'PostgreSQL',
+    version: '1.0.0',
+    description: '',
+    default_port: 5432,
+    capabilities: {
+      schemas: true,
+      views: true,
+      routines: true,
+      file_based: false,
+      folder_based: false,
+      identifier_quote: '"',
+      alter_primary_key: true,
+      sql_dialect: 'postgres',
+      ...overrides,
+    },
+  };
+}
+
+describe('shouldQuoteIdentifiers', () => {
+  it('returns true for the bare "postgres" string (legacy path)', () => {
+    expect(shouldQuoteIdentifiers('postgres')).toBe(true);
+  });
+
+  it('returns false for the bare "postgresql" string — no capabilities object, so the narrow literal fallback applies', () => {
+    expect(shouldQuoteIdentifiers('postgresql')).toBe(false);
+  });
+
+  it('returns true for a manifest/capabilities object declaring sql_dialect: "postgres"', () => {
+    expect(shouldQuoteIdentifiers(pluginManifest())).toBe(true);
+    expect(shouldQuoteIdentifiers(pluginManifest().capabilities)).toBe(true);
+  });
+
+  it('returns true when sql_dialect is omitted entirely (defaults to postgres per the manifest schema)', () => {
+    const { sql_dialect, ...withoutDialect } = pluginManifest().capabilities;
+    expect(shouldQuoteIdentifiers(withoutDialect)).toBe(true);
+  });
+
+  it('returns false for sql_dialect: "sqlite" — must not flip on identifier_quote alone, which sqlite shares with postgres', () => {
+    expect(
+      shouldQuoteIdentifiers(pluginManifest({ sql_dialect: 'sqlite' })),
+    ).toBe(false);
+  });
+
+  it('returns false for sql_dialect: "mysql"', () => {
+    expect(
+      shouldQuoteIdentifiers(pluginManifest({ sql_dialect: 'mysql' })),
+    ).toBe(false);
+  });
+});
 
 describe('getQuoteChar', () => {
   it('should return backtick for mysql', () => {
@@ -33,6 +92,10 @@ describe('getQuoteChar', () => {
 
   it('should return double quote for unknown driver', () => {
     expect(getQuoteChar('oracle')).toBe('"');
+  });
+
+  it('should read identifier_quote off a PluginManifest for a non-"postgres" plugin id', () => {
+    expect(getQuoteChar(pluginManifest())).toBe('"');
   });
 });
 
@@ -70,6 +133,12 @@ describe('quoteIdentifier', () => {
   it('should handle identifiers with special characters', () => {
     expect(quoteIdentifier('table-name.v2', 'postgres')).toBe('"table-name.v2"');
   });
+
+  it('quotes identically for a "postgresql" plugin manifest and the bare "postgres" string', () => {
+    expect(quoteIdentifier('my_table', pluginManifest())).toBe(
+      quoteIdentifier('my_table', 'postgres'),
+    );
+  });
 });
 
 describe('quoteTableRef', () => {
@@ -99,6 +168,12 @@ describe('quoteTableRef', () => {
 
   it('should escape special chars in both schema and table', () => {
     expect(quoteTableRef('my"table', 'postgres', 'my"schema')).toBe('"my""schema"."my""table"');
+  });
+
+  it('produces the same schema-qualified reference for a "postgresql" plugin manifest as for the bare "postgres" string', () => {
+    expect(quoteTableRef('users', pluginManifest(), 'public')).toBe(
+      quoteTableRef('users', 'postgres', 'public'),
+    );
   });
 });
 
@@ -137,5 +212,17 @@ describe('formatSqlIdentifier', () => {
     expect(formatSqlIdentifier('Status', null)).toBe('Status');
     expect(formatSqlIdentifier('users', 'sqlite')).toBe('users');
     expect(formatSqlIdentifier('AccountEventLog', 'sqlite')).toBe('AccountEventLog');
+  });
+
+  it('quotes mixed-case identifiers identically for a "postgresql" plugin manifest and the bare "postgres" string', () => {
+    expect(formatSqlIdentifier('AccountEventLog', pluginManifest())).toBe(
+      formatSqlIdentifier('AccountEventLog', 'postgres'),
+    );
+  });
+
+  it('leaves identifiers unchanged for a plugin manifest declaring a non-postgres dialect', () => {
+    expect(
+      formatSqlIdentifier('Status', pluginManifest({ sql_dialect: 'mysql' })),
+    ).toBe('Status');
   });
 });
