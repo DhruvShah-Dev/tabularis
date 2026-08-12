@@ -2543,7 +2543,7 @@ export const NewConnectionModal = ({
             <div
               className={clsx(
                 "grid gap-3",
-                driver === "postgres" ? "grid-cols-4" : "grid-cols-3",
+                isPostgresDialect ? "grid-cols-4" : "grid-cols-3",
               )}
             >
               <FieldInput

@@ -1347,4 +1347,28 @@ describe("NewConnectionModal SSL mode options (issue #614)", () => {
       "verify_identity",
     ]);
   });
+
+  // Regression test for issue #614: the host/port grid also branched on
+  // `driver === "postgres"` literally, so a non-builtin driver whose
+  // manifest declares the postgres SQL dialect got a 3-column grid instead
+  // of the 4-column grid the builtin driver got for the same two fields —
+  // a real (if purely visual) layout inconsistency between the builtin and
+  // the plugin, not just a cosmetic no-op.
+  it("uses a 4-column host/port grid for a non-'postgres' driver with sql_dialect: postgres, same as the builtin", () => {
+    renderModal(createInitialConnection({ driver: "postgresql" }));
+
+    const hostInput = screen.getByPlaceholderText("localhost");
+    const grid = hostInput.closest(".grid");
+    expect(grid).not.toBeNull();
+    expect(grid).toHaveClass("grid-cols-4");
+  });
+
+  it("uses a 3-column host/port grid for the mysql driver", () => {
+    renderModal(createInitialConnection({ driver: "mysql" }));
+
+    const hostInput = screen.getByPlaceholderText("localhost");
+    const grid = hostInput.closest(".grid");
+    expect(grid).not.toBeNull();
+    expect(grid).toHaveClass("grid-cols-3");
+  });
 });
