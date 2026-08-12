@@ -1578,6 +1578,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               onContextMenu={handleContextMenu}
                               connectionId={activeConnectionId!}
                               driver={activeDriver!}
+                              capabilities={activeCapabilities}
                               canManage={supportsManageTables(activeCapabilities)}
                               onAddColumn={(t_name) =>
                                 setModifyColumnModal({ isOpen: true, tableName: t_name, column: null })
@@ -1684,6 +1685,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                             onContextMenu={handleContextMenu}
                             connectionId={activeConnectionId!}
                             driver={activeDriver!}
+                            capabilities={activeCapabilities}
                           />
                         ))}
                       </div>
@@ -2648,6 +2650,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           tableName={triggerEditorModal.tableName}
           schema={triggerEditorModal.schema}
           driver={activeDriver ?? undefined}
+          capabilities={activeCapabilities}
           isNewTrigger={triggerEditorModal.isNewTrigger}
           onSuccess={() => {
             if (refreshTriggers) refreshTriggers();
