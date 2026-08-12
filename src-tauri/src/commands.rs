@@ -5368,6 +5368,7 @@ pub async fn get_create_foreign_key_sql<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_create_foreign_key_sql(
+        &saved_conn.params,
         &table,
         &fk_name,
         &column,

@@ -709,6 +709,7 @@ pub trait DatabaseDriver: Send + Sync {
 
     async fn get_create_foreign_key_sql(
         &self,
+        _params: &ConnectionParams,
         _table: &str,
         _fk_name: &str,
         _column: &str,
