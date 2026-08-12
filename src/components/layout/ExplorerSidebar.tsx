@@ -1957,7 +1957,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       icon: Trash2,
                       danger: true,
                       action: async () => {
-                        const quotedTable = quoteTableRef(contextMenu.id, activeDriver, ctxSchema);
+                        const quotedTable = quoteTableRef(contextMenu.id, activeCapabilities ?? activeDriver, ctxSchema);
                         if (
                           await ask(
                             t("sidebar.deleteTableConfirm", { table: contextMenu.id }),

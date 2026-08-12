@@ -3,7 +3,8 @@
  * Pure functions for managing toolbar state and changes
  */
 
-import { formatSqlIdentifier } from "./identifiers";
+import { formatSqlIdentifier, shouldQuoteIdentifiers } from "./identifiers";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 
 export interface TableToolbarState {
   filterInput: string;
@@ -97,12 +98,16 @@ export function generateOrderByPlaceholder(column: string): string {
 
 /**
  * Quotes column names in ORDER BY input for PostgreSQL (e.g. `Status DESC` → `"Status" DESC`).
+ * Capability-driven (issue #614): routes through `shouldQuoteIdentifiers`
+ * instead of its own literal `driver === "postgres"` check, so a
+ * postgres-compatible driver registered under a different id (e.g. a
+ * standalone PostgreSQL plugin) is quoted the same as the builtin driver.
  */
 export function formatSortClause(
   clause: string,
-  driver?: string | null,
+  driver?: string | PluginManifest | DriverCapabilities | null,
 ): string {
-  if (!clause.trim() || driver !== "postgres") {
+  if (!clause.trim() || !shouldQuoteIdentifiers(driver)) {
     return clause;
   }
 
