@@ -767,6 +767,7 @@
       "categories_notebook": "ノートブック",
       "pasteImportClipboard": "クリップボードからインポート",
       "quickNavigator": "クイックナビゲーター",
+      "commandPaletteActions": "アクションを検索",
       "triggerSuggestions": "候補を表示",
       "formatSql": "SQLをフォーマット",
       "refreshTable": "テーブルを更新"
@@ -867,6 +868,7 @@
     "nameRequired": "接続名は必須です",
     "dbNameRequired": "データベース名は必須です",
     "connectionUriRequiresKeychain": "接続 URI は OS のキーチェーンに保存する必要があります。「パスワードをキーチェーンに保存」を有効にしてください。",
+    "connectionUriRequired": "接続 URI は必須です",
     "dbType": "データベースの種類",
     "host": "ホスト",
     "port": "ポート",
@@ -1094,8 +1096,6 @@
       "noResults": "一致する要素が見つかりません",
       "count_one": "1件",
       "count_other": "{{count}}件",
-      "navigationHint": "↑↓で移動、Enterで開く",
-      "escHint": "Escで閉じる",
       "type_table": "テーブル",
       "type_view": "ビュー",
       "type_routine": "ルーチン",
@@ -1479,7 +1479,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [フィールド]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "SQL を生成できません: この接続のデータベース方言が不明です。"
   },
   "modifyColumn": {
     "titleAdd": "カラムを追加",
@@ -2007,6 +2008,27 @@
     "runButton": "実行",
     "runTabPrefix": "実行",
     "returnValue": "戻り値"
+  },
+  "commandPalette": {
+    "title": "コマンドパレット",
+    "objectsTitle": "データベースオブジェクト",
+    "searchLabel": "コマンドを検索",
+    "placeholder": "アクションを検索...",
+    "executionError": "アクションを実行できませんでした",
+    "objectsLoadError": "一部のオブジェクトを読み込めませんでした: {{names}}",
+    "noResults": "一致するアクションがありません",
+    "navigationHint": "移動",
+    "escapeHint": "閉じる",
+    "categories": {
+      "navigation": "ナビゲーション",
+      "connection": "接続",
+      "table": "テーブル"
+    },
+    "commands": {
+      "openSettings": "設定を開く",
+      "openConnections": "接続マネージャーを開く",
+      "openTableInConsole": "現在のテーブルをSQLコンソールで開く"
+    }
   },
   "pagination": {
     "firstPage": "最初のページ",

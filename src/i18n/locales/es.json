@@ -778,6 +778,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Importar desde Portapapeles",
       "quickNavigator": "Navegador rápido",
+      "commandPaletteActions": "Buscar acciones",
       "triggerSuggestions": "Mostrar sugerencias",
       "formatSql": "Formatear SQL",
       "refreshTable": "Actualizar tabla"
@@ -878,6 +879,7 @@
     "nameRequired": "El nombre de la conexión es requerido",
     "dbNameRequired": "El nombre de la base de datos es requerido",
     "connectionUriRequiresKeychain": "Las URI de conexión deben guardarse en el Llavero del sistema. Activa “Guardar contraseñas en el Llavero” para continuar.",
+    "connectionUriRequired": "El URI de conexión es requerido",
     "dbType": "Tipo de Base de Datos",
     "host": "Host",
     "port": "Puerto",
@@ -1101,8 +1103,6 @@
       "noResults": "No se encontraron elementos coincidentes",
       "count_one": "1 elemento",
       "count_other": "{{count}} elementos",
-      "navigationHint": "↑↓ para navegar, Enter para abrir",
-      "escHint": "Esc para cerrar",
       "type_table": "tabla",
       "type_view": "vista",
       "type_routine": "rutina",
@@ -1431,7 +1431,8 @@
     "tabSelectAll": "Select *",
     "tabSelectFields": "Select [campos]",
     "tabUpdate": "Update",
-    "tabDelete": "Delete"
+    "tabDelete": "Delete",
+    "unknownDialect": "No se puede generar SQL: se desconoce el dialecto de base de datos de esta conexión."
   },
   "modifyColumn": {
     "titleAdd": "Agregar Columna",
@@ -1911,6 +1912,27 @@
     "runButton": "Ejecutar",
     "runTabPrefix": "Ejecutar",
     "returnValue": "devuelve"
+  },
+  "commandPalette": {
+    "title": "Paleta de comandos",
+    "objectsTitle": "Objetos de base de datos",
+    "searchLabel": "Buscar comandos",
+    "placeholder": "Buscar acciones...",
+    "executionError": "No se pudo completar la acción",
+    "objectsLoadError": "No se pudieron cargar algunos objetos: {{names}}",
+    "noResults": "No se encontraron acciones coincidentes",
+    "navigationHint": "Navegar",
+    "escapeHint": "Cerrar",
+    "categories": {
+      "navigation": "Navegación",
+      "connection": "Conexión",
+      "table": "Tabla"
+    },
+    "commands": {
+      "openSettings": "Abrir configuración",
+      "openConnections": "Abrir gestor de conexiones",
+      "openTableInConsole": "Abrir la tabla actual en la consola SQL"
+    }
   },
   "pagination": {
     "firstPage": "Primera página",

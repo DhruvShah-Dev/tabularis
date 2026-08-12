@@ -778,6 +778,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Importa dagli Appunti",
       "quickNavigator": "Navigatore rapido",
+      "commandPaletteActions": "Cerca azioni",
       "triggerSuggestions": "Mostra suggerimenti",
       "formatSql": "Formatta SQL",
       "refreshTable": "Aggiorna tabella"
@@ -878,6 +879,7 @@
     "nameRequired": "Il nome della connessione è richiesto",
     "dbNameRequired": "Il nome del database è richiesto",
     "connectionUriRequiresKeychain": "Gli URI di connessione devono essere salvati nel Portachiavi di sistema. Attiva “Salva password nel Portachiavi” per continuare.",
+    "connectionUriRequired": "L'URI di connessione è richiesto",
     "dbType": "Tipo Database",
     "host": "Host",
     "port": "Porta",
@@ -1172,8 +1174,6 @@
       "noResults": "Nessun elemento corrispondente trovato",
       "count_one": "1 elemento",
       "count_other": "{{count}} elementi",
-      "navigationHint": "↑↓ per navigare, Invio per aprire",
-      "escHint": "Esc per chiudere",
       "type_table": "tabella",
       "type_view": "vista",
       "type_routine": "routine",
@@ -1490,7 +1490,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [campi]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "Impossibile generare SQL: il dialetto del database di questa connessione è sconosciuto."
   },
   "modifyColumn": {
     "titleAdd": "Aggiungi Colonna",
@@ -1991,6 +1992,27 @@
     "runButton": "Esegui",
     "runTabPrefix": "Esegui",
     "returnValue": "ritorna"
+  },
+  "commandPalette": {
+    "title": "Tavolozza dei comandi",
+    "objectsTitle": "Oggetti del database",
+    "searchLabel": "Cerca comandi",
+    "placeholder": "Cerca azioni...",
+    "executionError": "Impossibile completare l’azione",
+    "objectsLoadError": "Impossibile caricare alcuni oggetti: {{names}}",
+    "noResults": "Nessuna azione corrispondente",
+    "navigationHint": "Naviga",
+    "escapeHint": "Chiudi",
+    "categories": {
+      "navigation": "Navigazione",
+      "connection": "Connessione",
+      "table": "Tabella"
+    },
+    "commands": {
+      "openSettings": "Apri impostazioni",
+      "openConnections": "Apri gestore connessioni",
+      "openTableInConsole": "Apri la tabella corrente nella console SQL"
+    }
   },
   "pagination": {
     "firstPage": "Prima pagina",
