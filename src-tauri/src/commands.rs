@@ -2383,7 +2383,11 @@ pub async fn test_connection<R: Runtime>(
 
     // For file-based drivers, verify the database file exists before attempting connection
     if drv.manifest().capabilities.file_based {
-        let db_path = std::path::Path::new(resolved_params.database.primary());
+        let db_path = if resolved_params.driver == "sqlite" {
+            crate::sqlite_database::expand_sqlite_filename(resolved_params.database.primary())
+        } else {
+            PathBuf::from(resolved_params.database.primary())
+        };
         if !db_path.exists() {
             let err = format!("Database file not found: {}", resolved_params.database);
             return Err(emit_test_failure(&app, progress_id, "dbConnect", err));
@@ -5364,6 +5368,7 @@ pub async fn get_create_foreign_key_sql<R: Runtime>(
     let saved_conn = find_connection_by_id(&app, &connection_id)?;
     let drv = driver_for(&saved_conn.params.driver).await?;
     drv.get_create_foreign_key_sql(
+        &saved_conn.params,
         &table,
         &fk_name,
         &column,

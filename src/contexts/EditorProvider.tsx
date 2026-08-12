@@ -58,6 +58,14 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    // This connection's tabs are already live in memory. Storage copies are
+    // saved result-stripped, so reloading them here would wipe the query
+    // results of every tab whenever the user switches connections (#292).
+    if (tabsRef.current.some((t) => t.connectionId === activeConnectionId)) {
+      setIsLoading(false);
+      return;
+    }
+
     const loadPreferences = async () => {
       setIsLoading(true);
       try {

@@ -182,6 +182,7 @@ pub async fn get_columns(
                 is_pk,
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
+                is_generated: false,
                 default_value,
                 character_maximum_length,
             }
@@ -327,6 +328,7 @@ pub async fn get_all_columns_batch(
             is_pk,
             is_nullable: null_str == "YES",
             is_auto_increment: is_auto,
+            is_generated: false,
             default_value,
             character_maximum_length,
         };
@@ -1325,6 +1327,7 @@ pub async fn get_view_columns(
                 is_pk,
                 is_nullable: null_str == "YES",
                 is_auto_increment: is_auto,
+                is_generated: false,
                 default_value,
                 character_maximum_length,
             }
@@ -1390,6 +1393,7 @@ pub async fn get_materialized_view_columns(
             is_pk: false,
             is_nullable: !r.try_get::<_, bool>("not_null").unwrap_or(false),
             is_auto_increment: false,
+            is_generated: false,
             default_value: None,
             character_maximum_length: None,
         })
@@ -2424,6 +2428,7 @@ impl DatabaseDriver for PostgresDriver {
 
     async fn get_create_foreign_key_sql(
         &self,
+        _params: &crate::models::ConnectionParams,
         table: &str,
         fk_name: &str,
         column: &str,

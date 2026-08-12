@@ -410,6 +410,22 @@
   "settings": {
     "title": "Paramètres",
     "general": "Général",
+    "privacy": "Confidentialité",
+    "columnMasking": "Masquage des colonnes",
+    "columnMaskingDesc": "Masque le contenu des colonnes sensibles (mots de passe, e-mails, jetons…) dans la grille de résultats. La copie et l'export utilisent toujours les valeurs réelles.",
+    "columnMaskingEnabled": "Masquer les colonnes sensibles",
+    "columnMaskingEnabledDesc": "Affiche un espace réservé à la place de la valeur réelle pour les colonnes dont le nom correspond à un motif sensible.",
+    "maskingPatterns": "Motifs de noms de colonnes sensibles",
+    "maskingPatternsDesc": "Un motif par ligne. Une colonne est masquée lorsque son nom contient un motif (insensible à la casse).",
+    "maskingOverrides": "Exceptions par connexion",
+    "maskingOverridesDesc": "Force le masquage (inclure) ou l'absence de masquage (exclure) de colonnes précises pour une connexion. Une entrée table.colonne par ligne ; les exclusions priment sur les inclusions et les motifs.",
+    "maskingConnection": "Connexion",
+    "maskingConnectionDesc": "Choisissez la connexion à laquelle ces exceptions s'appliquent.",
+    "maskingInclude": "Toujours masquer",
+    "maskingIncludeDesc": "Colonnes toujours masquées pour cette connexion, même si leur nom ne correspond à aucun motif.",
+    "maskingExclude": "Ne jamais masquer",
+    "maskingExcludeDesc": "Colonnes jamais masquées pour cette connexion, même si leur nom correspond à un motif.",
+    "maskingOverridePlaceholder": "ex. utilisateurs.password",
     "info": "Infos",
     "dataEditor": "Éditeur de données",
     "pageSize": "Taille de page des résultats (limite)",
@@ -685,12 +701,14 @@
       "confirmRemove": "Voulez-vous vraiment supprimer \"{{name}}\" ? Cela supprimera les fichiers du plugin.",
       "enabled": "Activé",
       "disabled": "Désactivé",
+      "openFolder": "Ouvrir le dossier des plugins",
       "installError": {
         "title": "Échec de l’installation",
         "subtitle": "Une erreur s’est produite lors de l’installation du plugin. Voir les détails ci-dessous.",
         "details": "Détails de l’erreur",
         "copy": "Copier",
-        "copied": "Copié !"
+        "copied": "Copié !",
+        "reload": "Recharger les plugins"
       },
       "uninstallError": {
         "title": "Échec de la désinstallation",
@@ -769,6 +787,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Importer depuis le Presse-papiers",
       "quickNavigator": "Navigateur rapide",
+      "commandPaletteActions": "Rechercher des actions",
       "triggerSuggestions": "Afficher les suggestions",
       "formatSql": "Formater SQL",
       "refreshTable": "Actualiser la table"
@@ -869,6 +888,7 @@
     "nameRequired": "Le nom de la connexion est requis",
     "dbNameRequired": "Le nom de la base de données est requis",
     "connectionUriRequiresKeychain": "Les URI de connexion doivent être enregistrées dans le trousseau du système. Activez « Enregistrer les mots de passe dans le trousseau » pour continuer.",
+    "connectionUriRequired": "L'URI de connexion est requise",
     "dbType": "Type de base de données",
     "host": "Hôte",
     "port": "Port",
@@ -1012,6 +1032,9 @@
     "waiting": "En attente de votre clé de sécurité — touchez-la pour confirmer."
   },
   "dataGrid": {
+    "noRowIdentity": "Impossible de modifier les lignes : \"{{table}}\" n'a pas de clé primaire, la modification nécessite donc que le résultat inclue toutes les colonnes de la table. Sélectionnez toutes les colonnes (p. ex. SELECT *) ou ajoutez une clé primaire.",
+    "keylessRowNotFound": "Aucune ligne ne correspond aux valeurs d'origine lors de la mise à jour de \"{{column}}\". La table n'a pas de clé primaire et les données ont peut-être changé : actualisez puis réessayez.",
+    "keylessDeleteNotFound": "Aucune ligne ne correspond aux valeurs d'origine lors de la suppression. La table n'a pas de clé primaire et les données ont peut-être changé : actualisez puis réessayez.",
     "newRow": "NOUVELLE",
     "noData": "Aucune donnée à afficher",
     "editRow": "Modifier la ligne",
@@ -1060,7 +1083,11 @@
     "setEmpty": "Définir EMPTY",
     "setServerNow": "Insérer l'horodatage actuel",
     "previewReferenced": "Aperçu de l'enregistrement lié",
-    "openReferenced": "Ouvrir la ligne référencée dans {{table}}"
+    "openReferenced": "Ouvrir la ligne référencée dans {{table}}",
+    "revealCell": "Afficher la cellule",
+    "maskCell": "Masquer la cellule",
+    "revealColumn": "Afficher la colonne",
+    "maskColumn": "Masquer la colonne"
   },
   "editRow": {
     "title": "Modifier la ligne",
@@ -1163,8 +1190,6 @@
       "noResults": "Aucun élément correspondant trouvé",
       "count_one": "1 élément",
       "count_other": "{{count}} éléments",
-      "navigationHint": "↑↓ pour naviguer, Entrée pour ouvrir",
-      "escHint": "Échap pour fermer",
       "type_table": "table",
       "type_view": "vue",
       "type_routine": "routine",
@@ -1481,7 +1506,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [champs]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "Impossible de générer le SQL : le dialecte de base de données de cette connexion est inconnu."
   },
   "modifyColumn": {
     "titleAdd": "Ajouter une colonne",
@@ -2043,6 +2069,27 @@
     "runTabPrefix": "Exécuter",
     "returnValue": "retourne"
   },
+  "commandPalette": {
+    "title": "Palette de commandes",
+    "objectsTitle": "Objets de base de données",
+    "searchLabel": "Rechercher des commandes",
+    "placeholder": "Rechercher des actions...",
+    "executionError": "L’action n’a pas pu être exécutée",
+    "objectsLoadError": "Certains objets n’ont pas pu être chargés : {{names}}",
+    "noResults": "Aucune action correspondante",
+    "navigationHint": "Naviguer",
+    "escapeHint": "Fermer",
+    "categories": {
+      "navigation": "Navigation",
+      "connection": "Connexion",
+      "table": "Table"
+    },
+    "commands": {
+      "openSettings": "Ouvrir les paramètres",
+      "openConnections": "Ouvrir le gestionnaire de connexions",
+      "openTableInConsole": "Ouvrir la table actuelle dans la console SQL"
+    }
+  },
   "pagination": {
     "firstPage": "Première page",
     "previousPage": "Page précédente",
@@ -2113,6 +2160,7 @@
     "driverCount_other": "{{count}} pilotes",
     "connectTo": "Se connecter à {{name}}",
     "unavailableOnPlatform": "Indisponible sur votre plateforme",
+    "unavailable": "Indisponible",
     "backToCatalogue": "Retour au catalogue",
     "pickDriver": "Plusieurs pilotes se connectent à {{name}}. Choisissez-en un :",
     "latestVersion": "Dernière v{{version}}",
@@ -2122,7 +2170,14 @@
     "notInstalled": "Ce pilote n'est pas encore installé. Installez-le pour configurer une connexion.",
     "installVersion": "Installer v{{version}}",
     "installingVersion": "Installation de v{{version}}…",
-    "retryInstall": "Réessayer l'installation"
+    "retryInstall": "Réessayer l'installation",
+    "viewDetails": "Plus de détails",
+    "installTitle": "Installer le pilote",
+    "readmeSubtitle": "README du plugin",
+    "readmeLoading": "Chargement du README…",
+    "readmeUnavailable": "Aucun README n'est disponible pour ce plugin.",
+    "readmeFallbackLocale": "Ce README n'est pas encore disponible dans votre langue — affiché en « {{locale}} ».",
+    "openDocumentation": "Ouvrir la documentation complète"
   },
   "connectionErrors": {
     "ssh-auth": {

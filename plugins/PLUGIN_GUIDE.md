@@ -24,35 +24,34 @@ An external plugin in Tabularis is a separate executable (binary or script) that
    - **Linux:** `~/.local/share/tabularis/plugins/`
    - **macOS:** `~/Library/Application Support/tabularis/plugins/`
    - **Windows:** `%APPDATA%\tabularis\plugins\`
-2. It reads the `manifest.json` for each plugin to discover its capabilities and data types.
+2. It reads each plugin's `.tabularium` manifest (or a legacy `manifest.json`) to discover its capabilities and data types.
 3. The plugin is registered as a driver and appears in the "Database Type" list.
 4. When the user opens a connection using the plugin's driver, Tabularis spawns the executable and begins sending JSON-RPC messages.
 5. The same process instance is reused for all operations in that session.
 
 ---
 
-## 2. Directory Structure & `manifest.json`
+## 2. Directory Structure & the Manifest (`.tabularium`)
 
 A Tabularis plugin is distributed as a `.zip` file. When extracted into the plugins folder, it must have the following structure:
 
 ```text
 plugins/
 └── duckdb/
-    ├── manifest.json
+    ├── .tabularium  (or legacy manifest.json)
     └── duckdb-plugin  (or duckdb-plugin.exe on Windows)
 ```
 
-### The `manifest.json`
+### The `.tabularium` manifest
 
-The manifest tells Tabularis everything about your plugin.
+One manifest tells Tabularis everything about your plugin — and, when you publish, tells the Tabularium registry how to list it. Its canonical name is **`.tabularium`**; the host still reads a legacy `manifest.json` as a fallback. In a `.tabularium`, `name` is the lowercase slug that identifies the plugin (legacy manifests may keep a separate `id` and a display `name`). When publishing, the registry resolves the manifest from your **release assets** — upload `.tabularium` as a standalone asset (GitHub silently renames the dotfile to `default.tabularium`; the registry accepts both names).
 
-> **JSON Schema available:** [`plugins/manifest.schema.json`](./manifest.schema.json) — add `"$schema": "./manifest.schema.json"` to your manifest for IDE autocompletion and validation.
+> **JSON Schema available:** point `$schema` at the registry's live merged schema (as below) for IDE autocompletion and validation, or at the local [`plugins/manifest.schema.json`](./manifest.schema.json) for legacy `manifest.json` files.
 
 ```json
 {
-  "$schema": "https://tabularis.dev/schemas/plugin-manifest.json",
-  "id": "duckdb",
-  "name": "DuckDB",
+  "$schema": "https://registry.tabularis.dev/manifest.schema.json?kind=driver",
+  "name": "duckdb",
   "version": "1.0.0",
   "description": "DuckDB file-based analytical database",
   "default_port": null,
@@ -87,10 +86,10 @@ The manifest tells Tabularis everything about your plugin.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Unique driver identifier (lowercase, no spaces). Must match the folder name. |
-| `name` | string | Display name shown in the UI (e.g., `"DuckDB"`). |
-| `version` | string | Plugin version (semver). |
-| `description` | string | Short description shown in the plugins list. |
+| `name` | string | Lowercase slug identifying the plugin (e.g., `"duckdb"`). Must match the folder name and the registry pattern `^[a-z][a-z0-9-]*$`; it becomes the registry slug and is pinned at first submit. |
+| `id` | string | Legacy identifier from `manifest.json`-era plugins. Optional — when absent, identity falls back to `name`. Omit in new `.tabularium` manifests; the registry ignores it. |
+| `version` | string | Plugin version (semver, **no leading `v`**). Must equal the release tag with any `v` prefix stripped — the registry rejects tag/manifest mismatches. |
+| `description` | string | Short description shown in the plugins list. Optional for the registry; max **280 chars**. |
 | `default_port` | number \| null | Default TCP port. Use `null` for file-based databases. |
 | `executable` | string | Relative path to the executable inside the plugin folder. |
 | `capabilities` | object | Feature flags (see below). |
@@ -175,7 +174,7 @@ Since `map_inferred_type()` is a synchronous trait method that cannot issue an R
 
 Plugins can declare custom configuration fields that Tabularis renders in the **Settings → gear icon** modal for that plugin. Users fill in the values, Tabularis persists them in `config.json`, and passes them to the plugin at startup via an `initialize` RPC call.
 
-### Declaring settings in `manifest.json`
+### Declaring settings in the manifest
 
 Add an optional `settings` array at the top level of your manifest:
 
@@ -290,7 +289,7 @@ Plugins can inject custom React components into the host UI through a **slot-bas
 
 ### Declaring UI Extensions
 
-Add an optional `ui_extensions` array to your `manifest.json`:
+Add an optional `ui_extensions` array to your manifest:
 
 ```json
 {
@@ -483,7 +482,7 @@ Plugins can ship locale files at `locales/{lang}.json` inside their plugin folde
 
 ```
 my-plugin/
-├── manifest.json
+├── .tabularium
 ├── my-plugin-binary
 ├── locales/
 │   ├── en.json
@@ -1345,7 +1344,7 @@ You should see a valid JSON-RPC response on stdout.
    - **Linux:** `~/.local/share/tabularis/plugins/myplugin/`
    - **macOS:** `~/Library/Application Support/tabularis/plugins/myplugin/`
    - **Windows:** `%APPDATA%\tabularis\plugins\myplugin\`
-2. Place your `manifest.json` and the compiled executable in that directory.
+2. Place your `.tabularium` (or legacy `manifest.json`) and the compiled executable in that directory.
 3. On Linux/macOS, make the executable runnable: `chmod +x myplugin`
 4. Restart Tabularis (or install via Settings to hot-reload without restart).
 5. Open **Settings → Installed Plugins** — your driver should appear.
@@ -1358,11 +1357,12 @@ You should see a valid JSON-RPC response on stdout.
 To make your plugin available in the official registry:
 
 1. Build release binaries for all supported platforms.
-2. Package each platform binary with `manifest.json` into a `.zip` file.
-3. Create a GitHub Release (or host on another URL) with the ZIP files.
-4. Open a pull request to this repository adding your plugin entry to `plugins/registry.json`.
+2. Package each platform binary with your `.tabularium` into a `.zip` file (the scaffolded release workflow does this).
+3. Create a GitHub Release with the ZIP files attached — **plus `.tabularium` as a standalone asset** (GitHub renames it to `default.tabularium`; the registry accepts both). The registry resolves the manifest from release assets, and the tag stripped of `v` must equal the manifest `version`.
+4. Submit your plugin at [registry.tabularis.dev/submit](https://registry.tabularis.dev/submit) — ownership is verified via OAuth against your linked repository, and CI can pre-validate the manifest via `POST /api/manifest/validate`. A manifest that fails validation is rejected with **HTTP 422** — there is no silent fallback. The registry's [plugin development page](https://registry.tabularis.dev/docs/plugin-development) documents every `.tabularium` field; the full author docs live at [docs.tabularium.wiki](https://docs.tabularium.wiki/manifest/).
+5. Installs are verified client-side: Tabularis checks the registry's JWS signature and the download's SHA-256 before anything runs.
 
-See [README.md](./README.md) for the full `registry.json` format.
+The legacy path — a pull request adding an entry to `plugins/registry.json` (format in [README.md](./README.md)) — still works during the transition; new plugins should submit to the registry directly.
 
 > **Note:** `min_tabularis_version` is specified per-release inside the `releases[]` array,
 > not at the root plugin level. This allows older Tabularis installs to install an older

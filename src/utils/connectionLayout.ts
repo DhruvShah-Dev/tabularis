@@ -29,6 +29,28 @@ export const MAX_SPLIT_CONNECTIONS = 4;
 /** Minimum share (in %) a split pane can be resized down to */
 export const MIN_SPLIT_PANE_SIZE = 10;
 
+interface SplitLayoutState {
+  splitView: SplitView | null | undefined;
+  isSplitVisible: boolean;
+  pathname: string;
+}
+
+/** Returns the split view to render, or `null` when the route owns the pane. */
+export function resolveRenderedSplitLayout({
+  splitView,
+  isSplitVisible,
+  pathname,
+}: SplitLayoutState): SplitView | null {
+  const isRouteWithSplit =
+    pathname !== '/' &&
+    pathname !== '/connections' &&
+    pathname !== '/settings';
+
+  return splitView && isSplitVisible && isRouteWithSplit
+    ? splitView
+    : null;
+}
+
 export function leaf(connectionId: string): SplitNode {
   return { type: 'leaf', connectionId };
 }
