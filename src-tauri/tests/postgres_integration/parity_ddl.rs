@@ -319,9 +319,10 @@ async fn parity_ddl_create_foreign_key() {
     let result = harness
         .assert_parity(
             "get_create_foreign_key_sql:basic",
-            |driver, _params| async move {
+            |driver, params| async move {
                 driver
                     .get_create_foreign_key_sql(
+                        &params,
                         "crud_scratch",
                         "fk_parity_ddl_test",
                         "value",

@@ -4,7 +4,8 @@
     "data_type": "integer",
     "is_pk": true,
     "is_nullable": false,
-    "is_auto_increment": true
+    "is_auto_increment": true,
+    "is_generated": false
   },
   {
     "name": "current_mood",
@@ -12,6 +13,7 @@
     "is_pk": false,
     "is_nullable": false,
     "is_auto_increment": false,
+    "is_generated": false,
     "default_value": "'neutral'::test_schema.mood"
   }
 ]

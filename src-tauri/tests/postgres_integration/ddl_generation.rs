@@ -211,9 +211,11 @@ async fn test_get_create_index_sql_unique() {
 #[ignore]
 async fn test_get_create_foreign_key_sql() {
     require_pg!();
+    let params = pg_params();
 
     let sql_statements = PostgresDriver::new()
         .get_create_foreign_key_sql(
+            &params,
             "crud_scratch",
             "fk_ddl_test",
             "value",

@@ -9,14 +9,12 @@ on:
     branches: [main]
     paths:
       - 'src-tauri/**'
-      - 'plugins/postgres-plugin/**'
       - '.github/workflows/pg-integration.yml'
       - 'tests/fixtures/**'
   pull_request:
     branches: [main]
     paths:
       - 'src-tauri/**'
-      - 'plugins/postgres-plugin/**'
       - '.github/workflows/pg-integration.yml'
       - 'tests/fixtures/**'
 
@@ -59,8 +57,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-            plugins/postgres-plugin/target
-          key: ${{ runner.os }}-cargo-pg-${{ hashFiles('src-tauri/Cargo.lock', 'plugins/postgres-plugin/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-pg-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-pg-
 
@@ -69,26 +66,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libsoup-3.0-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
 
-      - name: Build PostgreSQL plugin
-        run: cargo build --release --manifest-path plugins/postgres-plugin/Cargo.toml
-
-      - name: Run PostgreSQL plugin unit tests
-        run: cargo test --manifest-path plugins/postgres-plugin/Cargo.toml
-
       - name: Run PostgreSQL integration tests
         working-directory: src-tauri
         env:
           RUST_TEST_THREADS: "1"
           REGENERATE_GOLDEN: "1"
         run: cargo test --test postgres_integration -- --include-ignored
-
-      - name: Run parity tests (plugin vs builtin)
-        working-directory: src-tauri
-        continue-on-error: true
-        env:
-          RUST_TEST_THREADS: "1"
-          POSTGRES_PLUGIN_BIN: ${{ github.workspace }}/plugins/postgres-plugin/target/release/postgresql-plugin
-        run: cargo test --test postgres_integration parity -- --include-ignored
 
       - name: Upload golden files
         if: always()
