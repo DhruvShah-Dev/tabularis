@@ -332,7 +332,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const tabForQuery = { ...tab, schema: effectiveSchema };
       const query =
         tab.type === "table" && tab.activeTable
-          ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
+          ? reconstructTableQuery(tabForQuery, activeCapabilities ?? activeDriver ?? undefined)
           : tab.query;
 
       addTab({
@@ -914,7 +914,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         const tabForQuery = { ...targetTab, schema: effectiveSchema };
         textToRun = reconstructTableQuery(
           tabForQuery,
-          activeDriver ?? undefined,
+          activeCapabilities ?? activeDriver ?? undefined,
           {
             filterOverride:
               filterOverride !== undefined ? filterOverride : undefined,
@@ -1511,7 +1511,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                 schema:
                   activeCapabilities?.schemas === true ? tab.schema : undefined,
               },
-              activeDriver ?? undefined,
+              activeCapabilities ?? activeDriver ?? undefined,
               { sortOverride: null, limitOverride: null },
             )
           : tab.query;
@@ -2137,7 +2137,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const filterClause = buildForeignKeyFilterClause(
         fk,
         value,
-        activeDriver ?? null,
+        activeCapabilities ?? activeDriver ?? null,
         sourceType,
       );
 
@@ -3277,7 +3277,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     const tabForQuery = { ...activeTab, schema: effectiveSchema };
     const query =
       activeTab.type === "table" && activeTab.activeTable
-        ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
+        ? reconstructTableQuery(tabForQuery, activeCapabilities ?? activeDriver ?? undefined)
         : activeTab.query;
 
     if (!query || !query.trim()) return;
@@ -3360,7 +3360,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         ? // limitOverride: copy-all goes beyond the tab's "Total Limit" — the
           // user explicitly asked for every row. Sort is kept so the copy
           // matches the on-screen order.
-          reconstructTableQuery(tabForQuery, activeDriver ?? undefined, {
+          reconstructTableQuery(tabForQuery, activeCapabilities ?? activeDriver ?? undefined, {
             limitOverride: null,
           })
         : activeTab.query;
@@ -4610,6 +4610,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                       activeFkQuery={activeFkQuery}
                       connectionId={activeConnectionId}
                       driver={activeDriver}
+                      capabilities={activeCapabilities}
                       schema={activeSchema}
                       onClose={() => setActiveFkQuery(null)}
                       onNavigateToTab={handleForeignKeyNavigate}

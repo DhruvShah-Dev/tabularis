@@ -193,7 +193,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   const navigate = useNavigate();
   const objectNavigation = useDatabaseObjectNavigation(
     activeConnectionId,
-    activeDriver,
+    activeCapabilities ?? activeDriver,
   );
   const [schemaVersion, setSchemaVersion] = useState(0);
   const sidebarBodyRef = useRef<HTMLDivElement>(null);

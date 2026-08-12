@@ -57,7 +57,7 @@ export function useSqlAutocompleteRegistration(
         connectionId,
         effectiveTables,
         schema,
-        activeDriver ?? null,
+        activeCapabilities ?? activeDriver ?? null,
       );
     };
 
