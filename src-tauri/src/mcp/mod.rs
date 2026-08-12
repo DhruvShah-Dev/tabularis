@@ -362,7 +362,7 @@ fn resolve_default_schema<'a>(
     driver: &Arc<dyn DatabaseDriver>,
     requested_schema: Option<&'a str>,
 ) -> Option<&'a str> {
-    if driver.manifest().capabilities.sql_dialect == SqlDialect::Postgres {
+    if driver.manifest().capabilities.sql_dialect == Some(SqlDialect::Postgres) {
         Some(requested_schema.unwrap_or("public"))
     } else {
         requested_schema
