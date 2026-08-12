@@ -214,3 +214,55 @@ async fn parity_execute_query_count() {
     let rows = result.get("rows").and_then(Value::as_array).unwrap();
     assert_eq!(rows.len(), 1, "COUNT query should return exactly one row");
 }
+
+/// Regression test for a real bug caught by manual smoke testing (issue #614
+/// follow-up, filed as tabularis-postgresql-plugin#7): the plugin's
+/// `extract_value` had no explicit case for PostgreSQL enum columns, so
+/// SELECTing an enum value returned `null` instead of the real label — while
+/// the builtin driver (confirmed here, and independently via `psql`) returns
+/// the correct string. `assert_parity` alone would have failed loudly on this
+/// exact mismatch had it existed; it didn't, because no parity test read an
+/// enum value back through `execute_query` — only `get_columns` (metadata)
+/// and `insert_record`/`update_record` (binding) exercised enums before this.
+#[tokio::test]
+#[ignore]
+async fn parity_execute_query_enum_value() {
+    require_pg!();
+    let harness = ParityHarness::new().await;
+
+    let result = harness
+        .assert_parity("execute_query:enum_value", |driver, params| async move {
+            driver
+                .execute_query(
+                    &params,
+                    "SELECT id, current_mood FROM test_schema.with_enum ORDER BY id LIMIT 1",
+                    Some(100),
+                    1,
+                    Some("test_schema"),
+                )
+                .await
+        })
+        .await;
+
+    let rows = result.get("rows").and_then(Value::as_array).unwrap();
+    assert_eq!(rows.len(), 1, "expected exactly one row");
+    let row = &rows[0];
+
+    // Seed data (tests/fixtures/postgres_seed.sql) inserts current_mood =
+    // 'happy' for the one seeded row and never updates it in any other
+    // integration test, so this value is stable — a real, non-null enum
+    // label, not a placeholder. Handles both row shapes (object keyed by
+    // column name, or positional array) the same way parity_execute_query_
+    // null_handling above does.
+    let mood_val = row
+        .get("current_mood")
+        .or_else(|| row.as_array().and_then(|arr| arr.get(1)))
+        .expect("current_mood should be present in the result row");
+
+    assert_eq!(
+        mood_val.as_str(),
+        Some("happy"),
+        "current_mood should be the real enum label 'happy', not null — \
+         got: {mood_val:?}"
+    );
+}
