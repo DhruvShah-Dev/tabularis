@@ -53,8 +53,10 @@ export function getQuoteChar(
  * PostgreSQL plugin) is quoted identically to the builtin "postgres" driver.
  * An omitted `sql_dialect` defaults to "postgres" per the manifest schema —
  * matching the same fallback `src/utils/sqlSplitter/index.ts` already uses.
- * Falls back to the legacy literal string check when only a bare driver id
- * is available (no capabilities object in scope).
+ * Falls back to a literal string check when only a bare driver id is
+ * available (no capabilities object in scope) — covers both "postgres"
+ * (builtin) and "postgresql" (the shipped plugin's id, per PR #588) so
+ * bare-string callers keep working without a manifest in scope.
  */
 export function shouldQuoteIdentifiers(
   driver: string | PluginManifest | DriverCapabilities | null | undefined,
@@ -63,7 +65,7 @@ export function shouldQuoteIdentifiers(
   if (caps) {
     return (caps.sql_dialect ?? "postgres") === "postgres";
   }
-  return driver === "postgres";
+  return driver === "postgres" || driver === "postgresql";
 }
 
 // PostgreSQL folds unquoted identifiers to lowercase and only needs quotes for

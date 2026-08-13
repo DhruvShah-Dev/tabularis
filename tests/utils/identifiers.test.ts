@@ -38,8 +38,8 @@ describe('shouldQuoteIdentifiers', () => {
     expect(shouldQuoteIdentifiers('postgres')).toBe(true);
   });
 
-  it('returns false for the bare "postgresql" string — no capabilities object, so the narrow literal fallback applies', () => {
-    expect(shouldQuoteIdentifiers('postgresql')).toBe(false);
+  it('returns true for the bare "postgresql" string — no capabilities object, so the literal fallback covers the shipped plugin id too (PR #588)', () => {
+    expect(shouldQuoteIdentifiers('postgresql')).toBe(true);
   });
 
   it('returns true for a manifest/capabilities object declaring sql_dialect: "postgres"', () => {
@@ -189,6 +189,17 @@ describe('formatSqlIdentifier', () => {
     expect(formatSqlIdentifier('AccountId', 'postgres')).toBe('"AccountId"');
   });
 
+  it('should quote identifiers for postgresql driver ids', () => {
+    expect(formatSqlIdentifier('AccountId', 'postgresql')).toBe('"AccountId"');
+    expect(formatSqlIdentifier('user', 'postgresql')).toBe('"user"');
+  });
+
+  it('should quote identifiers for PostgreSQL plugin manifests', () => {
+    const manifest = { id: 'postgresql' } as PluginManifest;
+
+    expect(formatSqlIdentifier('AccountId', manifest)).toBe('"AccountId"');
+  });
+
   it('should quote reserved words for postgres', () => {
     expect(formatSqlIdentifier('select', 'postgres')).toBe('"select"');
     expect(formatSqlIdentifier('user', 'postgres')).toBe('"user"');
@@ -213,7 +224,6 @@ describe('formatSqlIdentifier', () => {
     expect(formatSqlIdentifier('users', 'sqlite')).toBe('users');
     expect(formatSqlIdentifier('AccountEventLog', 'sqlite')).toBe('AccountEventLog');
   });
-
   it('quotes mixed-case identifiers identically for a "postgresql" plugin manifest and the bare "postgres" string', () => {
     expect(formatSqlIdentifier('AccountEventLog', pluginManifest())).toBe(
       formatSqlIdentifier('AccountEventLog', 'postgres'),
