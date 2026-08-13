@@ -1046,6 +1046,7 @@
     "pasteCells": "貼り付け",
     "pastedCells": "{{count}} 個のセルに貼り付けました",
     "pasteNotEditable": "このセルは編集できません",
+    "pasteReadFailed": "クリップボードを読み取れませんでした",
     "copyColumnName": "カラム名をコピー",
     "copyColumnNameQuoted": "`column` 形式でコピー",
     "copyColumnNameTable": "table.column 形式でコピー",

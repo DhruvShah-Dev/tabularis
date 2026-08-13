@@ -1048,6 +1048,7 @@
     "pasteCells": "Colar",
     "pastedCells": "{{count}} célula(s) colada(s)",
     "pasteNotEditable": "Estas células não podem ser editadas",
+    "pasteReadFailed": "Não foi possível ler a área de transferência",
     "copyColumnName": "Copiar nome da coluna",
     "copyColumnNameQuoted": "Copiar como `column`",
     "copyColumnNameTable": "Copiar como table.column",

@@ -1059,6 +1059,7 @@
     "pasteCells": "Incolla",
     "pastedCells": "{{count}} cella/e incollate",
     "pasteNotEditable": "Queste celle non possono essere modificate",
+    "pasteReadFailed": "Impossibile leggere gli appunti",
     "copyColumnName": "Copia nome colonna",
     "copyColumnNameQuoted": "Copia come `colonna`",
     "copyColumnNameTable": "Copia come tabella.colonna",

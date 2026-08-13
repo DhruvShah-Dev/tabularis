@@ -1065,6 +1065,7 @@
     "pasteCells": "I-paste",
     "pastedCells": "Na-paste ang {{count}} cell",
     "pasteNotEditable": "Hindi maaaring i-edit ang mga cell na ito",
+    "pasteReadFailed": "Hindi mabasa ang clipboard",
     "copyColumnName": "Kopyahin ang pangalan ng column",
     "copyColumnNameQuoted": "Kopyahin bilang `column`",
     "copyColumnNameTable": "Kopyahin bilang table.column",

@@ -1059,6 +1059,7 @@
     "pasteCells": "Pegar",
     "pastedCells": "{{count}} celda(s) pegada(s)",
     "pasteNotEditable": "Estas celdas no se pueden editar",
+    "pasteReadFailed": "No se pudo leer el portapapeles",
     "copyColumnName": "Copiar nombre de columna",
     "copyColumnNameQuoted": "Copiar como `columna`",
     "copyColumnNameTable": "Copiar como tabla.columna",

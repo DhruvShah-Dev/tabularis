@@ -1080,6 +1080,7 @@
     "pasteCells": "Paste",
     "pastedCells": "Pasted {{count}} cell(s)",
     "pasteNotEditable": "These cells cannot be edited",
+    "pasteReadFailed": "Couldn't read the clipboard",
     "copyColumnName": "Copy column name",
     "copyColumnNameQuoted": "Copy as `column`",
     "copyColumnNameTable": "Copy as table.column",

@@ -1029,6 +1029,7 @@
     "pasteCells": "Вставить",
     "pastedCells": "Вставлено ячеек: {{count}}",
     "pasteNotEditable": "Эти ячейки нельзя редактировать",
+    "pasteReadFailed": "Не удалось прочитать буфер обмена",
     "copyColumnName": "Копировать имя столбца",
     "copyColumnNameQuoted": "Копировать как `column`",
     "copyColumnNameTable": "Копировать как table.column",

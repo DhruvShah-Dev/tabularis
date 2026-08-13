@@ -1034,6 +1034,7 @@
     "pasteCells": "Einfügen",
     "pastedCells": "{{count}} Zelle(n) eingefügt",
     "pasteNotEditable": "Diese Zellen können nicht bearbeitet werden",
+    "pasteReadFailed": "Zwischenablage konnte nicht gelesen werden",
     "copyColumnName": "Spaltennamen kopieren",
     "copyColumnNameQuoted": "Als `column` kopieren",
     "copyColumnNameTable": "Als table.column kopieren",

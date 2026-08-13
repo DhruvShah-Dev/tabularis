@@ -1070,6 +1070,7 @@
     "pasteCells": "Coller",
     "pastedCells": "{{count}} cellule(s) collée(s)",
     "pasteNotEditable": "Ces cellules ne peuvent pas être modifiées",
+    "pasteReadFailed": "Impossible de lire le presse-papiers",
     "copyColumnName": "Copier le nom de colonne",
     "copyColumnNameQuoted": "Copier comme `column`",
     "copyColumnNameTable": "Copier comme table.column",

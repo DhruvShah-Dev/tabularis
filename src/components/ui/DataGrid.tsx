@@ -395,6 +395,31 @@ export const DataGrid = React.memo(
       [columnMetadata],
     );
 
+    // Primary key columns (lowercased), for guards that must not touch row
+    // identity. Real metadata PKs when available — the pkColumns prop is the
+    // row-identity fallback, which on keyless tables covers every column.
+    const pkColumnSet = useMemo(
+      () =>
+        new Set(
+          columnMetadata
+            ? columnMetadata
+                .filter((col) => col.is_pk)
+                .map((col) => col.name.toLowerCase())
+            : (pkColumns ?? []).map((col) => col.toLowerCase()),
+        ),
+      [columnMetadata, pkColumns],
+    );
+
+    // True when the cell is masked and not revealed, at either the column or
+    // the individual-cell level.
+    const isCellMasked = useCallback(
+      (rowIndex: number, colIndex: number) =>
+        maskedColIndices.has(colIndex) &&
+        !revealedColIndices.has(colIndex) &&
+        !revealedCells.has(`${rowIndex}:${colIndex}`),
+      [maskedColIndices, revealedColIndices, revealedCells],
+    );
+
     // Precompute the result-coloring class per column once (the type is fixed
     // per column), so rows don't reclassify every cell on each render. `null`
     // when the feature is off, which makes rows skip the wrapper entirely.
@@ -1791,6 +1816,7 @@ export const DataGrid = React.memo(
           text = await readText();
         } catch (e) {
           console.error("Failed to read clipboard:", e);
+          showToast(t("dataGrid.pasteReadFailed"), { kind: "error" });
           return;
         }
         if (!text) return;
@@ -1810,10 +1836,15 @@ export const DataGrid = React.memo(
         ) {
           // Single value + row selection: fill every cell of the selected rows
           // (the row selection is the "range" here, like a spreadsheet).
+          // Primary key columns are excluded — a whole-row fill overwriting
+          // row identities is never what the user meant; explicit pastes
+          // (range / focused cell / a multi-cell matrix) still accept PK
+          // values.
           const value = matrix[0][0];
           targets = [];
           for (const rowIndex of selectedRowIndices) {
             for (let colIndex = 0; colIndex < columns.length; colIndex++) {
+              if (pkColumnSet.has(columns[colIndex].toLowerCase())) continue;
               targets.push({ rowIndex, colIndex, value });
             }
           }
@@ -1838,6 +1869,11 @@ export const DataGrid = React.memo(
           const mergedRow = mergedRows[rowIndex];
           if (!mergedRow) continue;
           const colName = columns[colIndex];
+          // Same guard as inline editing: generated columns are computed by
+          // the database and never accept a value, and masked cells must be
+          // revealed before they take one.
+          if (generatedColumns?.has(colName.toLowerCase())) continue;
+          if (isCellMasked(rowIndex, colIndex)) continue;
           if (mergedRow.type === "insertion") {
             if (onPendingInsertionChange && mergedRow.tempId) {
               onPendingInsertionChange(mergedRow.tempId, colName, value);
@@ -1877,6 +1913,9 @@ export const DataGrid = React.memo(
         mergedRows,
         columns,
         physicalColumnSet,
+        generatedColumns,
+        pkColumnSet,
+        isCellMasked,
         csvDelimiter,
         onPendingChange,
         onPendingInsertionChange,
