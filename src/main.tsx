@@ -7,27 +7,33 @@ import { App } from './App';
 import './index.css';
 import './i18n/config';
 import { DatabaseProvider } from './contexts/DatabaseProvider';
+import { ToastProvider } from './contexts/ToastProvider';
 import { SettingsProvider } from './contexts/SettingsProvider';
 import { SavedQueriesProvider } from './contexts/SavedQueriesProvider';
 import { QueryHistoryProvider } from './contexts/QueryHistoryProvider';
 import { EditorProvider } from './contexts/EditorProvider';
 import { ThemeProvider } from './contexts/ThemeProvider';
 import { UpdateProvider } from './contexts/UpdateProvider';
+import { ProductionGuardProvider } from './contexts/ProductionGuardContext';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <UpdateProvider>
       <ThemeProvider>
         <SettingsProvider>
-          <DatabaseProvider>
-            <SavedQueriesProvider>
+          <ToastProvider>
+            <DatabaseProvider>
+              <SavedQueriesProvider>
               <QueryHistoryProvider>
                 <EditorProvider>
-                  <App />
+                  <ProductionGuardProvider>
+                    <App />
+                  </ProductionGuardProvider>
                 </EditorProvider>
               </QueryHistoryProvider>
             </SavedQueriesProvider>
-          </DatabaseProvider>
+            </DatabaseProvider>
+          </ToastProvider>
         </SettingsProvider>
       </ThemeProvider>
     </UpdateProvider>

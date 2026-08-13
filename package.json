@@ -1,11 +1,15 @@
 {
   "name": "tabularis",
   "private": true,
-  "version": "0.12.0",
+  "version": "0.19.0",
   "type": "module",
   "links": {
     "discord": "https://discord.com/invite/K2hmhfHRSt",
-    "github": "https://github.com/TabularisDB/tabularis"
+    "github": "https://github.com/TabularisDB/tabularis",
+    "github-issues": "https://github.com/TabularisDB/tabularis/issues",
+    "x": "https://x.com/tabularisdb",
+    "bluesky": "https://bsky.app/profile/tabularis.bsky.social",
+    "mastodon": "https://mastodon.social/@tabularis"
   },
   "scripts": {
     "dev": "vite",
@@ -18,6 +22,8 @@
     "test:rust": "cd src-tauri && cargo test",
     "test:all": "pnpm test:rust && pnpm test:coverage",
     "tauri": "tauri",
+    "build:explain": "pnpm --filter @tabularis/explain build",
+    "typecheck:explain": "pnpm --filter @tabularis/explain typecheck",
     "build:plugin-api": "pnpm --filter @tabularis/plugin-api build",
     "check:plugin-api": "pnpm --filter @tabularis/plugin-api check:sync",
     "build:create-plugin": "pnpm --filter @tabularis/create-plugin build",
@@ -25,10 +31,11 @@
     "roadmap": "node scripts/update-roadmap.js",
     "sync-links": "node scripts/sync-links.js",
     "sync-sponsors": "node scripts/sync-sponsors.js",
-    "version": "node scripts/sync-version.js && conventional-changelog -p angular -i CHANGELOG.md -s && git add README.md CHANGELOG.md src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock src/version.ts"
+    "version": "node scripts/sync-version.js && conventional-changelog -p angular -i CHANGELOG.md -s && git add README*.md CHANGELOG.md src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock src/version.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "@tabularis/explain": "workspace:*",
     "@tailwindcss/postcss": "^4.2.2",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.23",
@@ -36,6 +43,7 @@
     "@tauri-apps/plugin-clipboard-manager": "~2.3.2",
     "@tauri-apps/plugin-dialog": "^2.6.0",
     "@tauri-apps/plugin-fs": "^2.4.5",
+    "@tauri-apps/plugin-notification": "^2.3.1",
     "@tauri-apps/plugin-opener": "^2.5.3",
     "@tauri-apps/plugin-updater": "~2.10.0",
     "@types/dagre": "^0.7.54",
@@ -43,7 +51,9 @@
     "buffer": "^6.0.3",
     "clsx": "^2.1.1",
     "dagre": "^0.8.5",
+    "dompurify": "^3.4.13",
     "emoji-picker-react": "^4.19.1",
+    "fuse.js": "^7.4.2",
     "i18next": "^25.10.10",
     "i18next-browser-languagedetector": "^8.2.1",
     "json-edit-react": "^1.29.1",
@@ -57,12 +67,13 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.13.2",
     "recharts": "^3.8.1",
+    "sql-formatter": "^15.8.2",
     "util": "^0.12.5",
     "wkx": "^0.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@tauri-apps/cli": "^2.10.1",
+    "@tauri-apps/cli": "^2.11.4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -77,6 +88,7 @@
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.26",
+    "gitnexus": "^1.6.9",
     "globals": "^16.5.0",
     "jsdom": "^28.1.0",
     "postcss": "^8.5.8",

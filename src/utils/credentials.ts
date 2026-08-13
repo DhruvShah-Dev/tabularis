@@ -6,6 +6,10 @@ interface ConnectionParams {
   port?: number;
   username?: string;
   password?: string;
+  /** Raw driver-specific connection URI, restored from the OS keychain by the host. */
+  connection_uri?: string;
+  /** True when the URI can be restored from the OS keychain. */
+  connection_uri_in_keychain?: boolean;
   database: string | string[];
   ssl_mode?: string;
   ssh_enabled?: boolean;
@@ -16,7 +20,11 @@ interface ConnectionParams {
   ssh_password?: string;
   ssh_key_file?: string;
   ssh_key_passphrase?: string;
+  ssh_allow_passphrase_prompt?: boolean;
   save_in_keychain?: boolean;
+  /** Opaque plugin-specific connection fields, persisted as-is and forwarded
+   * verbatim to the driver/plugin. */
+  extra?: Record<string, string>;
 }
 
 export interface SavedConnectionWithCredentials {

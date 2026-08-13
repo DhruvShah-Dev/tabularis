@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Loader2, Key, Table2 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { useDatabase } from '../../hooks/useDatabase';
 import { Modal } from '../ui/Modal';
+import type { TableTarget } from '../../types/databaseObjects';
 
 interface TableColumn {
   name: string;
@@ -15,29 +15,27 @@ interface TableColumn {
 interface SchemaModalProps {
   isOpen: boolean;
   onClose: () => void;
-  tableName: string;
-  schema?: string | null;
+  target: TableTarget;
 }
 
-export const SchemaModal = ({ isOpen, onClose, tableName, schema }: SchemaModalProps) => {
+export const SchemaModal = ({ isOpen, onClose, target }: SchemaModalProps) => {
   const { t } = useTranslation();
-  const { activeConnectionId, activeSchema } = useDatabase();
+  const { connectionId, tableName, schema } = target;
   const [columns, setColumns] = useState<TableColumn[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const resolvedSchema = schema ?? activeSchema;
 
   useEffect(() => {
-    if (!isOpen || !activeConnectionId || !tableName) return;
+    if (!isOpen || !connectionId || !tableName) return;
 
     const loadSchema = async () => {
       setLoading(true);
       setError('');
       try {
         const cols = await invoke<TableColumn[]>('get_columns', {
-          connectionId: activeConnectionId,
+          connectionId,
           tableName,
-          ...(resolvedSchema ? { schema: resolvedSchema } : {}),
+          ...(schema ? { schema } : {}),
         });
         setColumns(cols);
       } catch (err) {
@@ -49,11 +47,11 @@ export const SchemaModal = ({ isOpen, onClose, tableName, schema }: SchemaModalP
     };
 
     void loadSchema();
-  }, [isOpen, activeConnectionId, tableName, resolvedSchema]);
+  }, [isOpen, connectionId, tableName, schema]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} overlayClassName="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100]">
-      <div className="bg-elevated rounded-xl shadow-2xl w-[600px] border border-strong flex flex-col max-h-[90vh]">
+      <div className="bg-elevated rounded-xl shadow-2xl w-[600px] border border-strong flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-default bg-base">
           <div className="flex items-center gap-3">
@@ -62,7 +60,7 @@ export const SchemaModal = ({ isOpen, onClose, tableName, schema }: SchemaModalP
             </div>
             <div>
               <h2 className="text-lg font-semibold text-primary">{t('schema.title', { table: tableName })}</h2>
-              {resolvedSchema && <p className="text-xs text-secondary font-mono">{resolvedSchema}</p>}
+              {schema && <p className="text-xs text-secondary font-mono">{schema}</p>}
             </div>
           </div>
           <button onClick={onClose} className="text-secondary hover:text-primary transition-colors">

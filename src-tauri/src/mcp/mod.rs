@@ -7,18 +7,25 @@ use crate::config::{
     DEFAULT_MCP_APPROVAL_TIMEOUT_SECONDS, DEFAULT_MCP_PREFLIGHT_EXPLAIN,
 };
 use crate::credential_cache;
+use crate::drivers::driver_trait::DatabaseDriver;
+use crate::drivers::registry as driver_registry;
 use crate::drivers::{mysql, postgres, sqlite};
 use crate::heartbeat;
-use crate::models::{ConnectionParams, SshConnection};
+use crate::models::{ConnectionParams, K8sConnection, SshConnection};
 use crate::paths;
 use crate::persistence;
+use crate::plugins;
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
+use std::sync::Arc;
 
 pub mod install;
 pub mod preflight;
 pub mod protocol;
 use protocol::*;
+
+#[cfg(test)]
+mod tests;
 
 const APPROVAL_POLL_INTERVAL_MS: u64 = 500;
 
@@ -153,8 +160,69 @@ async fn expand_ssh_params_for_mcp(
     Ok(expanded)
 }
 
+/// MCP-mode equivalent of K8s saved-connection expansion.
+async fn expand_k8s_params_for_mcp(
+    params: &ConnectionParams,
+) -> Result<ConnectionParams, JsonRpcError> {
+    let mut expanded = params.clone();
+
+    if !params.k8s_enabled.unwrap_or(false) {
+        return Ok(expanded);
+    }
+
+    let k8s_id = match &params.k8s_connection_id {
+        Some(id) => id.clone(),
+        None => return Ok(expanded),
+    };
+
+    let k8s_path = paths::get_app_config_dir().join("k8s_connections.json");
+    if !k8s_path.exists() {
+        return Err(JsonRpcError {
+            code: -32000,
+            message: format!("K8s connection {} not found", k8s_id),
+            data: None,
+        });
+    }
+
+    let content = tokio::task::spawn_blocking({
+        let p = k8s_path.clone();
+        move || std::fs::read_to_string(p).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| JsonRpcError {
+        code: -32000,
+        message: e.to_string(),
+        data: None,
+    })?
+    .map_err(|e| JsonRpcError {
+        code: -32000,
+        message: e,
+        data: None,
+    })?;
+
+    let k8s: K8sConnection = serde_json::from_str::<Vec<K8sConnection>>(&content)
+        .unwrap_or_default()
+        .into_iter()
+        .find(|k| k.id == k8s_id)
+        .ok_or_else(|| JsonRpcError {
+            code: -32000,
+            message: format!("K8s connection {} not found", k8s_id),
+            data: None,
+        })?;
+
+    expanded.k8s_context = Some(k8s.context);
+    expanded.k8s_namespace = Some(k8s.namespace);
+    expanded.k8s_resource_type = Some(k8s.resource_type);
+    expanded.k8s_resource_name = Some(k8s.resource_name);
+    expanded.k8s_port = Some(k8s.port);
+    expanded.k8s_kubectl_path = k8s.kubectl_path;
+    expanded.k8s_kubeconfig_path = k8s.kubeconfig_path;
+
+    Ok(expanded)
+}
+
 fn find_connection(conn_id: &str) -> Result<crate::models::SavedConnection, JsonRpcError> {
-    let config_path = paths::get_app_config_dir().join("connections.json");
+    let config_path = paths::resolve_connections_path(&paths::get_app_config_dir());
     let connections = persistence::load_connections(&config_path).map_err(|e| JsonRpcError {
         code: -32000,
         message: e,
@@ -177,8 +245,11 @@ async fn resolve_db_params(
 ) -> Result<(crate::models::SavedConnection, ConnectionParams), JsonRpcError> {
     let mut conn = find_connection(conn_id)?;
 
-    // Load DB password from keychain if it isn't stored inline
-    if conn.params.save_in_keychain.unwrap_or(false) {
+    // Load DB password from keychain unless the connection uses IAM auth,
+    // whose 15-min tokens must come from the `password` field on every
+    // connect — never from the keychain, where a stale token would survive.
+    let iam_auth = conn.params.use_iam_auth.unwrap_or(false);
+    if !iam_auth && conn.params.save_in_keychain.unwrap_or(false) {
         let cache = std::sync::Arc::new(credential_cache::CredentialCache::default());
         let id = conn.id.clone();
         let pwd = tokio::task::spawn_blocking(move || {
@@ -196,9 +267,38 @@ async fn resolve_db_params(
                 conn.params.password = Some(p);
             }
         }
+    } else if iam_auth && conn.params.save_in_keychain.unwrap_or(false) {
+        log::warn!(
+            "MCP: connection {} has use_iam_auth=true; ignoring any password stored in the keychain. A fresh RDS auth token must be supplied on every connect.",
+            conn_id
+        );
+        conn.params.password = None;
+    }
+
+    // connections.json never holds the URI, so a passthrough connection that
+    // works in the app would reach the driver without its endpoint and
+    // credentials here unless it is restored the same way. Kept out of the
+    // password branches above: the URI has its own keychain entry and its own
+    // marker, so it must not depend on how the password happens to be stored.
+    if conn.params.connection_uri_in_keychain.unwrap_or(false) {
+        let cache = std::sync::Arc::new(credential_cache::CredentialCache::default());
+        let id = conn.id.clone();
+        let uri = tokio::task::spawn_blocking(move || {
+            credential_cache::get_connection_uri_cached(&cache, &id, true)
+        })
+        .await
+        .map_err(|e| JsonRpcError {
+            code: -32000,
+            message: e.to_string(),
+            data: None,
+        })?;
+        if let Ok(Some(value)) = uri {
+            conn.params.connection_uri = Some(value);
+        }
     }
 
     let expanded = expand_ssh_params_for_mcp(&conn.params).await?;
+    let expanded = expand_k8s_params_for_mcp(&expanded).await?;
     let db_params = commands::resolve_connection_params(&expanded).map_err(|e| JsonRpcError {
         code: -32000,
         message: e,
@@ -207,8 +307,51 @@ async fn resolve_db_params(
     Ok((conn, db_params))
 }
 
+/// Populate the driver registry for the standalone MCP subprocess: the three
+/// built-in drivers plus any installed plugin drivers, honoring the user's
+/// `active_external_drivers` preference. Without this, MCP can only reach
+/// mysql/postgres/sqlite connections — every other driver fails with
+/// "Unsupported driver".
+async fn register_drivers_for_mcp() {
+    driver_registry::register_driver(mysql::MysqlDriver::new()).await;
+    driver_registry::register_driver(postgres::PostgresDriver::new()).await;
+    driver_registry::register_driver(sqlite::SqliteDriver::new()).await;
+
+    let app_config = config::load_config_from_disk();
+    let plugin_configs = app_config.plugins.unwrap_or_default();
+    let enabled_ids = app_config.active_external_drivers;
+    plugins::manager::load_plugins_with_configs(plugin_configs, enabled_ids.as_deref()).await;
+}
+
+/// Resolve the driver for an MCP-known connection. Returns the connection,
+/// the resolved DB params, and the registered driver. Errors with a JSON-RPC
+/// "Unsupported driver" payload when no driver matches the connection's
+/// `driver` id (e.g. the plugin failed to load).
+async fn resolve_db_driver(
+    conn_id: &str,
+) -> Result<
+    (
+        crate::models::SavedConnection,
+        ConnectionParams,
+        Arc<dyn DatabaseDriver>,
+    ),
+    JsonRpcError,
+> {
+    let (conn, db_params) = resolve_db_params(conn_id).await?;
+    let driver = driver_registry::get_driver(&conn.params.driver)
+        .await
+        .ok_or_else(|| JsonRpcError {
+            code: -32000,
+            message: format!("Unsupported driver: {}", conn.params.driver),
+            data: None,
+        })?;
+    Ok((conn, db_params, driver))
+}
+
 pub async fn run_mcp_server() {
     eprintln!("[MCP] Starting Tabularis MCP Server...");
+
+    register_drivers_for_mcp().await;
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -228,12 +371,20 @@ pub async fn run_mcp_server() {
                     Ok(request) => {
                         let response = handle_request(request).await;
                         if let Some(resp) = response {
-                            let json = serde_json::to_string(&resp).unwrap();
+                            let json = serde_json::to_string(&resp)
+                                .expect("serializing a JsonRpcResponse cannot fail");
                             // Log output to stderr
                             eprintln!("[MCP] Sending: {}", json);
-                            stdout.write_all(json.as_bytes()).unwrap();
-                            stdout.write_all(b"\n").unwrap();
-                            stdout.flush().unwrap();
+                            // Stop cleanly if the client has gone away (BrokenPipe)
+                            // rather than panicking the whole server.
+                            if let Err(e) = stdout
+                                .write_all(json.as_bytes())
+                                .and_then(|_| stdout.write_all(b"\n"))
+                                .and_then(|_| stdout.flush())
+                            {
+                                eprintln!("[MCP] Failed to write response, stopping: {}", e);
+                                break;
+                            }
                         }
                     }
                     Err(e) => {
@@ -314,7 +465,7 @@ fn handle_initialize(params: Option<Value>) -> Result<Value, JsonRpcError> {
 }
 
 async fn handle_list_resources() -> Result<Value, JsonRpcError> {
-    let config_path = paths::get_app_config_dir().join("connections.json");
+    let config_path = paths::resolve_connections_path(&paths::get_app_config_dir());
     let connections = persistence::load_connections(&config_path).map_err(|e| JsonRpcError {
         code: -32000,
         message: format!("Failed to load connections: {}", e),
@@ -360,7 +511,7 @@ async fn handle_read_resource(params: Option<Value>) -> Result<Value, JsonRpcErr
     })?;
 
     if uri == "tabularis://connections" {
-        let config_path = paths::get_app_config_dir().join("connections.json");
+        let config_path = paths::resolve_connections_path(&paths::get_app_config_dir());
         let connections =
             persistence::load_connections(&config_path).map_err(|e| JsonRpcError {
                 code: -32000,
@@ -402,47 +553,22 @@ async fn handle_read_resource(params: Option<Value>) -> Result<Value, JsonRpcErr
         }
         let conn_id = parts[2];
 
-        let config_path = paths::get_app_config_dir().join("connections.json");
-        let connections =
-            persistence::load_connections(&config_path).map_err(|e| JsonRpcError {
+        // Resolve through the same path as the tools so keychain passwords and
+        // SSH tunnels are applied — not just the raw saved params.
+        let (conn, params, driver) = resolve_db_driver(conn_id).await?;
+        let schema = if conn.params.driver == "postgres" {
+            Some("public")
+        } else {
+            None
+        };
+        let tables = driver
+            .get_tables(&params, schema)
+            .await
+            .map_err(|e| JsonRpcError {
                 code: -32000,
                 message: e,
                 data: None,
             })?;
-
-        // Try to find by ID or exact name (case-insensitive) first, then partial name match
-        let conn = connections
-            .iter()
-            .find(|c| c.id == conn_id || c.name.eq_ignore_ascii_case(conn_id))
-            .or_else(|| {
-                connections
-                    .iter()
-                    .find(|c| c.name.to_lowercase().contains(&conn_id.to_lowercase()))
-            })
-            .ok_or(JsonRpcError {
-                code: -32000,
-                message: format!("Connection not found: {}", conn_id),
-                data: None,
-            })?;
-
-        let params =
-            commands::resolve_connection_params(&conn.params).map_err(|e| JsonRpcError {
-                code: -32000,
-                message: e,
-                data: None,
-            })?;
-
-        let tables = match conn.params.driver.as_str() {
-            "mysql" => mysql::get_tables(&params, None).await,
-            "postgres" => postgres::get_tables(&params, "public").await,
-            "sqlite" => sqlite::get_tables(&params).await,
-            _ => Err("Unsupported driver".into()),
-        }
-        .map_err(|e| JsonRpcError {
-            code: -32000,
-            message: e,
-            data: None,
-        })?;
 
         // Format as simplified DDL or JSON
         let schema_json = serde_json::to_string_pretty(&tables).unwrap();
@@ -471,6 +597,17 @@ fn handle_list_tools() -> Result<Value, JsonRpcError> {
             input_schema: json!({
                 "type": "object",
                 "properties": {}
+            }),
+        },
+        Tool {
+            name: "list_databases".to_string(),
+            description: Some("List all databases available for a connection".to_string()),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "connection_id": { "type": "string", "description": "The ID or name of the connection" }
+                },
+                "required": ["connection_id"]
             }),
         },
         Tool {
@@ -625,6 +762,10 @@ async fn dispatch_tool(
 ) -> Result<Value, JsonRpcError> {
     match name {
         "list_connections" => tool_list_connections(audit).await,
+        "list_databases" => {
+            let args = require_args(args)?;
+            tool_list_databases(args, audit).await
+        }
         "list_tables" => {
             let args = require_args(args)?;
             tool_list_tables(args, audit).await
@@ -656,7 +797,7 @@ fn require_args(
 }
 
 async fn tool_list_connections(_audit: &mut CallAudit) -> Result<Value, JsonRpcError> {
-    let config_path = paths::get_app_config_dir().join("connections.json");
+    let config_path = paths::resolve_connections_path(&paths::get_app_config_dir());
     let connections = persistence::load_connections(&config_path).map_err(|e| JsonRpcError {
         code: -32000,
         message: e,
@@ -671,7 +812,7 @@ async fn tool_list_connections(_audit: &mut CallAudit) -> Result<Value, JsonRpcE
                 "name": c.name,
                 "driver": c.params.driver,
                 "host": c.params.host,
-                "database": c.params.database.to_string()
+                "database": c.params.database.as_vec()
             })
         })
         .collect();
@@ -700,23 +841,22 @@ async fn tool_list_tables(
 
     audit.connection_id = Some(conn_id.to_string());
 
-    let (conn, db_params) = resolve_db_params(conn_id).await?;
+    let (conn, db_params, driver) = resolve_db_driver(conn_id).await?;
     audit.connection_name = Some(conn.name.clone());
 
-    let tables = match conn.params.driver.as_str() {
-        "mysql" => mysql::get_tables(&db_params, schema).await,
-        "postgres" => {
-            let s = schema.unwrap_or("public");
-            postgres::get_tables(&db_params, s).await
-        }
-        "sqlite" => sqlite::get_tables(&db_params).await,
-        _ => Err("Unsupported driver".into()),
-    }
-    .map_err(|e| JsonRpcError {
-        code: -32000,
-        message: e,
-        data: None,
-    })?;
+    let effective_schema = if conn.params.driver == "postgres" {
+        Some(schema.unwrap_or("public"))
+    } else {
+        schema
+    };
+    let tables = driver
+        .get_tables(&db_params, effective_schema)
+        .await
+        .map_err(|e| JsonRpcError {
+            code: -32000,
+            message: e,
+            data: None,
+        })?;
 
     let names: Vec<&str> = tables.iter().map(|t| t.name.as_str()).collect();
     audit.rows = Some(names.len());
@@ -724,6 +864,42 @@ async fn tool_list_tables(
         "content": [{
             "type": "text",
             "text": serde_json::to_string_pretty(&names).unwrap()
+        }]
+    }))
+}
+
+async fn tool_list_databases(
+    args: &serde_json::Map<String, Value>,
+    audit: &mut CallAudit,
+) -> Result<Value, JsonRpcError> {
+    let conn_id = args
+        .get("connection_id")
+        .and_then(|v| v.as_str())
+        .ok_or(JsonRpcError {
+            code: -32602,
+            message: "Missing connection_id".to_string(),
+            data: None,
+        })?;
+
+    audit.connection_id = Some(conn_id.to_string());
+
+    let (conn, db_params, driver) = resolve_db_driver(conn_id).await?;
+    audit.connection_name = Some(conn.name.clone());
+
+    let databases = driver
+        .get_databases(&db_params)
+        .await
+        .map_err(|e| JsonRpcError {
+            code: -32000,
+            message: e,
+            data: None,
+        })?;
+
+    audit.rows = Some(databases.len());
+    Ok(json!({
+        "content": [{
+            "type": "text",
+            "text": serde_json::to_string_pretty(&databases).unwrap()
         }]
     }))
 }
@@ -752,37 +928,22 @@ async fn tool_describe_table(
 
     audit.connection_id = Some(conn_id.to_string());
 
-    let (conn, db_params) = resolve_db_params(conn_id).await?;
+    let (conn, db_params, driver) = resolve_db_driver(conn_id).await?;
     audit.connection_name = Some(conn.name.clone());
 
-    let (columns, foreign_keys, indexes) = match conn.params.driver.as_str() {
-        "mysql" => {
-            let cols = mysql::get_columns(&db_params, table_name, schema).await;
-            let fks = mysql::get_foreign_keys(&db_params, table_name, schema).await;
-            let idxs = mysql::get_indexes(&db_params, table_name, schema).await;
-            (cols, fks, idxs)
-        }
-        "postgres" => {
-            let s = schema.unwrap_or("public");
-            let cols = postgres::get_columns(&db_params, table_name, s).await;
-            let fks = postgres::get_foreign_keys(&db_params, table_name, s).await;
-            let idxs = postgres::get_indexes(&db_params, table_name, s).await;
-            (cols, fks, idxs)
-        }
-        "sqlite" => {
-            let cols = sqlite::get_columns(&db_params, table_name).await;
-            let fks = sqlite::get_foreign_keys(&db_params, table_name).await;
-            let idxs = sqlite::get_indexes(&db_params, table_name).await;
-            (cols, fks, idxs)
-        }
-        _ => {
-            return Err(JsonRpcError {
-                code: -32000,
-                message: "Unsupported driver".to_string(),
-                data: None,
-            })
-        }
+    let effective_schema = if conn.params.driver == "postgres" {
+        Some(schema.unwrap_or("public"))
+    } else {
+        schema
     };
+    // Run the three metadata fetches concurrently so a slow driver costs one
+    // round-trip's worth of latency, not three (and at most one call timeout
+    // rather than three sequential ones blocking the MCP request loop).
+    let (columns, foreign_keys, indexes) = tokio::join!(
+        driver.get_columns(&db_params, table_name, effective_schema),
+        driver.get_foreign_keys(&db_params, table_name, effective_schema),
+        driver.get_indexes(&db_params, table_name, effective_schema),
+    );
 
     let result = json!({
         "table": table_name,
@@ -832,7 +993,7 @@ async fn tool_run_query(
     let kind = ai_activity::classify_query_kind(query);
     audit.query_kind = Some(kind.to_string());
 
-    let (conn, db_params) = resolve_db_params(conn_id).await?;
+    let (conn, db_params, driver) = resolve_db_driver(conn_id).await?;
     audit.connection_name = Some(conn.name.clone());
 
     // Read-only enforcement (fail-closed: unknown counts as write).
@@ -935,7 +1096,28 @@ async fn tool_run_query(
                         .map(str::trim)
                         .filter(|s| !s.is_empty())
                     {
+                        // Re-classify and re-enforce read-only on the edited
+                        // query. Without this, an approver can flip a benign
+                        // SELECT into a DELETE/DROP (or a multi-statement
+                        // payload) and slip past the gate that runs against
+                        // the *original* query above.
                         effective_query = edited.to_string();
+                        let new_kind = ai_activity::classify_query_kind(&effective_query);
+                        audit.query = Some(effective_query.clone());
+                        audit.query_kind = Some(new_kind.to_string());
+
+                        if config::is_connection_readonly(config, &conn.id)
+                            && new_kind != "select"
+                        {
+                            audit.status = "blocked_readonly".to_string();
+                            let msg = "Edited query blocked by Tabularis read-only mode. Enable writes for this connection in Settings → MCP → Read-only mode.".to_string();
+                            audit.error = Some(msg.clone());
+                            return Err(JsonRpcError {
+                                code: -32000,
+                                message: msg,
+                                data: None,
+                            });
+                        }
                     }
                 } else {
                     let reason = decision
@@ -991,21 +1173,14 @@ async fn tool_run_query(
         }
     }
 
-    let result = match conn.params.driver.as_str() {
-        "mysql" => {
-            mysql::execute_query(&db_params, &effective_query, Some(max_rows), 1, None).await
-        }
-        "postgres" => {
-            postgres::execute_query(&db_params, &effective_query, Some(max_rows), 1, None).await
-        }
-        "sqlite" => sqlite::execute_query(&db_params, &effective_query, Some(max_rows), 1).await,
-        _ => Err("Unsupported driver".into()),
-    }
-    .map_err(|e| JsonRpcError {
-        code: -32000,
-        message: e,
-        data: None,
-    })?;
+    let result = driver
+        .execute_query(&db_params, &effective_query, Some(max_rows), 1, None)
+        .await
+        .map_err(|e| JsonRpcError {
+            code: -32000,
+            message: e,
+            data: None,
+        })?;
 
     audit.rows = Some(result.rows.len());
 

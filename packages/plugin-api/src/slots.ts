@@ -74,6 +74,13 @@ export type SlotContextMap = {
   "connection-modal.connection_content": {
     driver: string;
   };
+  "connection-modal.extra_fields": {
+    driver: string;
+    /** Current values of the plugin-owned extra connection fields. */
+    extra: Record<string, string>;
+    /** Update one extra field. Pass an empty string to clear it. */
+    setExtraField: (key: string, value: string) => void;
+  };
 };
 
 /**
@@ -113,7 +120,7 @@ export interface SlotComponentProps {
 }
 
 /**
- * Manifest-level UI extension declaration (what authors put in manifest.json).
+ * Manifest-level UI extension declaration (what authors put in the `.tabularium` manifest).
  */
 export interface UIExtensionDeclaration {
   slot: SlotName;

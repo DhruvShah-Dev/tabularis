@@ -6,13 +6,13 @@ import {
   getDriverLabel,
   generateConnectionName,
   connectionSubtitle,
-  hasConnectionMenuItems,
   getCardClass,
+  updateExtraField,
   type ConnectionParams,
   type DatabaseDriver,
 } from '../../src/utils/connections';
 import type { DriverCapabilities } from '../../src/types/plugins';
-import type { SavedConnection, ConnectionGroup } from '../../src/contexts/DatabaseContext';
+import type { SavedConnection } from '../../src/contexts/DatabaseContext';
 
 const makeFileCaps = (): DriverCapabilities => ({
   schemas: false, views: false, routines: false,
@@ -442,31 +442,25 @@ describe('connections', () => {
       const conn = makeConn({ host: 'db.host', port: 5432, database: 'mydb' });
       expect(connectionSubtitle(conn, null)).toBe('db.host:5432  ·  mydb');
     });
-  });
 
-  describe('hasConnectionMenuItems', () => {
-    const makeGroup = (id: string): ConnectionGroup => ({
-      id, name: id, collapsed: false, sort_order: 0,
+    it('should label empty database as all databases on multi-db drivers', () => {
+      const conn = makeConn({ host: 'db.host', port: 3306, database: '' });
+      expect(connectionSubtitle(conn, makeRemoteCaps())).toBe('db.host:3306  ·  All databases');
+      expect(
+        connectionSubtitle(conn, makeRemoteCaps(), { allDatabases: 'Tutti i database' }),
+      ).toBe('db.host:3306  ·  Tutti i database');
     });
 
-    it('should return false when no groups and connection is not in a group', () => {
-      expect(hasConnectionMenuItems([], undefined)).toBe(false);
+    it('should keep empty database verbatim when capabilities are unknown', () => {
+      const conn = makeConn({ host: 'db.host', port: 3306, database: '' });
+      expect(connectionSubtitle(conn, null)).toBe('db.host:3306  ·  ');
     });
 
-    it('should return true when there are groups and connection is not in any', () => {
-      expect(hasConnectionMenuItems([makeGroup('g1'), makeGroup('g2')], undefined)).toBe(true);
-    });
-
-    it('should return true when connection is in a group (can be removed)', () => {
-      expect(hasConnectionMenuItems([], 'g1')).toBe(true);
-    });
-
-    it('should return true when connection is the only group and is already in it (can be removed)', () => {
-      expect(hasConnectionMenuItems([makeGroup('g1')], 'g1')).toBe(true);
-    });
-
-    it('should return true when connection is in one group and another exists', () => {
-      expect(hasConnectionMenuItems([makeGroup('g1'), makeGroup('g2')], 'g1')).toBe(true);
+    it('should use the translated database counter when provided', () => {
+      const conn = makeConn({ host: 'db.host', port: 5432, database: ['db1', 'db2'] });
+      expect(
+        connectionSubtitle(conn, makeRemoteCaps(), { databaseCount: (c) => `${c} DB` }),
+      ).toBe('db.host:5432  ·  2 DB');
     });
   });
 
@@ -520,6 +514,54 @@ describe('connections', () => {
     it('should use localhost when host is missing for remote driver', () => {
       const params: ConnectionParams = { driver: 'duckdb-remote', database: 'analytics' };
       expect(generateConnectionName(params, makeRemoteCaps())).toBe('analytics@localhost');
+    });
+  });
+
+  describe('updateExtraField', () => {
+    it('should set a field on an undefined map', () => {
+      expect(updateExtraField(undefined, 'region', 'us-east-1')).toEqual({
+        region: 'us-east-1',
+      });
+    });
+
+    it('should set a field alongside existing entries', () => {
+      const result = updateExtraField({ profile: 'dev' }, 'region', 'eu-west-1');
+      expect(result).toEqual({ profile: 'dev', region: 'eu-west-1' });
+    });
+
+    it('should not mutate the input map', () => {
+      const input = { region: 'us-east-1' };
+      updateExtraField(input, 'region', 'eu-west-1');
+      expect(input).toEqual({ region: 'us-east-1' });
+    });
+
+    it('should remove the key when the value is empty', () => {
+      const result = updateExtraField(
+        { region: 'us-east-1', profile: 'dev' },
+        'region',
+        '',
+      );
+      expect(result).toEqual({ profile: 'dev' });
+    });
+
+    it('should return undefined when the last entry is removed', () => {
+      expect(updateExtraField({ region: 'us-east-1' }, 'region', '')).toBeUndefined();
+    });
+
+    it('should return undefined when removing from an undefined map', () => {
+      expect(updateExtraField(undefined, 'region', '')).toBeUndefined();
+    });
+
+    it('should ignore blank keys', () => {
+      const input = { region: 'us-east-1' };
+      expect(updateExtraField(input, '  ', 'value')).toBe(input);
+      expect(updateExtraField(undefined, '', 'value')).toBeUndefined();
+    });
+
+    it('should trim the key', () => {
+      expect(updateExtraField(undefined, ' region ', 'us-east-1')).toEqual({
+        region: 'us-east-1',
+      });
     });
   });
 });

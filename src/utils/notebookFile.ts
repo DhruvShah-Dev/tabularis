@@ -4,17 +4,39 @@ import type {
   NotebookParam,
 } from "../types/notebook";
 import { generateCellId } from "./notebook";
+import { validateParamName } from "./notebookParams";
+
+/**
+ * Keep only well-formed params from an untrusted notebook file: name must be
+ * a valid identifier (`\w+`) and value must be a string. Malformed entries
+ * are dropped instead of failing the whole import.
+ */
+function sanitizeParams(raw: unknown): NotebookParam[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const params = raw.filter((p): p is NotebookParam => {
+    if (typeof p !== "object" || p === null) return false;
+    const { name, value } = p as Record<string, unknown>;
+    return (
+      typeof name === "string" &&
+      validateParamName(name) &&
+      typeof value === "string"
+    );
+  });
+  return params.length > 0 ? params : undefined;
+}
 
 export function serializeNotebook(
   title: string,
   cells: NotebookCell[],
   params?: NotebookParam[],
   stopOnError?: boolean,
+  connectionId?: string,
 ): NotebookFile {
   return {
     version: 2,
     title,
     createdAt: new Date().toISOString(),
+    ...(connectionId ? { connectionId } : {}),
     cells: cells.map((c) => ({
       type: c.type,
       content: c.content,
@@ -23,6 +45,9 @@ export function serializeNotebook(
       ...(c.chartConfig ? { chartConfig: c.chartConfig } : {}),
       ...(c.isParallel ? { isParallel: c.isParallel } : {}),
       ...(c.isCollapsed ? { isCollapsed: c.isCollapsed } : {}),
+      ...(c.isQueryCollapsed ? { isQueryCollapsed: c.isQueryCollapsed } : {}),
+      ...(c.isResultCollapsed ? { isResultCollapsed: c.isResultCollapsed } : {}),
+      ...(c.isChartVisible != null ? { isChartVisible: c.isChartVisible } : {}),
     })),
     ...(params && params.length > 0 ? { params } : {}),
     ...(stopOnError ? { stopOnError } : {}),
@@ -77,6 +102,9 @@ export function deserializeNotebook(json: string): {
         chartConfig: cellRaw.chartConfig as NotebookCell['chartConfig'] ?? null,
         isParallel: cellRaw.isParallel as boolean | undefined,
         isCollapsed: cellRaw.isCollapsed as boolean | undefined,
+        isQueryCollapsed: cellRaw.isQueryCollapsed as boolean | undefined,
+        isResultCollapsed: cellRaw.isResultCollapsed as boolean | undefined,
+        isChartVisible: cellRaw.isChartVisible as boolean | undefined,
         result: null,
         error: undefined,
         executionTime: null,
@@ -84,7 +112,7 @@ export function deserializeNotebook(json: string): {
         isPreview: c.type === "markdown" ? true : undefined,
       };
     }),
-    params: Array.isArray(raw.params) ? raw.params as NotebookParam[] : undefined,
+    params: sanitizeParams(raw.params),
     stopOnError: typeof raw.stopOnError === "boolean" ? raw.stopOnError : undefined,
   };
 }

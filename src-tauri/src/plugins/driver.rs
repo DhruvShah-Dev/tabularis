@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -9,15 +10,49 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::drivers::driver_trait::{DatabaseDriver, PluginManifest};
+use crate::drivers::driver_trait::{BatchProgressFn, DatabaseDriver, PluginManifest};
 use crate::models::{
-    ColumnDefinition, ConnectionParams, DataTypeInfo, ExplainPlan, ForeignKey, Index, QueryResult,
-    RoutineInfo, RoutineParameter, TableColumn, TableInfo, TableSchema, ViewInfo,
+    AiSchemaContext, BatchStatementResult, ColumnDefinition, ConnectionParams, DataTypeInfo,
+    DbPrivilegeCatalog, DbUserInfo, ExplainQueryOutput, ForeignKey, Index, QueryResult, RoutineInfo,
+    RoutineParameter, TableColumn, TableInfo, TableSchema, TriggerInfo, ViewInfo,
 };
 use crate::plugins::rpc::{JsonRpcRequest, JsonRpcResponse};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+/// Maximum time to wait for a plugin to answer a single JSON-RPC call before
+/// giving up. Generous enough for slow query execution, bounded so a wedged
+/// plugin cannot block the (single-threaded) MCP request loop forever.
+const PLUGIN_CALL_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Shorter ceiling for the startup `initialize` handshake so one unresponsive
+/// plugin cannot stall MCP server startup indefinitely.
+const PLUGIN_INIT_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Flag to create the process without a console window on Windows.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Heuristic for the JSON-RPC "method not found" error (code -32601). Only
+/// the error *message* survives the response plumbing, so optional-method
+/// fallbacks match on the standard wording (and the code, for SDKs that
+/// embed it in the message).
+fn is_method_not_found(err: &str) -> bool {
+    err.to_lowercase().contains("method not found") || err.contains("-32601")
+}
+
+/// Message sent to the management task that owns the plugin child process.
+enum PluginCommand {
+    /// Dispatch a JSON-RPC request and route the response back via the sender.
+    Call(JsonRpcRequest, oneshot::Sender<Result<Value, String>>),
+    /// Drop the pending entry for `id` because the caller stopped waiting
+    /// (timed out). Prevents an unbounded leak of orphaned response senders.
+    Cancel(u64),
+}
+
 pub struct PluginProcess {
-    sender: mpsc::Sender<(JsonRpcRequest, oneshot::Sender<Result<Value, String>>)>,
+    sender: mpsc::Sender<PluginCommand>,
     next_id: AtomicU64,
     shutdown_tx: tokio::sync::Mutex<Option<oneshot::Sender<()>>>,
     pub pid: Option<u32>,
@@ -25,8 +60,7 @@ pub struct PluginProcess {
 
 impl PluginProcess {
     async fn new(executable_path: PathBuf, interpreter: Option<String>) -> Result<Self, String> {
-        let (tx, rx) =
-            mpsc::channel::<(JsonRpcRequest, oneshot::Sender<Result<Value, String>>)>(100);
+        let (tx, rx) = mpsc::channel::<PluginCommand>(100);
         let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
         // Spawn the child process directly in the async context so that any
@@ -38,10 +72,20 @@ impl PluginProcess {
         } else {
             Command::new(&executable_path)
         };
+
+        #[cfg(windows)]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+
         let child = cmd
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::inherit())
+            // Kill the child if its owning task is dropped without a clean
+            // shutdown — e.g. when the `--mcp` subprocess exits on stdin EOF
+            // and the Tokio runtime is torn down. Without this, the management
+            // task is cancelled before its `select!` can call `child.kill()`,
+            // leaving orphaned plugin processes running.
+            .kill_on_drop(true)
             .spawn()
             .map_err(|e| {
                 format!(
@@ -75,7 +119,7 @@ impl PluginProcess {
                     }
                     msg = rx.recv() => {
                         match msg {
-                            Some((req, resp_tx)) => {
+                            Some(PluginCommand::Call(req, resp_tx)) => {
                                 let id = req.id;
                                 pending_requests.insert(id, resp_tx);
 
@@ -88,6 +132,11 @@ impl PluginProcess {
                                         let _ = tx.send(Err(format!("Plugin communication error: {}", e)));
                                     }
                                 }
+                            }
+                            Some(PluginCommand::Cancel(id)) => {
+                                // Caller timed out; drop the orphaned sender so
+                                // pending_requests does not grow without bound.
+                                pending_requests.remove(&id);
                             }
                             None => {
                                 // Channel closed without explicit shutdown — kill the process anyway.
@@ -147,6 +196,20 @@ impl PluginProcess {
     }
 
     async fn call(&self, method: &str, params: Value) -> Result<Value, String> {
+        self.call_with_timeout(method, params, PLUGIN_CALL_TIMEOUT)
+            .await
+    }
+
+    /// Sends a JSON-RPC request to the plugin and waits at most `timeout` for a
+    /// response. A hung or unresponsive plugin therefore fails this single call
+    /// instead of blocking the caller — and, in the single-threaded MCP request
+    /// loop, every subsequent request — forever.
+    async fn call_with_timeout(
+        &self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+    ) -> Result<Value, String> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let req = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
@@ -157,12 +220,24 @@ impl PluginProcess {
 
         let (tx, rx) = oneshot::channel();
         self.sender
-            .send((req, tx))
+            .send(PluginCommand::Call(req, tx))
             .await
             .map_err(|_| "Plugin process channel closed".to_string())?;
 
-        rx.await
-            .map_err(|_| "Plugin process did not respond".to_string())?
+        match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err("Plugin process did not respond".to_string()),
+            Err(_) => {
+                // Tell the management task to drop the now-orphaned pending
+                // entry so it does not leak one slot per timeout.
+                let _ = self.sender.send(PluginCommand::Cancel(id)).await;
+                Err(format!(
+                    "Plugin call '{}' timed out after {}s",
+                    method,
+                    timeout.as_secs()
+                ))
+            }
+        }
     }
 }
 
@@ -181,9 +256,16 @@ impl RpcDriver {
         settings: HashMap<String, serde_json::Value>,
     ) -> Result<Self, String> {
         let process = Arc::new(PluginProcess::new(executable_path, interpreter).await?);
-        // Send initialize RPC with settings; silently ignore any error or non-response.
+        // Send initialize RPC with settings; silently ignore any error or
+        // non-response. The short timeout keeps one unresponsive plugin from
+        // stalling startup (notably the standalone `--mcp` subprocess, which
+        // registers every plugin before serving any request).
         let _ = process
-            .call("initialize", json!({ "settings": settings }))
+            .call_with_timeout(
+                "initialize",
+                json!({ "settings": settings }),
+                PLUGIN_INIT_TIMEOUT,
+            )
             .await;
         Ok(Self {
             manifest,
@@ -209,6 +291,15 @@ impl DatabaseDriver for RpcDriver {
 
     fn get_data_types(&self) -> Vec<DataTypeInfo> {
         self.data_types.clone()
+    }
+
+    fn map_inferred_type(&self, kind: &str) -> String {
+        // Manifest keys are documented as uppercase; the lookup is case-insensitive.
+        self.manifest
+            .type_mappings
+            .get(&kind.to_uppercase())
+            .cloned()
+            .unwrap_or_else(|| kind.to_string())
     }
 
     fn build_connection_url(&self, _params: &ConnectionParams) -> Result<String, String> {
@@ -396,6 +487,91 @@ impl DatabaseDriver for RpcDriver {
         serde_json::from_value(res).map_err(|e| e.to_string())
     }
 
+    // --- Materialized views -------------------------------------------------
+
+    async fn get_materialized_views(
+        &self,
+        params: &ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<ViewInfo>, String> {
+        let res = self
+            .process
+            .call(
+                "get_materialized_views",
+                json!({ "params": params, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => Ok(Vec::new()),
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn get_materialized_view_columns(
+        &self,
+        params: &ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<Vec<TableColumn>, String> {
+        let res = self
+            .process
+            .call(
+                "get_materialized_view_columns",
+                json!({ "params": params, "view_name": view_name, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => Ok(Vec::new()),
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn get_materialized_view_definition(
+        &self,
+        params: &ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        let res = self
+            .process
+            .call(
+                "get_materialized_view_definition",
+                json!({ "params": params, "view_name": view_name, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => {
+                Err("Materialized views are not supported by this driver".to_string())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn refresh_materialized_view(
+        &self,
+        params: &ConnectionParams,
+        view_name: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
+        let res = self
+            .process
+            .call(
+                "refresh_materialized_view",
+                json!({ "params": params, "view_name": view_name, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(_) => Ok(()),
+            Err(e) if is_method_not_found(&e) => {
+                Err("Materialized views are not supported by this driver".to_string())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     async fn get_routines(
         &self,
         params: &ConnectionParams,
@@ -438,6 +614,126 @@ impl DatabaseDriver for RpcDriver {
         serde_json::from_value(res).map_err(|e| e.to_string())
     }
 
+    // --- Routine management ---------------------------------------------
+    //
+    // These RPC methods are OPTIONAL for plugins that declare the
+    // `routine_management` capability: when the plugin does not implement
+    // one, the host falls back to the same dialect-neutral SQL the trait
+    // defaults produce, so a plugin only overrides what its dialect needs.
+
+    async fn build_routine_call_sql(
+        &self,
+        params: &ConnectionParams,
+        routine_name: &str,
+        routine_type: &str,
+        args: &[crate::models::RoutineCallArg],
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        let res = self
+            .process
+            .call(
+                "build_routine_call_sql",
+                json!({ "params": params, "routine_name": routine_name, "routine_type": routine_type, "args": args, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => {
+                Ok(crate::drivers::common::generic_routine_call_sql(
+                    routine_name,
+                    routine_type,
+                    args,
+                    schema,
+                    &self.manifest.capabilities.identifier_quote,
+                ))
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn routine_create_template(
+        &self,
+        routine_type: &str,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        let res = self
+            .process
+            .call(
+                "routine_create_template",
+                json!({ "routine_type": routine_type, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => {
+                let keyword = if routine_type.eq_ignore_ascii_case("FUNCTION") {
+                    "FUNCTION"
+                } else {
+                    "PROCEDURE"
+                };
+                Ok(format!(
+                    "CREATE {keyword} my_routine()\nBEGIN\n    -- routine body\nEND"
+                ))
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn get_routine_edit_script(
+        &self,
+        params: &ConnectionParams,
+        routine_name: &str,
+        routine_type: &str,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        let res = self
+            .process
+            .call(
+                "get_routine_edit_script",
+                json!({ "params": params, "routine_name": routine_name, "routine_type": routine_type, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => {
+                self.get_routine_definition(params, routine_name, routine_type, schema)
+                    .await
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn drop_routine(
+        &self,
+        params: &ConnectionParams,
+        routine_name: &str,
+        routine_type: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
+        let res = self
+            .process
+            .call(
+                "drop_routine",
+                json!({ "params": params, "routine_name": routine_name, "routine_type": routine_type, "schema": schema }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => {
+                let sql = crate::drivers::common::generic_drop_routine_sql(
+                    routine_name,
+                    routine_type,
+                    schema,
+                    &self.manifest.capabilities.identifier_quote,
+                );
+                self.execute_query(params, &sql, None, 1, schema)
+                    .await
+                    .map(|_| ())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     async fn execute_query(
         &self,
         params: &ConnectionParams,
@@ -450,13 +746,64 @@ impl DatabaseDriver for RpcDriver {
         serde_json::from_value(res).map_err(|e| e.to_string())
     }
 
+    async fn execute_batch(
+        &self,
+        params: &ConnectionParams,
+        queries: &[String],
+        limit: Option<u32>,
+        page: u32,
+        schema: Option<&str>,
+        on_progress: Option<&BatchProgressFn>,
+    ) -> Result<Vec<BatchStatementResult>, String> {
+        let res = self
+            .process
+            .call(
+                "execute_query_batch",
+                json!({
+                    "params": params,
+                    "queries": queries,
+                    "limit": limit,
+                    "page": page,
+                    "schema": schema
+                }),
+            )
+            .await;
+
+        match res {
+            Ok(value) => {
+                let results: Vec<BatchStatementResult> =
+                    serde_json::from_value(value).map_err(|e| e.to_string())?;
+                if let Some(cb) = on_progress {
+                    for (idx, result) in results.iter().enumerate() {
+                        cb(idx, result);
+                    }
+                }
+                Ok(results)
+            }
+            Err(e) if is_method_not_found(&e) => {
+                let mut results = Vec::with_capacity(queries.len());
+                for (idx, q) in queries.iter().enumerate() {
+                    let start = std::time::Instant::now();
+                    let outcome = self.execute_query(params, q, limit, page, schema).await;
+                    let result = BatchStatementResult::from_outcome(start, outcome);
+                    if let Some(cb) = on_progress {
+                        cb(idx, &result);
+                    }
+                    results.push(result);
+                }
+                Ok(results)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     async fn explain_query(
         &self,
         params: &ConnectionParams,
         query: &str,
         analyze: bool,
         schema: Option<&str>,
-    ) -> Result<ExplainPlan, String> {
+    ) -> Result<ExplainQueryOutput, String> {
         let res = self
             .process
             .call(
@@ -464,7 +811,9 @@ impl DatabaseDriver for RpcDriver {
                 json!({ "params": params, "query": query, "analyze": analyze, "schema": schema }),
             )
             .await?;
-        serde_json::from_value(res).map_err(|e| e.to_string())
+        // A plugin knows engines the core parsers do not, so its already
+        // parsed plan passes through to the frontend untouched.
+        Ok(ExplainQueryOutput::Plan { plan: res })
     }
 
     async fn insert_record(
@@ -483,14 +832,13 @@ impl DatabaseDriver for RpcDriver {
         &self,
         params: &ConnectionParams,
         table: &str,
-        pk_col: &str,
-        pk_val: serde_json::Value,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
         col_name: &str,
         new_val: serde_json::Value,
         schema: Option<&str>,
         max_blob_size: u64,
     ) -> Result<u64, String> {
-        let res = self.process.call("update_record", json!({ "params": params, "table": table, "pk_col": pk_col, "pk_val": pk_val, "col_name": col_name, "new_val": new_val, "schema": schema, "max_blob_size": max_blob_size })).await?;
+        let res = self.process.call("update_record", json!({ "params": params, "table": table, "pk_map": pk_map, "col_name": col_name, "new_val": new_val, "schema": schema, "max_blob_size": max_blob_size })).await?;
         serde_json::from_value(res).map_err(|e| e.to_string())
     }
 
@@ -498,12 +846,81 @@ impl DatabaseDriver for RpcDriver {
         &self,
         params: &ConnectionParams,
         table: &str,
-        pk_col: &str,
-        pk_val: serde_json::Value,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
         schema: Option<&str>,
     ) -> Result<u64, String> {
-        let res = self.process.call("delete_record", json!({ "params": params, "table": table, "pk_col": pk_col, "pk_val": pk_val, "schema": schema })).await?;
+        let res = self
+            .process
+            .call(
+                "delete_record",
+                json!({ "params": params, "table": table, "pk_map": pk_map, "schema": schema }),
+            )
+            .await?;
         serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    // --- BLOB helpers ---------------------------------------------------------
+
+    async fn save_blob_to_file(
+        &self,
+        params: &ConnectionParams,
+        table: &str,
+        col_name: &str,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
+        schema: Option<&str>,
+        file_path: &str,
+    ) -> Result<(), String> {
+        let res = self
+            .process
+            .call(
+                "save_blob_to_file",
+                json!({
+                    "params": params,
+                    "table": table,
+                    "col_name": col_name,
+                    "pk_map": pk_map,
+                    "schema": schema,
+                    "file_path": file_path
+                }),
+            )
+            .await;
+        match res {
+            Ok(_) => Ok(()),
+            Err(e) if is_method_not_found(&e) => {
+                Err("BLOB file export not supported by this driver".into())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn fetch_blob_as_data_url(
+        &self,
+        params: &ConnectionParams,
+        table: &str,
+        col_name: &str,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        let res = self
+            .process
+            .call(
+                "fetch_blob_as_data_url",
+                json!({
+                    "params": params,
+                    "table": table,
+                    "col_name": col_name,
+                    "pk_map": pk_map,
+                    "schema": schema
+                }),
+            )
+            .await;
+        match res {
+            Ok(v) => serde_json::from_value(v).map_err(|e| e.to_string()),
+            Err(e) if is_method_not_found(&e) => {
+                Err("BLOB preview not supported by this driver".into())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     async fn get_create_table_sql(
@@ -563,6 +980,7 @@ impl DatabaseDriver for RpcDriver {
 
     async fn get_create_foreign_key_sql(
         &self,
+        params: &ConnectionParams,
         table: &str,
         fk_name: &str,
         column: &str,
@@ -572,7 +990,7 @@ impl DatabaseDriver for RpcDriver {
         on_update: Option<&str>,
         schema: Option<&str>,
     ) -> Result<Vec<String>, String> {
-        let res = self.process.call("get_create_foreign_key_sql", json!({ "table": table, "fk_name": fk_name, "column": column, "ref_table": ref_table, "ref_column": ref_column, "on_delete": on_delete, "on_update": on_update, "schema": schema })).await?;
+        let res = self.process.call("get_create_foreign_key_sql", json!({ "params": params, "table": table, "fk_name": fk_name, "column": column, "ref_table": ref_table, "ref_column": ref_column, "on_delete": on_delete, "on_update": on_update, "schema": schema })).await?;
         serde_json::from_value(res).map_err(|e| e.to_string())
     }
 
@@ -603,6 +1021,203 @@ impl DatabaseDriver for RpcDriver {
         Ok(())
     }
 
+    async fn get_triggers(
+        &self,
+        params: &ConnectionParams,
+        schema: Option<&str>,
+    ) -> Result<Vec<TriggerInfo>, String> {
+        let res = self
+            .process
+            .call(
+                "get_triggers",
+                json!({ "params": params, "schema": schema }),
+            )
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    // --- User management (plugins opt in via `capabilities.userManagement`) --
+
+    async fn get_db_privilege_catalog(&self) -> Result<DbPrivilegeCatalog, String> {
+        let res = self
+            .process
+            .call("get_db_privilege_catalog", json!({}))
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn get_db_users(&self, params: &ConnectionParams) -> Result<Vec<DbUserInfo>, String> {
+        let res = self
+            .process
+            .call("get_db_users", json!({ "params": params }))
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn get_db_user_grants(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+    ) -> Result<Vec<String>, String> {
+        let res = self
+            .process
+            .call(
+                "get_db_user_grants",
+                json!({ "params": params, "user": user, "host": host }),
+            )
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn create_db_user(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+        password: &str,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "create_db_user",
+                json!({ "params": params, "user": user, "host": host, "password": password }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn drop_db_user(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "drop_db_user",
+                json!({ "params": params, "user": user, "host": host }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn set_db_user_password(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+        password: &str,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "set_db_user_password",
+                json!({ "params": params, "user": user, "host": host, "password": password }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn get_db_user_privileges(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+    ) -> Result<Vec<crate::models::DbUserGrantSet>, String> {
+        let res = self
+            .process
+            .call(
+                "get_db_user_privileges",
+                json!({ "params": params, "user": user, "host": host }),
+            )
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn apply_db_user_privileges(
+        &self,
+        params: &ConnectionParams,
+        user: &str,
+        host: &str,
+        database: Option<&str>,
+        table: Option<&str>,
+        privileges: &[String],
+        grant: bool,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "apply_db_user_privileges",
+                json!({
+                    "params": params,
+                    "user": user,
+                    "host": host,
+                    "database": database,
+                    "table": table,
+                    "privileges": privileges,
+                    "grant": grant
+                }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn get_trigger_definition(
+        &self,
+        params: &ConnectionParams,
+        trigger_name: &str,
+        table_name: &str,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        let res = self
+            .process
+            .call(
+                "get_trigger_definition",
+                json!({
+                    "params": params,
+                    "trigger_name": trigger_name,
+                    "table_name": table_name,
+                    "schema": schema
+                }),
+            )
+            .await?;
+        serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn create_trigger(
+        &self,
+        params: &ConnectionParams,
+        trigger_sql: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "create_trigger",
+                json!({ "params": params, "trigger_sql": trigger_sql, "schema": schema }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn drop_trigger(
+        &self,
+        params: &ConnectionParams,
+        trigger_name: &str,
+        table_name: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
+        self.process
+            .call(
+                "drop_trigger",
+                json!({
+                    "params": params,
+                    "trigger_name": trigger_name,
+                    "table_name": table_name,
+                    "schema": schema
+                }),
+            )
+            .await?;
+        Ok(())
+    }
+
     async fn get_schema_snapshot(
         &self,
         params: &ConnectionParams,
@@ -616,6 +1231,32 @@ impl DatabaseDriver for RpcDriver {
             )
             .await?;
         serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+
+    async fn get_ai_schema_context(
+        &self,
+        params: &ConnectionParams,
+        schema: Option<&str>,
+        max_tables: usize,
+    ) -> Result<AiSchemaContext, String> {
+        match self
+            .process
+            .call(
+                "get_ai_schema_context",
+                json!({
+                    "params": params,
+                    "schema": schema,
+                    "max_tables": max_tables,
+                }),
+            )
+            .await
+        {
+            Ok(value) => serde_json::from_value(value).map_err(|e| e.to_string()),
+            Err(error) if is_method_not_found(&error) => {
+                crate::ai_schema_context::load_from_driver(self, params, schema, max_tables).await
+            }
+            Err(error) => Err(error),
+        }
     }
 
     async fn get_all_columns_batch(
@@ -646,5 +1287,749 @@ impl DatabaseDriver for RpcDriver {
             )
             .await?;
         serde_json::from_value(res).map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::drivers::driver_trait::DriverCapabilities;
+    use crate::models::DatabaseSelection;
+
+    fn test_manifest() -> PluginManifest {
+        PluginManifest {
+            id: "test-plugin".to_string(),
+            name: "Test Plugin".to_string(),
+            version: "1.0.0".to_string(),
+            description: "Test plugin".to_string(),
+            default_port: None,
+            capabilities: DriverCapabilities {
+                triggers: true,
+                ..Default::default()
+            },
+            is_builtin: false,
+            engine: None,
+            paradigms: Vec::new(),
+            default_username: String::new(),
+            color: String::new(),
+            icon: String::new(),
+            settings: Vec::new(),
+            ui_extensions: None,
+            type_mappings: HashMap::new(),
+        }
+    }
+
+    fn test_connection_params() -> ConnectionParams {
+        ConnectionParams {
+            driver: "test-plugin".to_string(),
+            host: Some("localhost".to_string()),
+            port: Some(1234),
+            username: Some("user".to_string()),
+            password: Some("secret".to_string()),
+            connection_uri: None,
+            connection_uri_in_keychain: None,
+            database: DatabaseSelection::Single("db".to_string()),
+            ssl_mode: None,
+            ssl_ca: None,
+            ssl_cert: None,
+            ssl_key: None,
+            enable_cleartext_plugin: None,
+            pipes_as_concat: None,
+            ssh_enabled: None,
+            ssh_connection_id: None,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_password: None,
+            ssh_key_file: None,
+            ssh_key_passphrase: None,
+            ssh_allow_passphrase_prompt: None,
+            save_in_keychain: None,
+            k8s_enabled: None,
+            k8s_connection_id: None,
+            k8s_context: None,
+            k8s_namespace: None,
+            k8s_resource_type: None,
+            k8s_resource_name: None,
+            k8s_port: None,
+            k8s_kubectl_path: None,
+            k8s_kubeconfig_path: None,
+            startup_script: None,
+            use_iam_auth: None,
+            extra: HashMap::new(),
+            connection_id: Some("conn-1".to_string()),
+        }
+    }
+
+    fn test_driver<F>(mut handle_request: F) -> RpcDriver
+    where
+        F: FnMut(JsonRpcRequest) -> Value + Send + 'static,
+    {
+        test_driver_result(move |request| Ok(handle_request(request)))
+    }
+
+    fn test_driver_result<F>(mut handle_request: F) -> RpcDriver
+    where
+        F: FnMut(JsonRpcRequest) -> Result<Value, String> + Send + 'static,
+    {
+        let (tx, mut rx) = mpsc::channel::<PluginCommand>(8);
+        tokio::spawn(async move {
+            while let Some(command) = rx.recv().await {
+                if let PluginCommand::Call(request, response_tx) = command {
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        handle_request(request)
+                    }))
+                    .map_err(|_| "request assertion failed".to_string())
+                    .and_then(|outcome| outcome);
+                    let _ = response_tx.send(result);
+                }
+            }
+        });
+
+        let (shutdown_tx, _shutdown_rx) = oneshot::channel();
+        RpcDriver {
+            manifest: test_manifest(),
+            process: Arc::new(PluginProcess {
+                sender: tx,
+                next_id: AtomicU64::new(1),
+                shutdown_tx: tokio::sync::Mutex::new(Some(shutdown_tx)),
+                pid: None,
+            }),
+            data_types: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_uses_custom_ai_schema_context_when_available() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_ai_schema_context");
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["max_tables"], 20);
+            json!({
+                "tables": [{
+                    "name": "users",
+                    "columns": [],
+                    "foreign_keys": []
+                }],
+                "total_table_count": 1
+            })
+        });
+
+        let context = driver
+            .get_ai_schema_context(&test_connection_params(), Some("public"), 20)
+            .await
+            .expect("get_ai_schema_context");
+
+        assert_eq!(context.tables.len(), 1);
+        assert_eq!(context.tables[0].name, "users");
+        assert_eq!(context.total_table_count, 1);
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_params_to_get_create_foreign_key_sql() {
+        let uri = "libsql://db.example.invalid?authToken=tok";
+        let expected = uri.to_string();
+        let driver = test_driver(move |request| {
+            assert_eq!(request.method, "get_create_foreign_key_sql");
+            assert_eq!(request.params["params"]["connection_uri"], expected);
+            assert_eq!(request.params["table"], "orders");
+            json!(["ALTER TABLE ..."])
+        });
+        let mut params = test_connection_params();
+        params.connection_uri = Some(uri.to_string());
+
+        let sql = driver
+            .get_create_foreign_key_sql(
+                &params,
+                "orders",
+                "fk_user",
+                "user_id",
+                "users",
+                "id",
+                Some("CASCADE"),
+                Some("CASCADE"),
+                None,
+            )
+            .await
+            .expect("fk sql");
+        assert_eq!(sql, vec!["ALTER TABLE ...".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_builds_ai_schema_context_from_standard_metadata_as_fallback() {
+        let driver = test_driver_result(|request| match request.method.as_str() {
+            "get_ai_schema_context" => Err("Method not found (-32601)".to_string()),
+            "get_tables" => Ok(json!([{ "name": "users" }])),
+            "get_columns" => Ok(json!([{
+                "name": "id",
+                "data_type": "bigint",
+                "is_pk": true,
+                "is_nullable": false,
+                "is_auto_increment": true
+            }])),
+            "get_foreign_keys" => Ok(json!([])),
+            method => Err(format!("Unexpected method: {method}")),
+        });
+
+        let context = driver
+            .get_ai_schema_context(&test_connection_params(), Some("public"), 20)
+            .await
+            .expect("fallback schema context");
+
+        assert_eq!(context.tables.len(), 1);
+        assert_eq!(context.tables[0].name, "users");
+        assert_eq!(context.tables[0].columns[0].name, "id");
+        assert_eq!(context.total_table_count, 1);
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_the_connection_uri_to_test_connection() {
+        let uri = "mongodb+srv://cluster.example.invalid/app?retryWrites=true&w=majority";
+        let expected = uri.to_string();
+        let driver = test_driver(move |request| {
+            assert_eq!(request.method, "test_connection");
+            assert_eq!(request.params["params"]["connection_uri"], expected);
+            Value::Null
+        });
+        let mut params = test_connection_params();
+        params.connection_uri = Some(uri.to_string());
+
+        driver
+            .test_connection(&params)
+            .await
+            .expect("test connection");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_the_connection_uri_to_subsequent_operations() {
+        let uri = "mongodb+srv://cluster.example.invalid/app?retryWrites=true&w=majority";
+        let expected = uri.to_string();
+        let driver = test_driver(move |request| {
+            assert_eq!(request.method, "get_databases");
+            assert_eq!(request.params["params"]["connection_uri"], expected);
+            json!(["app"])
+        });
+        let mut params = test_connection_params();
+        params.connection_uri = Some(uri.to_string());
+
+        let databases = driver.get_databases(&params).await.expect("get databases");
+
+        assert_eq!(databases, vec!["app"]);
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_omits_the_connection_uri_when_unset() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_databases");
+            assert!(request.params["params"].get("connection_uri").is_none());
+            json!(["db"])
+        });
+
+        driver
+            .get_databases(&test_connection_params())
+            .await
+            .expect("get databases");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_execute_query_batch() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "execute_query_batch");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            assert_eq!(
+                request.params["queries"],
+                json!(["CREATE TEMP TABLE t(id INT)", "SELECT * FROM t"])
+            );
+            assert_eq!(request.params["limit"], 50);
+            assert_eq!(request.params["page"], 2);
+            assert_eq!(request.params["schema"], "public");
+            json!([
+                {
+                    "result": {
+                        "columns": [],
+                        "rows": [],
+                        "affected_rows": 0,
+                        "pagination": null
+                    },
+                    "error": null,
+                    "execution_time_ms": 1.5
+                },
+                {
+                    "result": null,
+                    "error": "boom",
+                    "execution_time_ms": 2.5
+                }
+            ])
+        });
+
+        let queries = vec![
+            "CREATE TEMP TABLE t(id INT)".to_string(),
+            "SELECT * FROM t".to_string(),
+        ];
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let progress_seen = Arc::clone(&seen);
+        let progress: Arc<BatchProgressFn> = Arc::new(move |idx, result| {
+            progress_seen
+                .lock()
+                .expect("progress lock")
+                .push((idx, result.result.is_some()));
+        });
+
+        let results = driver
+            .execute_batch(
+                &test_connection_params(),
+                &queries,
+                Some(50),
+                2,
+                Some("public"),
+                Some(progress.as_ref()),
+            )
+            .await
+            .expect("execute_query_batch");
+
+        assert_eq!(results.len(), 2);
+        assert!(results[0].result.is_some());
+        assert_eq!(results[1].error.as_deref(), Some("boom"));
+        assert_eq!(
+            *seen.lock().expect("progress lock"),
+            vec![(0, true), (1, false)]
+        );
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_execute_batch_falls_back_when_method_missing() {
+        let call_count = Arc::new(AtomicU64::new(0));
+        let call_count_for_driver = Arc::clone(&call_count);
+        let driver = test_driver_result(move |request| {
+            let idx = call_count_for_driver.fetch_add(1, Ordering::SeqCst);
+            match idx {
+                0 => {
+                    assert_eq!(request.method, "execute_query_batch");
+                    Err("method not found: -32601".to_string())
+                }
+                1 => {
+                    assert_eq!(request.method, "execute_query");
+                    assert_eq!(request.params["query"], "SELECT 1");
+                    Ok(json!({
+                        "columns": ["one"],
+                        "rows": [[1]],
+                        "affected_rows": 0,
+                        "pagination": null
+                    }))
+                }
+                2 => {
+                    assert_eq!(request.method, "execute_query");
+                    assert_eq!(request.params["query"], "BROKEN");
+                    Err("statement failed".to_string())
+                }
+                _ => panic!("unexpected request {}", idx),
+            }
+        });
+
+        let queries = vec!["SELECT 1".to_string(), "BROKEN".to_string()];
+        let results = driver
+            .execute_batch(&test_connection_params(), &queries, None, 1, None, None)
+            .await
+            .expect("fallback execute_batch");
+
+        assert_eq!(call_count.load(Ordering::SeqCst), 3);
+        assert!(results[0].result.is_some());
+        assert_eq!(results[1].error.as_deref(), Some("statement failed"));
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_get_triggers() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_triggers");
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            json!([
+                {
+                    "name": "users_audit_trg",
+                    "table_name": "users",
+                    "event": "INSERT OR UPDATE",
+                    "timing": "AFTER",
+                    "definition": "CREATE TRIGGER users_audit_trg ..."
+                }
+            ])
+        });
+
+        let triggers = driver
+            .get_triggers(&test_connection_params(), Some("public"))
+            .await
+            .expect("get_triggers");
+
+        assert_eq!(triggers.len(), 1);
+        assert_eq!(triggers[0].name, "users_audit_trg");
+        assert_eq!(triggers[0].table_name, "users");
+        assert_eq!(triggers[0].event, "INSERT OR UPDATE");
+        assert_eq!(triggers[0].timing, "AFTER");
+        assert_eq!(
+            triggers[0].definition.as_deref(),
+            Some("CREATE TRIGGER users_audit_trg ...")
+        );
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_get_trigger_definition() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_trigger_definition");
+            assert_eq!(request.params["trigger_name"], "users_audit_trg");
+            assert_eq!(request.params["table_name"], "users");
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            json!("CREATE TRIGGER users_audit_trg ...")
+        });
+
+        let definition = driver
+            .get_trigger_definition(
+                &test_connection_params(),
+                "users_audit_trg",
+                "users",
+                Some("public"),
+            )
+            .await
+            .expect("get_trigger_definition");
+
+        assert_eq!(definition, "CREATE TRIGGER users_audit_trg ...");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_create_trigger() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "create_trigger");
+            assert_eq!(
+                request.params["trigger_sql"],
+                "CREATE TRIGGER users_audit_trg ..."
+            );
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            Value::Null
+        });
+
+        driver
+            .create_trigger(
+                &test_connection_params(),
+                "CREATE TRIGGER users_audit_trg ...",
+                Some("public"),
+            )
+            .await
+            .expect("create_trigger");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_drop_trigger() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "drop_trigger");
+            assert_eq!(request.params["trigger_name"], "users_audit_trg");
+            assert_eq!(request.params["table_name"], "users");
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            Value::Null
+        });
+
+        driver
+            .drop_trigger(
+                &test_connection_params(),
+                "users_audit_trg",
+                "users",
+                Some("public"),
+            )
+            .await
+            .expect("drop_trigger");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_save_blob_to_file() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "save_blob_to_file");
+            assert_eq!(request.params["table"], "documents");
+            assert_eq!(request.params["col_name"], "content");
+            assert_eq!(request.params["pk_map"]["id"], 42);
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["file_path"], "/tmp/out.pdf");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            Value::Null
+        });
+
+        let mut pk_map = HashMap::new();
+        pk_map.insert("id".to_string(), json!(42));
+
+        driver
+            .save_blob_to_file(
+                &test_connection_params(),
+                "documents",
+                "content",
+                &pk_map,
+                Some("public"),
+                "/tmp/out.pdf",
+            )
+            .await
+            .expect("save_blob_to_file");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_save_blob_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "save_blob_to_file");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let pk_map = HashMap::new();
+        let result = driver
+            .save_blob_to_file(
+                &test_connection_params(),
+                "t",
+                "c",
+                &pk_map,
+                None,
+                "/tmp/x",
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("BLOB file export not supported"));
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_fetch_blob_as_data_url() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "fetch_blob_as_data_url");
+            assert_eq!(request.params["table"], "images");
+            assert_eq!(request.params["col_name"], "data");
+            assert_eq!(request.params["pk_map"]["id"], 7);
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            // The documented BLOB wire format (see drivers/common/blob.rs)
+            json!("BLOB:12:image/png:iVBORw0KGgo=")
+        });
+
+        let mut pk_map = HashMap::new();
+        pk_map.insert("id".to_string(), json!(7));
+
+        let url = driver
+            .fetch_blob_as_data_url(
+                &test_connection_params(),
+                "images",
+                "data",
+                &pk_map,
+                Some("public"),
+            )
+            .await
+            .expect("fetch_blob_as_data_url");
+
+        assert_eq!(url, "BLOB:12:image/png:iVBORw0KGgo=");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_fetch_blob_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "fetch_blob_as_data_url");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let pk_map = HashMap::new();
+        let result = driver
+            .fetch_blob_as_data_url(&test_connection_params(), "t", "c", &pk_map, None)
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("BLOB preview not supported"));
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_get_materialized_views() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_materialized_views");
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            json!([{ "name": "mv_sales", "schema": "public" }])
+        });
+
+        let views = driver
+            .get_materialized_views(&test_connection_params(), Some("public"))
+            .await
+            .expect("get_materialized_views");
+
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].name, "mv_sales");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_materialized_views_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "get_materialized_views");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let views = driver
+            .get_materialized_views(&test_connection_params(), None)
+            .await
+            .expect("fallback returns empty vec");
+
+        assert!(views.is_empty());
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_get_materialized_view_columns() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_materialized_view_columns");
+            assert_eq!(request.params["view_name"], "mv_sales");
+            assert_eq!(request.params["schema"], "public");
+            json!([{ "name": "total", "data_type": "numeric", "is_pk": false, "is_nullable": true, "is_auto_increment": false }])
+        });
+
+        let cols = driver
+            .get_materialized_view_columns(
+                &test_connection_params(),
+                "mv_sales",
+                Some("public"),
+            )
+            .await
+            .expect("get_materialized_view_columns");
+
+        assert_eq!(cols.len(), 1);
+        assert_eq!(cols[0].name, "total");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_materialized_view_columns_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "get_materialized_view_columns");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let cols = driver
+            .get_materialized_view_columns(&test_connection_params(), "mv_x", None)
+            .await
+            .expect("fallback returns empty vec");
+
+        assert!(cols.is_empty());
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_get_materialized_view_definition() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "get_materialized_view_definition");
+            assert_eq!(request.params["view_name"], "mv_sales");
+            json!("SELECT sum(amount) FROM sales")
+        });
+
+        let def = driver
+            .get_materialized_view_definition(
+                &test_connection_params(),
+                "mv_sales",
+                Some("public"),
+            )
+            .await
+            .expect("get_materialized_view_definition");
+
+        assert_eq!(def, "SELECT sum(amount) FROM sales");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_materialized_view_definition_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "get_materialized_view_definition");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let result = driver
+            .get_materialized_view_definition(&test_connection_params(), "mv_x", None)
+            .await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("Materialized views are not supported"));
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_refresh_materialized_view() {
+        let driver = test_driver(|request| {
+            assert_eq!(request.method, "refresh_materialized_view");
+            assert_eq!(request.params["view_name"], "mv_sales");
+            assert_eq!(request.params["schema"], "public");
+            assert_eq!(request.params["params"]["driver"], "test-plugin");
+            Value::Null
+        });
+
+        driver
+            .refresh_materialized_view(&test_connection_params(), "mv_sales", Some("public"))
+            .await
+            .expect("refresh_materialized_view");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_refresh_materialized_view_falls_back_when_method_missing() {
+        let driver = test_driver_result(|request| {
+            assert_eq!(request.method, "refresh_materialized_view");
+            Err("Method not found (-32601)".to_string())
+        });
+
+        let result = driver
+            .refresh_materialized_view(&test_connection_params(), "mv_x", None)
+            .await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("Materialized views are not supported"));
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_map_inferred_type_uses_manifest_mappings() {
+        let (tx, _rx) = mpsc::channel::<PluginCommand>(1);
+        let (shutdown_tx, _shutdown_rx) = oneshot::channel();
+
+        let mut manifest = test_manifest();
+        manifest
+            .type_mappings
+            .insert("DATETIME".to_string(), "TIMESTAMP".to_string());
+        manifest
+            .type_mappings
+            .insert("JSON".to_string(), "JSONB".to_string());
+
+        let driver = RpcDriver {
+            manifest,
+            process: Arc::new(PluginProcess {
+                sender: tx,
+                next_id: AtomicU64::new(1),
+                shutdown_tx: tokio::sync::Mutex::new(Some(shutdown_tx)),
+                pid: None,
+            }),
+            data_types: Vec::new(),
+        };
+
+        // Mapped types
+        assert_eq!(driver.map_inferred_type("DATETIME"), "TIMESTAMP");
+        assert_eq!(driver.map_inferred_type("JSON"), "JSONB");
+        // Lookup is case-insensitive (input is uppercased before matching)
+        assert_eq!(driver.map_inferred_type("datetime"), "TIMESTAMP");
+        // Unmapped types pass through unchanged
+        assert_eq!(driver.map_inferred_type("INTEGER"), "INTEGER");
+        assert_eq!(driver.map_inferred_type("TEXT"), "TEXT");
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_map_inferred_type_passthrough_without_mappings() {
+        let (tx, _rx) = mpsc::channel::<PluginCommand>(1);
+        let (shutdown_tx, _shutdown_rx) = oneshot::channel();
+
+        let driver = RpcDriver {
+            manifest: test_manifest(), // empty type_mappings
+            process: Arc::new(PluginProcess {
+                sender: tx,
+                next_id: AtomicU64::new(1),
+                shutdown_tx: tokio::sync::Mutex::new(Some(shutdown_tx)),
+                pid: None,
+            }),
+            data_types: Vec::new(),
+        };
+
+        assert_eq!(driver.map_inferred_type("DATETIME"), "DATETIME");
+        assert_eq!(driver.map_inferred_type("JSON"), "JSON");
     }
 }

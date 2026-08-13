@@ -25,6 +25,13 @@ pub struct AppConfig {
     pub result_page_size: Option<u32>,
     pub font_family: Option<String>,
     pub font_size: Option<u32>,
+    /// Colorize query result cell values by their data type (number, string,
+    /// date, boolean). Default: false — values render in the primary text color.
+    pub result_color_by_type: Option<bool>,
+    /// Per-type hex color overrides for result cell values. Keys: "number",
+    /// "string", "date", "boolean". Missing keys fall back to the active theme's
+    /// semantic colors.
+    pub result_type_colors: Option<HashMap<String, String>>,
     pub ai_enabled: Option<bool>,
     pub ai_provider: Option<String>,
     pub ai_model: Option<String>,
@@ -41,8 +48,23 @@ pub struct AppConfig {
     pub max_blob_size: Option<u64>,
     pub copy_format: Option<String>,
     pub csv_delimiter: Option<String>,
+    /// Whether copied CSV output includes a header row. Default: true.
+    pub csv_include_headers: Option<bool>,
     pub active_external_drivers: Option<Vec<String>>,
+    /// COMPAT(registry-ga): legacy config key from before the Tabularium API
+    /// cutover. Read once by `compat::migrate_legacy_config`, then cleared.
+    #[serde(default)]
     pub custom_registry_url: Option<String>,
+    /// COMPAT(registry-ga): override URL for the legacy static `registry.json`
+    /// merged into the catalogue during migration. Defaults to the built-in
+    /// GitHub-hosted file when unset.
+    #[serde(default)]
+    pub legacy_registry_url: Option<String>,
+    /// Base URL of the Tabularium plugin registry (e.g. https://registry.tabularis.dev).
+    /// Defaults to the built-in instance when unset.
+    pub tabularium_registry_url: Option<String>,
+    /// Update channel: "stable" (default) or "nightly". None ⇒ stable.
+    pub release_channel: Option<String>,
     pub plugins: Option<HashMap<String, PluginConfig>>,
     pub editor_theme: Option<String>,
     pub editor_font_family: Option<String>,
@@ -56,12 +78,23 @@ pub struct AppConfig {
     /// becomes `"smart"` (the safer variant), `false` becomes `"off"`.
     /// Default: `true` — matches the behaviour users expect from most editors.
     pub editor_accept_suggestion_on_enter: Option<bool>,
+    pub run_statement_under_cursor: Option<bool>,
+    // ----- SQL Formatter -----
+    pub formatter_keyword_case: Option<String>,
+    pub formatter_indent_style: Option<String>,
+    pub formatter_tab_width: Option<u32>,
+    pub formatter_use_tabs: Option<bool>,
+    pub formatter_function_case: Option<String>,
+    pub formatter_lines_between_queries: Option<u32>,
+    pub formatter_dense_operators: Option<bool>,
     /// Connection health check interval in seconds. 0 = disabled. Default: 30.
     pub ping_interval: Option<u32>,
     /// Maximum number of query history entries per connection. Default: 500.
     pub query_history_max_entries: Option<u32>,
     /// Whether to show the welcome screen on startup. Default: true (first launch).
     pub show_welcome: Option<bool>,
+    /// Maximize the window on startup. Default: false.
+    pub start_maximized: Option<bool>,
     /// IANA timezone name (e.g. `Asia/Tokyo`) used to render timestamps in the
     /// UI and exports. `None` or `"auto"` follows the OS local timezone.
     pub display_timezone: Option<String>,
@@ -92,6 +125,37 @@ pub struct AppConfig {
     pub mcp_approval_timeout_seconds: Option<u32>,
     /// Run a pre-flight EXPLAIN before opening the approval modal. Default: true.
     pub mcp_preflight_explain: Option<bool>,
+    /// Bring the main window to the foreground and make it temporarily top-most
+    /// while an MCP approval is pending. Default: true.
+    pub mcp_approval_always_on_top: Option<bool>,
+    /// Send a native notification and play a short sound when a new MCP
+    /// approval request arrives. Default: true.
+    pub mcp_approval_notify_sound: Option<bool>,
+
+    // ----- Automatic connections backup -----
+    /// When backups run: `"manual"` (default), `"interval"`, `"onClose"`
+    /// or `"onLaunch"`.
+    pub backup_mode: Option<String>,
+    /// Directory the backup files are written to.
+    pub backup_directory: Option<String>,
+    /// Minutes between automatic backups in interval mode. Default: 1440.
+    pub backup_interval_minutes: Option<u32>,
+    /// Number of backup files kept before rotation. Default: 10.
+    pub backup_retention: Option<u32>,
+    /// Backup destination: `"local"` (default) or `"webdav"`.
+    pub backup_target: Option<String>,
+    /// WebDAV collection URL the backups are uploaded into.
+    pub backup_webdav_url: Option<String>,
+    /// WebDAV username; the password lives in the OS keychain.
+    pub backup_webdav_username: Option<String>,
+
+    // ----- Session restore -----
+    /// Reconnect to the last active connection on startup. Default: true.
+    pub auto_connect_last_connection: Option<bool>,
+    /// Id of the connection that was active when the app was last closed.
+    pub last_active_connection_id: Option<String>,
+    /// Ids of all connections that were open when the app was last closed.
+    pub last_open_connection_ids: Option<Vec<String>>,
 }
 
 static CONFIG_CACHE: Lazy<RwLock<AppConfig>> = Lazy::new(|| RwLock::new(AppConfig::default()));
@@ -121,6 +185,8 @@ pub const DEFAULT_MCP_READONLY_DEFAULT: bool = false;
 pub const DEFAULT_MCP_APPROVAL_MODE: &str = "writes_only";
 pub const DEFAULT_MCP_APPROVAL_TIMEOUT_SECONDS: u32 = 120;
 pub const DEFAULT_MCP_PREFLIGHT_EXPLAIN: bool = true;
+pub const DEFAULT_MCP_APPROVAL_ALWAYS_ON_TOP: bool = true;
+pub const DEFAULT_MCP_APPROVAL_NOTIFY_SOUND: bool = true;
 
 /// Load `config.json` directly from disk without an `AppHandle`.
 ///
@@ -164,7 +230,8 @@ pub fn load_config_internal<R: tauri::Runtime>(app: &AppHandle<R>) -> AppConfig 
         let config_path = config_dir.join("config.json");
         if config_path.exists() {
             if let Ok(content) = fs::read_to_string(config_path) {
-                if let Ok(config) = serde_json::from_str(&content) {
+                if let Ok(mut config) = serde_json::from_str::<AppConfig>(&content) {
+                    crate::plugins::compat::migrate_legacy_config(&mut config); // COMPAT(registry-ga)
                     cache_config(&config);
                     return config;
                 }
@@ -207,6 +274,12 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         }
         if config.font_size.is_some() {
             existing_config.font_size = config.font_size;
+        }
+        if config.result_color_by_type.is_some() {
+            existing_config.result_color_by_type = config.result_color_by_type;
+        }
+        if config.result_type_colors.is_some() {
+            existing_config.result_type_colors = config.result_type_colors;
         }
         if config.ai_enabled.is_some() {
             existing_config.ai_enabled = config.ai_enabled;
@@ -256,8 +329,17 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         if config.csv_delimiter.is_some() {
             existing_config.csv_delimiter = config.csv_delimiter;
         }
+        if config.csv_include_headers.is_some() {
+            existing_config.csv_include_headers = config.csv_include_headers;
+        }
         if config.active_external_drivers.is_some() {
             existing_config.active_external_drivers = config.active_external_drivers;
+        }
+        if config.tabularium_registry_url.is_some() {
+            existing_config.tabularium_registry_url = config.tabularium_registry_url;
+        }
+        if config.release_channel.is_some() {
+            existing_config.release_channel = config.release_channel;
         }
         if config.plugins.is_some() {
             existing_config.plugins = config.plugins;
@@ -287,6 +369,9 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
             existing_config.editor_accept_suggestion_on_enter =
                 config.editor_accept_suggestion_on_enter;
         }
+        if config.run_statement_under_cursor.is_some() {
+            existing_config.run_statement_under_cursor = config.run_statement_under_cursor;
+        }
         if config.ping_interval.is_some() {
             let old_interval = existing_config.ping_interval;
             existing_config.ping_interval = config.ping_interval;
@@ -306,6 +391,9 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         }
         if config.show_welcome.is_some() {
             existing_config.show_welcome = config.show_welcome;
+        }
+        if config.start_maximized.is_some() {
+            existing_config.start_maximized = config.start_maximized;
         }
         if config.display_timezone.is_some() {
             existing_config.display_timezone = config.display_timezone;
@@ -333,6 +421,42 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         }
         if config.mcp_preflight_explain.is_some() {
             existing_config.mcp_preflight_explain = config.mcp_preflight_explain;
+        }
+        if config.mcp_approval_always_on_top.is_some() {
+            existing_config.mcp_approval_always_on_top = config.mcp_approval_always_on_top;
+        }
+        if config.mcp_approval_notify_sound.is_some() {
+            existing_config.mcp_approval_notify_sound = config.mcp_approval_notify_sound;
+        }
+        if config.backup_mode.is_some() {
+            existing_config.backup_mode = config.backup_mode;
+        }
+        if config.backup_directory.is_some() {
+            existing_config.backup_directory = config.backup_directory;
+        }
+        if config.backup_interval_minutes.is_some() {
+            existing_config.backup_interval_minutes = config.backup_interval_minutes;
+        }
+        if config.backup_retention.is_some() {
+            existing_config.backup_retention = config.backup_retention;
+        }
+        if config.backup_target.is_some() {
+            existing_config.backup_target = config.backup_target;
+        }
+        if config.backup_webdav_url.is_some() {
+            existing_config.backup_webdav_url = config.backup_webdav_url;
+        }
+        if config.backup_webdav_username.is_some() {
+            existing_config.backup_webdav_username = config.backup_webdav_username;
+        }
+        if config.auto_connect_last_connection.is_some() {
+            existing_config.auto_connect_last_connection = config.auto_connect_last_connection;
+        }
+        if config.last_active_connection_id.is_some() {
+            existing_config.last_active_connection_id = config.last_active_connection_id;
+        }
+        if config.last_open_connection_ids.is_some() {
+            existing_config.last_open_connection_ids = config.last_open_connection_ids;
         }
 
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;
@@ -375,6 +499,60 @@ pub fn set_schema_preference(
 }
 
 #[tauri::command]
+pub fn get_last_active_connection(app: AppHandle) -> Option<String> {
+    load_config_internal(&app).last_active_connection_id
+}
+
+#[tauri::command]
+pub fn set_last_active_connection(
+    app: AppHandle,
+    connection_id: Option<String>,
+) -> Result<(), String> {
+    if let Some(config_dir) = get_config_dir(&app) {
+        if !config_dir.exists() {
+            fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+        }
+        let config_path = config_dir.join("config.json");
+        let mut config = load_config_internal(&app);
+        config.last_active_connection_id = connection_id;
+        let content = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
+        fs::write(config_path, content).map_err(|e| e.to_string())?;
+        cache_config(&config);
+        Ok(())
+    } else {
+        Err("Could not resolve config directory".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn get_last_open_connections(app: AppHandle) -> Vec<String> {
+    load_config_internal(&app)
+        .last_open_connection_ids
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn set_last_open_connections(
+    app: AppHandle,
+    connection_ids: Vec<String>,
+) -> Result<(), String> {
+    if let Some(config_dir) = get_config_dir(&app) {
+        if !config_dir.exists() {
+            fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+        }
+        let config_path = config_dir.join("config.json");
+        let mut config = load_config_internal(&app);
+        config.last_open_connection_ids = Some(connection_ids);
+        let content = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
+        fs::write(config_path, content).map_err(|e| e.to_string())?;
+        cache_config(&config);
+        Ok(())
+    } else {
+        Err("Could not resolve config directory".to_string())
+    }
+}
+
+#[tauri::command]
 pub fn get_selected_schemas(app: AppHandle, connection_id: String) -> Vec<String> {
     let config = load_config_internal(&app);
     config
@@ -410,13 +588,21 @@ pub fn set_selected_schemas(
 }
 
 #[tauri::command]
-pub fn set_ai_key(provider: String, key: String) -> Result<(), String> {
-    keychain_utils::set_ai_key(&provider, &key)
+pub fn set_ai_key(app: AppHandle, provider: String, key: String) -> Result<(), String> {
+    keychain_utils::set_ai_key(&provider, &key)?;
+    // Write-through so subsequent reads avoid hitting the keychain (and its prompt).
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    crate::credential_cache::set_ai_key_cached(&cache, &provider, &key);
+    Ok(())
 }
 
 #[tauri::command]
-pub fn delete_ai_key(provider: String) -> Result<(), String> {
-    keychain_utils::delete_ai_key(&provider)
+pub fn delete_ai_key(app: AppHandle, provider: String) -> Result<(), String> {
+    keychain_utils::delete_ai_key(&provider)?;
+    // Drop the cached value so the next read reflects the deletion.
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    crate::credential_cache::invalidate_ai_key(&cache, &provider);
+    Ok(())
 }
 
 /// Get the configured maximum BLOB size in bytes, or DEFAULT_MAX_BLOB_SIZE if not set
@@ -427,9 +613,12 @@ pub fn get_max_blob_size<R: tauri::Runtime>(app: &AppHandle<R>) -> u64 {
         .unwrap_or(crate::drivers::common::DEFAULT_MAX_BLOB_SIZE)
 }
 
-pub fn get_ai_api_key(provider: &str) -> Result<String, String> {
-    // 1. Try Keychain First (Override)
-    if let Ok(key) = keychain_utils::get_ai_key(provider) {
+pub fn get_ai_api_key(app: &AppHandle, provider: &str) -> Result<String, String> {
+    // 1. Try Keychain First (Override) — via the in-memory credential cache so
+    //    repeated lookups don't trigger a macOS Keychain authorization prompt
+    //    each time. The keychain is read at most once per provider per session.
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    if let Ok(key) = crate::credential_cache::get_ai_key_cached(&cache, provider) {
         if !key.is_empty() {
             return Ok(key);
         }
@@ -466,9 +655,10 @@ pub struct AiKeyStatus {
     pub from_env: bool,
 }
 
-pub fn get_ai_api_key_status(provider: &str) -> AiKeyStatus {
-    // 1. Check Keychain
-    let keychain_exists = keychain_utils::get_ai_key(provider).is_ok();
+pub fn get_ai_api_key_status(app: &AppHandle, provider: &str) -> AiKeyStatus {
+    // 1. Check Keychain (through the cache to avoid repeated auth prompts)
+    let cache = app.state::<std::sync::Arc<crate::credential_cache::CredentialCache>>();
+    let keychain_exists = crate::credential_cache::get_ai_key_cached(&cache, provider).is_ok();
 
     // 2. Check Env Var
     let env_var = match provider {
@@ -511,13 +701,13 @@ pub fn get_ai_api_key_status(provider: &str) -> AiKeyStatus {
 }
 
 #[tauri::command]
-pub fn check_ai_key(provider: String) -> bool {
-    get_ai_api_key(&provider).is_ok()
+pub fn check_ai_key(app: AppHandle, provider: String) -> bool {
+    get_ai_api_key(&app, &provider).is_ok()
 }
 
 #[tauri::command]
-pub fn check_ai_key_status(provider: String) -> AiKeyStatus {
-    get_ai_api_key_status(&provider)
+pub fn check_ai_key_status(app: AppHandle, provider: String) -> AiKeyStatus {
+    get_ai_api_key_status(&app, &provider)
 }
 
 const DEFAULT_SYSTEM_PROMPT: &str = "You are an expert SQL assistant. Your task is to generate a SQL query based on the user's request and the provided database schema.\nReturn ONLY the SQL query, without any markdown formatting, explanations, or code blocks.\n\nSchema:\n{{SCHEMA}}";
@@ -811,6 +1001,8 @@ mod tests {
         assert!(config.mcp_approval_mode.is_none());
         assert!(config.mcp_approval_timeout_seconds.is_none());
         assert!(config.mcp_preflight_explain.is_none());
+        assert!(config.mcp_approval_always_on_top.is_none());
+        assert!(config.mcp_approval_notify_sound.is_none());
     }
 
     #[test]
@@ -824,6 +1016,8 @@ mod tests {
         config.mcp_approval_mode = Some("all".into());
         config.mcp_approval_timeout_seconds = Some(60);
         config.mcp_preflight_explain = Some(false);
+        config.mcp_approval_always_on_top = Some(true);
+        config.mcp_approval_notify_sound = Some(true);
 
         let json = serde_json::to_string(&config).unwrap();
         assert!(json.contains("aiAuditEnabled"));
@@ -834,6 +1028,8 @@ mod tests {
         assert!(json.contains("mcpApprovalMode"));
         assert!(json.contains("mcpApprovalTimeoutSeconds"));
         assert!(json.contains("mcpPreflightExplain"));
+        assert!(json.contains("mcpApprovalAlwaysOnTop"));
+        assert!(json.contains("mcpApprovalNotifySound"));
     }
 
     #[test]
@@ -846,7 +1042,9 @@ mod tests {
             "mcpReadonlyConnections": ["a", "b"],
             "mcpApprovalMode": "writes_only",
             "mcpApprovalTimeoutSeconds": 90,
-            "mcpPreflightExplain": true
+            "mcpPreflightExplain": true,
+            "mcpApprovalAlwaysOnTop": false,
+            "mcpApprovalNotifySound": true
         }"#;
         let config: AppConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.ai_audit_enabled, Some(false));
@@ -860,6 +1058,8 @@ mod tests {
         assert_eq!(config.mcp_approval_mode.as_deref(), Some("writes_only"));
         assert_eq!(config.mcp_approval_timeout_seconds, Some(90));
         assert_eq!(config.mcp_preflight_explain, Some(true));
+        assert_eq!(config.mcp_approval_always_on_top, Some(false));
+        assert_eq!(config.mcp_approval_notify_sound, Some(true));
     }
 
     #[test]

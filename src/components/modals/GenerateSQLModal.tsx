@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Loader2, Copy, Check, FileCode } from "lucide-react";
+import clsx from "clsx";
+import {X, Loader2, Copy, Check, FileCode, List, Table2, PenLine, Trash2, Play} from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { useNavigate } from "react-router-dom";
 import { useDatabase } from "../../hooks/useDatabase";
 import { Modal } from "../ui/Modal";
 import { SqlPreview } from "../ui/SqlPreview";
@@ -12,56 +14,84 @@ import {
   type ForeignKey,
   type Index,
 } from "../../utils/sqlGenerator";
+import { toBindParamName } from "../../utils/queryParameters";
+import type { TableTarget } from "../../types/databaseObjects";
+import type { CommandRuntime } from "../../types/commands";
+import { openEditor as navigateToEditor } from "../../utils/editorNavigation";
 
 interface GenerateSQLModalProps {
   isOpen: boolean;
   onClose: () => void;
-  tableName: string;
+  target: TableTarget;
+  /**
+   * Set when the palette opens this from a split panel: that panel owns its
+   * editor, and the routed one this would otherwise navigate is unmounted.
+   */
+  openEditor?: CommandRuntime["openEditor"];
 }
 
 export const GenerateSQLModal = ({
   isOpen,
   onClose,
-  tableName,
+  target,
+  openEditor,
 }: GenerateSQLModalProps) => {
   const { t } = useTranslation();
-  const { activeConnectionId, activeDriver, activeSchema, activeCapabilities } = useDatabase();
+  const navigate = useNavigate();
+  const { connectionDataMap } = useDatabase();
   const { showAlert } = useAlert();
+  const { connectionId, tableName, schema } = target;
+  const connectionData = connectionDataMap[connectionId];
+  const dialect =
+    connectionData?.capabilities ?? connectionData?.driver;
+  const dialectError =
+    isOpen && connectionId && tableName && !dialect
+      ? t("generateSQL.unknownDialect")
+      : null;
+  type SqlTab = "create" | "select-all" | "select-fields" | "update" | "delete";
+  const [tab, setTab] = useState<SqlTab>("create");
   const [sql, setSql] = useState<string>("");
+  const [columns, setColumns] = useState<TableColumn[]>([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!isOpen || !activeConnectionId || !tableName) return;
+    if (!isOpen || !connectionId || !tableName) return;
+
+    if (!dialect) {
+      // Guessing a dialect here silently emits SQL for the wrong database.
+      return;
+    }
 
     const generateSQL = async () => {
       setLoading(true);
       try {
-        const schemaParam = activeSchema ? { schema: activeSchema } : {};
-        const [columns, foreignKeys, indexes] = await Promise.all([
+        const schemaParam = schema ? { schema } : {};
+        const [fetchedColumns, foreignKeys, indexes] = await Promise.all([
           invoke<TableColumn[]>("get_columns", {
-            connectionId: activeConnectionId,
+            connectionId,
             tableName,
             ...schemaParam,
           }),
           invoke<ForeignKey[]>("get_foreign_keys", {
-            connectionId: activeConnectionId,
+            connectionId,
             tableName,
             ...schemaParam,
           }),
           invoke<Index[]>("get_indexes", {
-            connectionId: activeConnectionId,
+            connectionId,
             tableName,
             ...schemaParam,
           }),
         ]);
 
+        setColumns(fetchedColumns);
         const generatedSQL = generateCreateTableSQL(
           tableName,
-          columns,
+          fetchedColumns,
           foreignKeys,
           indexes,
-          activeCapabilities ?? 'sqlite',
+          dialect,
         );
         setSql(generatedSQL);
       } catch (err) {
@@ -73,10 +103,63 @@ export const GenerateSQLModal = ({
     };
 
     void generateSQL();
-  }, [isOpen, activeConnectionId, tableName, activeDriver, activeCapabilities, t, activeSchema, showAlert]);
+  }, [
+    isOpen,
+    connectionId,
+    tableName,
+    dialect,
+    t,
+    schema,
+    showAlert,
+  ]);
+
+  const getTabSql = (currentTab: SqlTab): string => {
+    switch (currentTab) {
+      case "create":
+        return sql;
+      case "select-all":
+        return `SELECT *\nFROM ${tableName};`;
+      case "select-fields": {
+        if (columns.length === 0)
+          return `SELECT *\nFROM ${tableName}\nLIMIT 100;`;
+        const fields = columns.map((c) => `  ${c.name}`).join(",\n");
+        return `SELECT\n${fields}\nFROM ${tableName}\nLIMIT 100;`;
+      }
+      case "update": {
+        if (columns.length === 0)
+          return `UPDATE ${tableName}\nSET column = :column\nWHERE 1 = 0;`;
+        const setClauses = columns
+          .map((c) => `  ${c.name} = :${toBindParamName(c.name)}`)
+          .join(",\n");
+        return `UPDATE ${tableName}\nSET\n${setClauses}\nWHERE 1 = 0;`;
+      }
+      case "delete":
+        return `DELETE\nFROM ${tableName}\nWHERE 1 = 0;`;
+    }
+  };
+
+  const displayedSql = getTabSql(tab);
+
+  const handleRunInConsole = () => {
+    const request = {
+      kind: "console",
+      initialQuery: displayedSql,
+      queryName: `${tableName} – ${tab}`,
+      preventAutoRun: true,
+      schema,
+      targetConnectionId: connectionId,
+    } as const;
+
+    if (openEditor) {
+      openEditor(request);
+    } else {
+      navigateToEditor(navigate, request);
+    }
+    onClose();
+  };
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(sql);
+    await navigator.clipboard.writeText(displayedSql);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -104,9 +187,63 @@ export const GenerateSQLModal = ({
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-1 border-b border-default px-6 overflow-x-auto">
+          {(
+            [
+              {
+                id: "create" as SqlTab,
+                icon: FileCode,
+                labelKey: "generateSQL.tabCreateTable",
+              },
+              {
+                id: "select-all" as SqlTab,
+                icon: List,
+                labelKey: "generateSQL.tabSelectAll",
+              },
+              {
+                id: "select-fields" as SqlTab,
+                icon: Table2,
+                labelKey: "generateSQL.tabSelectFields",
+              },
+              {
+                id: "update" as SqlTab,
+                icon: PenLine,
+                labelKey: "generateSQL.tabUpdate",
+              },
+              {
+                id: "delete" as SqlTab,
+                icon: Trash2,
+                labelKey: "generateSQL.tabDelete",
+              },
+            ] as const
+          ).map(({ id: tabId, icon: Icon, labelKey }) => (
+            <button
+              key={tabId}
+              onClick={() => setTab(tabId)}
+              className={clsx(
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
+                tab === tabId
+                  ? "text-primary border-blue-500"
+                  : "text-muted border-transparent hover:text-primary",
+              )}
+            >
+              <Icon size={14} />
+              {t(labelKey)}
+            </button>
+          ))}
+        </div>
+
         {/* Content */}
         <div className="flex-1 p-6 overflow-hidden flex flex-col">
-          {loading ? (
+          {dialectError ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-400"
+            >
+              {dialectError}
+            </div>
+          ) : loading ? (
             <div className="text-center py-8 text-muted">
               <Loader2 size={24} className="animate-spin mx-auto mb-2" />
               <span>{t("generateSQL.loading")}</span>
@@ -115,7 +252,7 @@ export const GenerateSQLModal = ({
             <div className="flex-1 flex flex-col gap-4">
               <div className="flex-1 overflow-hidden rounded-lg border border-default">
                 <SqlPreview
-                  sql={sql}
+                  sql={displayedSql}
                   height="100%"
                   showLineNumbers={true}
                   className="h-full"
@@ -126,8 +263,15 @@ export const GenerateSQLModal = ({
         </div>
 
         {/* Footer */}
-        {!loading && (
+        {!loading && !dialectError && (
           <div className="p-4 border-t border-default bg-base/50 flex justify-end gap-3">
+            <button
+              onClick={handleRunInConsole}
+              className="px-4 py-2 bg-surface-secondary hover:bg-surface-tertiary text-secondary hover:text-primary border border-default rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              <Play size={16} />
+              {t("generateSQL.runInConsole")}
+            </button>
             <button
               onClick={handleCopy}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"

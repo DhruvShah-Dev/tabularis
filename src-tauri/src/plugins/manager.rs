@@ -7,6 +7,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
+use crate::config::PluginConfig;
 use crate::drivers::driver_trait::{DriverCapabilities, PluginManifest, PluginSettingDefinition};
 use crate::models::DataTypeInfo;
 use crate::plugins::driver::RpcDriver;
@@ -28,8 +29,11 @@ pub fn get_plugin_startup_errors() -> Vec<PluginLoadError> {
 
 #[derive(Serialize, Deserialize)]
 pub struct ConfigManifest {
-    pub id: String,
+    /// Legacy field; the canonical schema uses `name` as the identity/slug.
+    #[serde(default)]
+    pub id: Option<String>,
     pub name: String,
+    /// The registry guarantees `version` in the manifest (`.tabularium`).
     pub version: String,
     pub description: String,
     #[serde(default)]
@@ -47,12 +51,23 @@ pub struct ConfigManifest {
     pub color: String,
     #[serde(default)]
     pub icon: String,
+    /// Registry manifest `engine` — surfaced so the connection catalogue can
+    /// group locally-installed plugins.
+    #[serde(default)]
+    pub engine: Option<String>,
+    /// Registry manifest `paradigms`, primary first.
+    #[serde(default)]
+    pub paradigms: Vec<String>,
     #[serde(default)]
     pub interpreter: Option<String>,
     #[serde(default)]
     pub settings: Vec<PluginSettingDefinition>,
     #[serde(default)]
     pub ui_extensions: Option<Vec<crate::drivers::driver_trait::UIExtensionEntry>>,
+    /// Static type mappings for `map_inferred_type`. Keys are generic inferred
+    /// types (e.g. `"DATETIME"`), values are driver-specific types (e.g. `"TIMESTAMP"`).
+    #[serde(default)]
+    pub type_mappings: HashMap<String, String>,
 }
 
 /// Load installed plugins at startup.
@@ -64,6 +79,19 @@ pub async fn load_plugins<R: tauri::Runtime>(app: &AppHandle<R>, enabled_ids: Op
     let plugin_configs = crate::config::load_config_internal(app)
         .plugins
         .unwrap_or_default();
+    load_plugins_with_configs(plugin_configs, enabled_ids).await;
+}
+
+/// Variant of [`load_plugins`] that takes plugin configs directly. Used by the
+/// standalone `--mcp` subprocess which has no Tauri `AppHandle` but needs to
+/// register the same drivers so MCP tools can reach plugin-driven connections.
+pub async fn load_plugins_with_configs(
+    plugin_configs: HashMap<String, PluginConfig>,
+    enabled_ids: Option<&[String]>,
+) {
+    // Migrate before resolving the shared directory so both the GUI and the
+    // standalone MCP process discover plugins installed by older builds.
+    crate::plugins::installer::migrate_legacy_plugins_dir();
 
     let plugins_dir = match crate::plugins::installer::get_plugins_dir() {
         Ok(dir) => dir,
@@ -128,30 +156,37 @@ pub async fn load_plugin_from_dir(
     interpreter_override: Option<String>,
     settings: HashMap<String, serde_json::Value>,
 ) -> Result<(), String> {
-    let manifest_path = path.join("manifest.json");
-    if !manifest_path.exists() {
-        return Err(format!("manifest.json not found in {:?}", path));
+    let config: ConfigManifest = crate::plugins::installer::read_manifest(path)?;
+
+    // Refuse plugins that claim a built-in driver id. Registration is a plain
+    // insert keyed by id, so otherwise a plugin with id "mysql"/"postgres"/
+    // "sqlite" would shadow the built-in driver and receive existing
+    // connections' resolved credentials.
+    let plugin_id = config.id.clone().unwrap_or_else(|| config.name.clone());
+    const BUILTIN_DRIVER_IDS: [&str; 3] = ["mysql", "postgres", "sqlite"];
+    if BUILTIN_DRIVER_IDS.contains(&plugin_id.as_str()) {
+        return Err(format!(
+            "Plugin id '{}' collides with a built-in driver and was refused",
+            plugin_id
+        ));
     }
 
-    let manifest_str = fs::read_to_string(&manifest_path)
-        .map_err(|e| format!("Failed to read plugin manifest {:?}: {}", manifest_path, e))?;
-
-    let config: ConfigManifest = serde_json::from_str(&manifest_str)
-        .map_err(|e| format!("Failed to parse plugin manifest {:?}: {}", manifest_path, e))?;
-
     let manifest = PluginManifest {
-        id: config.id,
+        id: plugin_id,
         name: config.name,
         version: config.version,
         description: config.description,
         default_port: config.default_port,
         capabilities: config.capabilities,
         is_builtin: false,
+        engine: config.engine,
+        paradigms: config.paradigms,
         default_username: config.default_username.unwrap_or_default(),
         color: config.color,
         icon: config.icon,
         settings: config.settings,
         ui_extensions: config.ui_extensions,
+        type_mappings: config.type_mappings,
     };
 
     // UI-only plugins (no executable) register only their manifest.

@@ -46,7 +46,10 @@ export interface NotebookCell {
   chartConfig?: CellChartConfig | null; // SQL only: inline chart configuration
   resultHeight?: number; // SQL only: custom result panel height in pixels
   isParallel?: boolean; // SQL only: can run in parallel during Run All
-  isCollapsed?: boolean; // Cell body hidden when collapsed
+  isCollapsed?: boolean; // Whole cell body hidden when collapsed
+  isQueryCollapsed?: boolean; // SQL only: query editor section hidden when collapsed
+  isResultCollapsed?: boolean; // SQL only: result grid section hidden when collapsed
+  isChartVisible?: boolean; // SQL only: chart section visible (defaults to whether chartConfig is set)
   history?: CellExecutionEntry[]; // Last N executions
 }
 
@@ -61,6 +64,7 @@ export interface NotebookFile {
   version: number;
   title: string;
   createdAt: string;
+  connectionId?: string;
   cells: Array<{
     type: NotebookCellType;
     content: string;
@@ -69,7 +73,19 @@ export interface NotebookFile {
     chartConfig?: CellChartConfig | null;
     isParallel?: boolean;
     isCollapsed?: boolean;
+    isQueryCollapsed?: boolean;
+    isResultCollapsed?: boolean;
+    isChartVisible?: boolean;
   }>;
   params?: NotebookParam[];
   stopOnError?: boolean;
+}
+
+// Lightweight metadata for the "saved notebooks" list, returned by the
+// `list_notebooks` Tauri command (sourced from disk, not the cell contents).
+export interface NotebookMetadata {
+  id: string;
+  title: string;
+  createdAt?: string;
+  updatedAt?: string;
 }

@@ -1,21 +1,26 @@
 import type { MouseEvent } from 'react';
-import { Shield, PlugZap } from 'lucide-react';
+import { Shield, PlugZap, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import clsx from 'clsx';
 import type { SavedConnection } from '../../contexts/DatabaseContext';
 import type { PluginManifest } from '../../types/plugins';
+import type { ConnectionTag } from '../../types/tags';
 import { useDatabase } from '../../hooks/useDatabase';
 import { getConnectionAccent, getConnectionIcon } from '../../utils/driverUI';
 import { getCapabilitiesForDriver } from '../../utils/driverCapabilities';
 import { connectionSubtitle, getCardClass } from '../../utils/connections';
 import { StatusBadge } from './StatusBadge';
 import { ActionButtons } from './ActionButtons';
+import { TagChips } from './TagChips';
+import { EnvironmentBadge } from './EnvironmentBadge';
 
 export interface ConnectionCardProps {
   conn: SavedConnection;
   connectingId: string | null;
   allDrivers: PluginManifest[];
   enabledDrivers: PluginManifest[];
+  /** All known connection tags, for resolving the card's tag chips. */
+  tags?: ConnectionTag[];
   onConnect: () => void;
   onDisconnect: () => void;
   onEdit: () => void;
@@ -23,6 +28,12 @@ export interface ConnectionCardProps {
   onDelete: () => void;
   onContextMenu: (e: MouseEvent<HTMLDivElement>) => void;
   onMouseDown?: (e: MouseEvent<HTMLDivElement>) => void;
+  /** Whether this connection is checked in multi-select mode. */
+  selected?: boolean;
+  /** Whether any connection is currently selected (keeps checkboxes visible). */
+  selectionActive?: boolean;
+  /** Toggles this connection's selection. Enables the checkbox when provided. */
+  onToggleSelect?: () => void;
 }
 
 export const ConnectionCard = ({
@@ -30,6 +41,7 @@ export const ConnectionCard = ({
   connectingId,
   allDrivers,
   enabledDrivers,
+  tags = [],
   onConnect,
   onDisconnect,
   onEdit,
@@ -37,16 +49,24 @@ export const ConnectionCard = ({
   onDelete,
   onContextMenu,
   onMouseDown,
+  selected = false,
+  selectionActive = false,
+  onToggleSelect,
 }: ConnectionCardProps) => {
   const { t } = useTranslation();
-  const { activeConnectionId, isConnectionOpen } = useDatabase();
+  const { activeConnectionId, isConnectionOpenAnywhere } = useDatabase();
 
-  const isOpen = isConnectionOpen(conn.id);
+  // Reflect connection status across all windows (open here or in another window).
+  const isOpen = isConnectionOpenAnywhere(conn.id);
   const isConnecting = connectingId === conn.id;
   const isDriverEnabled = enabledDrivers.some(d => d.id === conn.params.driver);
   const driverManifest = allDrivers.find(d => d.id === conn.params.driver);
   const capabilities = getCapabilitiesForDriver(conn.params.driver, allDrivers);
-  const subtitle = connectionSubtitle(conn, capabilities);
+  const subtitle = connectionSubtitle(conn, capabilities, {
+    allDatabases: t("newConnection.allDatabases"),
+    databaseCount: (count) =>
+      t("connections.databaseCount", { count, defaultValue: "{{count}} databases" }),
+  });
   const driverColor = getConnectionAccent(conn, driverManifest);
 
   return (
@@ -58,9 +78,32 @@ export const ConnectionCard = ({
         'group relative flex flex-col rounded-2xl border transition-all duration-150 cursor-pointer select-none overflow-hidden',
         !isDriverEnabled && 'opacity-60 cursor-not-allowed',
         isConnecting && 'pointer-events-none',
-        getCardClass(conn.id, activeConnectionId, isConnectionOpen),
+        selected && 'ring-2 ring-blue-500/70',
+        getCardClass(conn.id, activeConnectionId, isConnectionOpenAnywhere),
       )}
     >
+      {onToggleSelect && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect();
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          aria-pressed={selected}
+          className={clsx(
+            'absolute top-2.5 left-2.5 z-10 w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-150',
+            selected
+              ? 'bg-blue-600 border-blue-500 text-white opacity-100'
+              : clsx(
+                  'bg-elevated/90 border-strong text-transparent hover:border-blue-400',
+                  selectionActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                ),
+          )}
+        >
+          <Check size={12} />
+        </button>
+      )}
       <div className="flex items-start gap-3.5 px-4 pt-4 pb-3">
         <div
           className="w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md"
@@ -83,9 +126,16 @@ export const ConnectionCard = ({
             <span className="text-[10px] font-semibold text-secondary bg-surface-secondary border border-strong/40 px-1.5 py-0.5 rounded-md capitalize">
               {conn.params.driver}
             </span>
+            <EnvironmentBadge environment={conn.environment} />
+            <TagChips tagIds={conn.tag_ids} tags={tags} />
             {conn.params.ssh_enabled && (
               <span className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-md">
                 <Shield size={8} /> SSH
+              </span>
+            )}
+            {conn.params.k8s_enabled && (
+              <span className="flex items-center gap-0.5 text-[10px] font-bold text-blue-400 bg-blue-400/10 border border-blue-400/20 px-1.5 py-0.5 rounded-md">
+                <Shield size={8} /> K8s
               </span>
             )}
             {!isDriverEnabled && (

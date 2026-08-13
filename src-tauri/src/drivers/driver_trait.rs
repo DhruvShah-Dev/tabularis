@@ -7,10 +7,19 @@ use sqlx::{AnyConnection, Connection};
 use std::str::FromStr;
 
 use crate::models::{
-    BatchStatementResult, ColumnDefinition, ConnectionParams, DataTypeInfo, ExplainPlan,
-    ForeignKey, Index, QueryResult, RoutineInfo, RoutineParameter, TableColumn, TableInfo,
-    TableSchema, TriggerInfo, ViewInfo,
+    AiSchemaContext, BatchStatementResult, ColumnDefinition, ConnectionParams, DataTypeInfo,
+    DbUserInfo, ExplainQueryOutput, ForeignKey, Index, QueryResult, RoutineCallArg, RoutineInfo,
+    RoutineParameter, TableColumn, TableInfo, TableSchema, TriggerInfo, ViewInfo,
 };
+
+/// Callback invoked the moment each statement in a batch finishes, with the
+/// statement's zero-based index and its outcome. Drivers call this — when one
+/// is supplied — after every statement so the UI can mark that result tab done
+/// immediately, instead of waiting for the whole batch to return. Pass `None`
+/// to run without progress reporting (the full `Vec` is still returned either
+/// way). Kept Tauri-agnostic so drivers stay decoupled from the event layer;
+/// the command layer supplies a closure that emits a Tauri event.
+pub type BatchProgressFn = dyn Fn(usize, &BatchStatementResult) + Send + Sync;
 
 /// SQL dialect declaration used by the frontend statement splitter
 /// (`src/utils/sqlSplitter/`) to pick per-dialect tokenizer rules:
@@ -47,6 +56,11 @@ pub struct DriverCapabilities {
     pub schemas: bool,
     /// Supports views.
     pub views: bool,
+    /// Supports materialized views (e.g. PostgreSQL). When `false`, the
+    /// frontend skips the materialized-view metadata fetch entirely (so
+    /// other drivers don't pay for an empty round-trip). Defaults to `false`.
+    #[serde(default)]
+    pub materialized_views: bool,
     /// Supports stored procedures and functions.
     pub routines: bool,
     /// File-based database (e.g. SQLite); no host/port required.
@@ -54,6 +68,12 @@ pub struct DriverCapabilities {
     /// Folder-based database (e.g. CSV directory); connection points to a directory instead of a file.
     #[serde(default)]
     pub folder_based: bool,
+    /// The driver exposes a single implicit database, so there is nothing to
+    /// select or name (e.g. a flat search/document store like Meilisearch).
+    /// Skips the database tab and the database-name field in the connection
+    /// modal. Network drivers only.
+    #[serde(default)]
+    pub single_database: bool,
     /// Enables connection string import input in the connection modal.
     /// Defaults to `true` for backward compatibility.
     #[serde(default = "default_true", alias = "connectionString")]
@@ -61,6 +81,16 @@ pub struct DriverCapabilities {
     /// Optional placeholder example shown for connection string input.
     #[serde(default, alias = "connectionStringExample")]
     pub connection_string_example: String,
+    /// The driver consumes the raw connection URI verbatim instead of the
+    /// decomposed host/port/database fields. Set by drivers whose scheme
+    /// carries semantics the decomposition would destroy (e.g. the DNS
+    /// seedlist lookup implied by `mongodb+srv://`). Defaults to `false`.
+    #[serde(default, alias = "connectionUri")]
+    pub connection_uri: bool,
+    /// Additional URI schemes handled by this driver, beyond its own id and
+    /// the scheme of `connection_string_example` (e.g. `["mongodb+srv"]`).
+    #[serde(default, alias = "connectionUriSchemes")]
+    pub connection_uri_schemes: Vec<String>,
     /// Character used to quote identifiers (e.g. `"` for PostgreSQL, `` ` `` for MySQL).
     #[serde(default = "default_double_quote")]
     pub identifier_quote: String,
@@ -99,6 +129,26 @@ pub struct DriverCapabilities {
     /// Supports listing and managing database triggers.
     #[serde(default)]
     pub triggers: bool,
+    /// Supports listing and managing server accounts (users, grants).
+    /// Plugins opt in via their manifest. Defaults to `false`.
+    #[serde(default, alias = "userManagement")]
+    pub user_management: bool,
+    /// Supports managing stored routines (run with parameters, create from
+    /// template, edit definition, drop). Requires `routines` to be useful;
+    /// plugins opt in via their manifest. Defaults to `false`.
+    #[serde(default, alias = "routineManagement")]
+    pub routine_management: bool,
+    /// Supports the SSL/TLS configuration tab (mode + CA/client cert/key) in the
+    /// connection modal. Built-in network drivers set this; plugins opt in via
+    /// their manifest. Defaults to `false`.
+    #[serde(default, alias = "supportsSsl")]
+    pub supports_ssl: bool,
+    /// Supports EXPLAIN / query plan visualization (`explain_query`).
+    /// When `false`, the Visual Explain UI is hidden for connections using
+    /// this driver. Built-in drivers set this; plugins opt in via their
+    /// manifest. Defaults to `false`.
+    #[serde(default)]
+    pub explain: bool,
     /// When `true`, the driver is read-only: all data modification operations
     /// (INSERT, UPDATE, DELETE) are disabled in the UI.
     /// Table/column management is also hidden regardless of `manage_tables`.
@@ -130,6 +180,10 @@ pub struct UIExtensionEntry {
     /// Ordering weight (lower = earlier).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub order: Option<u32>,
+    /// If set, the contribution is only rendered when the active driver
+    /// matches this identifier (e.g. `"wordpress"`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub driver: Option<String>,
 }
 
 /// A single user-configurable setting declared in a plugin's manifest.
@@ -168,6 +222,16 @@ pub struct PluginManifest {
     /// built-in entries without relying on a hardcoded ID list.
     #[serde(default)]
     pub is_builtin: bool,
+    /// Concrete database engine this driver targets (registry manifest
+    /// `engine`, e.g. `"meilisearch"`). `None` for built-ins (the frontend
+    /// supplies their engine/paradigms). Lets the connection catalogue place
+    /// locally-installed, not-yet-published plugins.
+    #[serde(default)]
+    pub engine: Option<String>,
+    /// Data-model families, primary first (registry manifest `paradigms`,
+    /// e.g. `["search", "document"]`). Empty for built-ins.
+    #[serde(default)]
+    pub paradigms: Vec<String>,
     /// Default username pre-filled in the connection modal (e.g. `"postgres"`,
     /// `"root"`). Empty string for drivers that have no default.
     #[serde(default)]
@@ -184,6 +248,12 @@ pub struct PluginManifest {
     /// UI extension slot declarations. Absent for built-in drivers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_extensions: Option<Vec<UIExtensionEntry>>,
+    /// Static type mappings applied by `map_inferred_type`. Keys are generic
+    /// inferred types (uppercase, e.g. `"DATETIME"`), values are driver-specific
+    /// types (e.g. `"TIMESTAMP"`). Empty for built-in drivers which override the
+    /// trait method directly.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub type_mappings: HashMap<String, String>,
 }
 
 /// The complete interface every database driver plugin must implement.
@@ -263,6 +333,20 @@ pub trait DatabaseDriver: Send + Sync {
         schema: Option<&str>,
     ) -> Result<Vec<TableColumn>, String>;
 
+    /// Returns a bounded, structured schema context for AI features.
+    ///
+    /// Drivers may override this to use a database-specific batch query. The
+    /// default implementation composes the context from the standard metadata
+    /// methods, so existing external plugins work without a protocol update.
+    async fn get_ai_schema_context(
+        &self,
+        params: &ConnectionParams,
+        schema: Option<&str>,
+        max_tables: usize,
+    ) -> Result<AiSchemaContext, String> {
+        crate::ai_schema_context::load_from_driver(self, params, schema, max_tables).await
+    }
+
     async fn get_foreign_keys(
         &self,
         params: &ConnectionParams,
@@ -322,6 +406,46 @@ pub trait DatabaseDriver: Send + Sync {
         schema: Option<&str>,
     ) -> Result<(), String>;
 
+    // --- Materialized views -------------------------------------------------
+    // Default impls return empty / unsupported so drivers without materialized
+    // views (MySQL, SQLite, plugins) need no changes; the UI hides the group
+    // unless `DriverCapabilities::materialized_views` is set.
+
+    async fn get_materialized_views(
+        &self,
+        _params: &ConnectionParams,
+        _schema: Option<&str>,
+    ) -> Result<Vec<ViewInfo>, String> {
+        Ok(Vec::new())
+    }
+
+    async fn get_materialized_view_columns(
+        &self,
+        _params: &ConnectionParams,
+        _view_name: &str,
+        _schema: Option<&str>,
+    ) -> Result<Vec<TableColumn>, String> {
+        Ok(Vec::new())
+    }
+
+    async fn get_materialized_view_definition(
+        &self,
+        _params: &ConnectionParams,
+        _view_name: &str,
+        _schema: Option<&str>,
+    ) -> Result<String, String> {
+        Err("Materialized views are not supported by this driver".to_string())
+    }
+
+    async fn refresh_materialized_view(
+        &self,
+        _params: &ConnectionParams,
+        _view_name: &str,
+        _schema: Option<&str>,
+    ) -> Result<(), String> {
+        Err("Materialized views are not supported by this driver".to_string())
+    }
+
     // --- Routines -----------------------------------------------------------
 
     async fn get_routines(
@@ -344,6 +468,87 @@ pub trait DatabaseDriver: Send + Sync {
         routine_type: &str,
         schema: Option<&str>,
     ) -> Result<String, String>;
+
+    // --- Routine management (gated by `DriverCapabilities::routine_management`)
+
+    /// Builds an executable invocation script for a routine from the
+    /// argument values collected in the run-routine UI. The script is opened
+    /// in an editor tab so the user can review it before running.
+    ///
+    /// The default covers the common shape (`CALL proc(...)` /
+    /// `SELECT fn(...)`); dialects with richer conventions (MySQL `OUT`
+    /// session variables, PostgreSQL set-returning functions) override it.
+    async fn build_routine_call_sql(
+        &self,
+        _params: &ConnectionParams,
+        routine_name: &str,
+        routine_type: &str,
+        args: &[RoutineCallArg],
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        Ok(crate::drivers::common::generic_routine_call_sql(
+            routine_name,
+            routine_type,
+            args,
+            schema,
+            &self.manifest().capabilities.identifier_quote,
+        ))
+    }
+
+    /// Returns a starter script for creating a new routine of the given
+    /// type, opened in an editor tab. Dialect-specific (delimiters, body
+    /// quoting), so the default is a bare ISO-ish skeleton.
+    async fn routine_create_template(
+        &self,
+        routine_type: &str,
+        _schema: Option<&str>,
+    ) -> Result<String, String> {
+        let keyword = if routine_type.eq_ignore_ascii_case("FUNCTION") {
+            "FUNCTION"
+        } else {
+            "PROCEDURE"
+        };
+        Ok(format!(
+            "CREATE {keyword} my_routine()\nBEGIN\n    -- routine body\nEND"
+        ))
+    }
+
+    /// Returns an executable script for editing an existing routine. The
+    /// default assumes `get_routine_definition` already yields a re-runnable
+    /// statement (true for PostgreSQL's `CREATE OR REPLACE`); dialects whose
+    /// definition is not directly re-executable (MySQL needs `DROP` +
+    /// `DELIMITER` wrapping) override it.
+    async fn get_routine_edit_script(
+        &self,
+        params: &ConnectionParams,
+        routine_name: &str,
+        routine_type: &str,
+        schema: Option<&str>,
+    ) -> Result<String, String> {
+        self.get_routine_definition(params, routine_name, routine_type, schema)
+            .await
+    }
+
+    /// Drops a routine. The default issues a generic
+    /// `DROP PROCEDURE|FUNCTION`; dialects that identify routines by
+    /// signature (PostgreSQL overloads) override it.
+    async fn drop_routine(
+        &self,
+        params: &ConnectionParams,
+        routine_name: &str,
+        routine_type: &str,
+        schema: Option<&str>,
+    ) -> Result<(), String> {
+        let sql = crate::drivers::common::generic_drop_routine_sql(
+            routine_name,
+            routine_type,
+            schema,
+            &self.manifest().capabilities.identifier_quote,
+        );
+        self.execute_query(params, &sql, None, 1, schema)
+            .await
+            .map(|_| ())
+    }
 
     // --- Query execution ----------------------------------------------------
 
@@ -378,12 +583,17 @@ pub trait DatabaseDriver: Send + Sync {
         limit: Option<u32>,
         page: u32,
         schema: Option<&str>,
+        on_progress: Option<&BatchProgressFn>,
     ) -> Result<Vec<BatchStatementResult>, String> {
         let mut results = Vec::with_capacity(queries.len());
-        for q in queries {
+        for (idx, q) in queries.iter().enumerate() {
             let start = std::time::Instant::now();
             let outcome = self.execute_query(params, q, limit, page, schema).await;
-            results.push(BatchStatementResult::from_outcome(start, outcome));
+            let res = BatchStatementResult::from_outcome(start, outcome);
+            if let Some(cb) = on_progress {
+                cb(idx, &res);
+            }
+            results.push(res);
         }
         Ok(results)
     }
@@ -397,7 +607,7 @@ pub trait DatabaseDriver: Send + Sync {
         _query: &str,
         _analyze: bool,
         _schema: Option<&str>,
-    ) -> Result<ExplainPlan, String> {
+    ) -> Result<ExplainQueryOutput, String> {
         Err("EXPLAIN not supported by this driver".into())
     }
 
@@ -416,8 +626,7 @@ pub trait DatabaseDriver: Send + Sync {
         &self,
         params: &ConnectionParams,
         table: &str,
-        pk_col: &str,
-        pk_val: serde_json::Value,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
         col_name: &str,
         new_val: serde_json::Value,
         schema: Option<&str>,
@@ -428,8 +637,7 @@ pub trait DatabaseDriver: Send + Sync {
         &self,
         params: &ConnectionParams,
         table: &str,
-        pk_col: &str,
-        pk_val: serde_json::Value,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
         schema: Option<&str>,
     ) -> Result<u64, String>;
 
@@ -440,8 +648,7 @@ pub trait DatabaseDriver: Send + Sync {
         _params: &ConnectionParams,
         _table: &str,
         _col_name: &str,
-        _pk_col: &str,
-        _pk_val: serde_json::Value,
+        _pk_map: &std::collections::HashMap<String, serde_json::Value>,
         _schema: Option<&str>,
         _file_path: &str,
     ) -> Result<(), String> {
@@ -453,8 +660,7 @@ pub trait DatabaseDriver: Send + Sync {
         _params: &ConnectionParams,
         _table: &str,
         _col_name: &str,
-        _pk_col: &str,
-        _pk_val: serde_json::Value,
+        _pk_map: &std::collections::HashMap<String, serde_json::Value>,
         _schema: Option<&str>,
     ) -> Result<String, String> {
         Err("BLOB preview not supported by this driver".into())
@@ -503,6 +709,7 @@ pub trait DatabaseDriver: Send + Sync {
 
     async fn get_create_foreign_key_sql(
         &self,
+        _params: &ConnectionParams,
         _table: &str,
         _fk_name: &str,
         _column: &str,
@@ -572,6 +779,97 @@ pub trait DatabaseDriver: Send + Sync {
         _schema: Option<&str>,
     ) -> Result<(), String> {
         Err("Triggers not supported by this driver".into())
+    }
+
+    // --- User management (gated by `DriverCapabilities::user_management`) ----
+    // Defaults return errors so drivers without account management (SQLite,
+    // plugins) need no changes; the UI hides the feature unless the
+    // capability is set.
+
+    /// Returns the privilege keywords accepted by `apply_db_user_privileges`,
+    /// split by scope, so the frontend renders the dialect's own catalog.
+    async fn get_db_privilege_catalog(
+        &self,
+    ) -> Result<crate::models::DbPrivilegeCatalog, String> {
+        Err("User management is not supported by this driver".into())
+    }
+
+    /// Lists the server accounts visible to the connected user.
+    async fn get_db_users(&self, _params: &ConnectionParams) -> Result<Vec<DbUserInfo>, String> {
+        Err("User management is not supported by this driver".into())
+    }
+
+    /// Returns the grants of one account as raw SQL statements
+    /// (e.g. the output of MySQL's `SHOW GRANTS FOR`).
+    async fn get_db_user_grants(
+        &self,
+        _params: &ConnectionParams,
+        _user: &str,
+        _host: &str,
+    ) -> Result<Vec<String>, String> {
+        Err("User management is not supported by this driver".into())
+    }
+
+    /// Returns one account's privileges parsed per scope (global, database,
+    /// table), feeding the checkbox editor. Grants the dialect cannot
+    /// represent that way (roles, column-level, proxy) are omitted here and
+    /// only appear in `get_db_user_grants`.
+    async fn get_db_user_privileges(
+        &self,
+        _params: &ConnectionParams,
+        _user: &str,
+        _host: &str,
+    ) -> Result<Vec<crate::models::DbUserGrantSet>, String> {
+        Err("User management is not supported by this driver".into())
+    }
+
+    /// Creates an account with the given password.
+    async fn create_db_user(
+        &self,
+        _params: &ConnectionParams,
+        _user: &str,
+        _host: &str,
+        _password: &str,
+    ) -> Result<(), String> {
+        Err("User management is not supported by this driver".into())
+    }
+
+    /// Drops an account.
+    async fn drop_db_user(
+        &self,
+        _params: &ConnectionParams,
+        _user: &str,
+        _host: &str,
+    ) -> Result<(), String> {
+        Err("User management is not supported by this driver".into())
+    }
+
+    /// Changes an account's password.
+    async fn set_db_user_password(
+        &self,
+        _params: &ConnectionParams,
+        _user: &str,
+        _host: &str,
+        _password: &str,
+    ) -> Result<(), String> {
+        Err("User management is not supported by this driver".into())
+    }
+
+    /// Grants (`grant == true`) or revokes a set of privileges for an
+    /// account. Scope: global (`database == None`), one database
+    /// (`db.*`), or one table (`db.table` when `table` is `Some`).
+    /// Drivers must validate `privileges` against their own allowlist.
+    async fn apply_db_user_privileges(
+        &self,
+        _params: &ConnectionParams,
+        _user: &str,
+        _host: &str,
+        _database: Option<&str>,
+        _table: Option<&str>,
+        _privileges: &[String],
+        _grant: bool,
+    ) -> Result<(), String> {
+        Err("User management is not supported by this driver".into())
     }
 
     // --- ER diagram (batch) -------------------------------------------------

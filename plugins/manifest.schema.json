@@ -5,7 +5,6 @@
   "description": "Schema for the manifest.json file required by every Tabularis database driver plugin.",
   "type": "object",
   "required": [
-    "id",
     "name",
     "version",
     "executable",
@@ -17,7 +16,7 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9-]+$",
-      "description": "Unique driver identifier (lowercase letters, digits, hyphens). Must match the plugin folder name."
+      "description": "Legacy driver identifier (lowercase letters, digits, hyphens). Optional — when absent, identity falls back to name. Omit in new .tabularium manifests."
     },
     "name": {
       "type": "string",
@@ -71,9 +70,24 @@
           "type": "boolean",
           "description": "true to enable the Views section in the database explorer."
         },
+        "materialized_views": {
+          "type": "boolean",
+          "default": false,
+          "description": "true to enable the Materialized Views section in the database explorer. The backing RPCs (get_materialized_views, get_materialized_view_columns, get_materialized_view_definition, refresh_materialized_view) are optional: listing falls back to empty results when the plugin does not implement them."
+        },
         "routines": {
           "type": "boolean",
           "description": "true to enable stored procedures and functions in the database explorer."
+        },
+        "routine_management": {
+          "type": "boolean",
+          "default": false,
+          "description": "true to enable routine management actions (run with parameters, create from template, edit, drop). The backing RPCs (build_routine_call_sql, routine_create_template, get_routine_edit_script, drop_routine) are optional: the host falls back to dialect-neutral SQL when the plugin does not implement them."
+        },
+        "triggers": {
+          "type": "boolean",
+          "default": false,
+          "description": "true if the driver supports trigger metadata and trigger management RPCs."
         },
         "file_based": {
           "type": "boolean",
@@ -108,6 +122,12 @@
           "type": "string",
           "enum": ["\"", "`"],
           "description": "Character used to quote SQL identifiers: double-quote for ANSI SQL, backtick for MySQL-style."
+        },
+        "sql_dialect": {
+          "type": "string",
+          "enum": ["postgres", "mysql", "mssql", "sqlite", "oracle", "generic"],
+          "default": "postgres",
+          "description": "SQL dialect used by Tabularis for statement splitting and query classification. Oracle-like plugins can use oracle."
         },
         "alter_primary_key": {
           "type": "boolean",
@@ -152,6 +172,11 @@
           "type": "boolean",
           "default": false,
           "description": "When true, the driver is read-only: all data modification operations (INSERT, UPDATE, DELETE) are disabled in the UI. Table and column management is also hidden regardless of manage_tables. Defaults to false."
+        },
+        "supports_ssl": {
+          "type": "boolean",
+          "default": false,
+          "description": "true to show the SSL/TLS configuration tab (mode + CA/client cert/key) in the connection modal for this network driver. Defaults to false."
         }
       }
     },
@@ -179,6 +204,11 @@
           "options": { "type": "array", "items": { "type": "string" } }
         }
       }
+    },
+    "type_mappings": {
+      "type": "object",
+      "description": "Optional map of generic inferred type names to driver-specific types. Used by the host to resolve map_inferred_type() locally without an RPC call. Keys are uppercase generic names (e.g. DATETIME, JSON), values are the driver-native equivalents (e.g. TIMESTAMP, JSONB).",
+      "additionalProperties": { "type": "string" }
     },
     "data_types": {
       "type": "array",

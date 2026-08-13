@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
@@ -68,6 +69,16 @@ struct OpenAiModel {
 }
 
 #[derive(Deserialize, Debug)]
+struct AnthropicModelList {
+    data: Vec<AnthropicModel>,
+}
+
+#[derive(Deserialize, Debug)]
+struct AnthropicModel {
+    id: String,
+}
+
+#[derive(Deserialize, Debug)]
 struct OpenRouterModelList {
     data: Vec<OpenRouterModel>,
 }
@@ -83,12 +94,39 @@ struct AiModelsCache {
     models: HashMap<String, Vec<String>>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MiniMaxEndpoint {
+    region: &'static str,
+    openai_base_url: &'static str,
+}
+
+const MINIMAX_ENDPOINTS: [MiniMaxEndpoint; 2] = [
+    MiniMaxEndpoint {
+        region: "global",
+        openai_base_url: "https://api.minimax.io/v1",
+    },
+    MiniMaxEndpoint {
+        region: "cn_zh",
+        openai_base_url: "https://api.minimaxi.com/v1",
+    },
+];
+
+static MINIMAX_PREFERRED_ENDPOINT: AtomicUsize = AtomicUsize::new(0);
+
+fn minimax_endpoint_order(preferred: usize) -> [usize; 2] {
+    if preferred == 1 {
+        [1, 0]
+    } else {
+        [0, 1]
+    }
+}
+
 // --- Helper Functions ---
 
 fn load_default_models() -> HashMap<String, Vec<String>> {
     let yaml_content = include_str!("ai_models.yaml");
     serde_yaml::from_str(yaml_content).unwrap_or_else(|e| {
-        println!("Failed to parse models.yaml: {}", e);
+        eprintln!("Failed to parse models.yaml: {}", e);
         HashMap::new() // Fallback to empty map on critical error (should be caught by tests)
     })
 }
@@ -172,6 +210,55 @@ async fn fetch_openai_models(api_key: &str) -> Vec<String> {
         }
         Err(_) => Vec::new(),
     }
+}
+
+async fn fetch_anthropic_models(api_key: &str) -> Vec<String> {
+    if api_key.is_empty() {
+        return Vec::new();
+    }
+    let client = Client::new();
+    match client
+        .get("https://api.anthropic.com/v1/models")
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .send()
+        .await
+    {
+        Ok(res) => {
+            if res.status().is_success() {
+                if let Ok(json) = res.json::<AnthropicModelList>().await {
+                    return json.data.into_iter().map(|m| m.id).collect();
+                }
+            }
+            Vec::new()
+        }
+        Err(_) => Vec::new(),
+    }
+}
+
+async fn fetch_minimax_models(api_key: &str) -> Vec<String> {
+    if api_key.is_empty() {
+        return Vec::new();
+    }
+    let client = Client::new();
+    let preferred = MINIMAX_PREFERRED_ENDPOINT.load(Ordering::Relaxed);
+    for index in minimax_endpoint_order(preferred) {
+        let endpoint = MINIMAX_ENDPOINTS[index];
+        if let Ok(res) = client
+            .get(format!("{}/models", endpoint.openai_base_url))
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .await
+        {
+            if res.status().is_success() {
+                if let Ok(json) = res.json::<OpenAiModelList>().await {
+                    MINIMAX_PREFERRED_ENDPOINT.store(index, Ordering::Relaxed);
+                    return json.data.into_iter().map(|m| m.id).collect();
+                }
+            }
+        }
+    }
+    Vec::new()
 }
 
 async fn fetch_openrouter_models() -> Vec<String> {
@@ -285,7 +372,7 @@ pub async fn get_ai_models(
                 // Always refresh custom-openai as it depends on user configuration
                 if let (Some(base_url), Ok(api_key)) = (
                     app_config.ai_custom_openai_url.clone(),
-                    config::get_ai_api_key("custom-openai"),
+                    config::get_ai_api_key(&app, "custom-openai"),
                 ) {
                     if !base_url.is_empty() && !api_key.is_empty() {
                         let custom_models = fetch_custom_openai_models(&base_url, &api_key).await;
@@ -294,6 +381,22 @@ pub async fn get_ai_models(
                         } else {
                             cached_models.insert("custom-openai".to_string(), vec![]);
                         }
+                    }
+                }
+
+                // Always refresh Anthropic if API key is present
+                if let Ok(key) = config::get_ai_api_key(&app, "anthropic") {
+                    let anthropic_models = fetch_anthropic_models(&key).await;
+                    if !anthropic_models.is_empty() {
+                        cached_models.insert("anthropic".to_string(), anthropic_models);
+                    }
+                }
+
+                // Always refresh MiniMax if API key is present
+                if let Ok(key) = config::get_ai_api_key(&app, "minimax") {
+                    let minimax_models = fetch_minimax_models(&key).await;
+                    if !minimax_models.is_empty() {
+                        cached_models.insert("minimax".to_string(), minimax_models);
                     }
                 }
 
@@ -311,7 +414,7 @@ pub async fn get_ai_models(
     }
 
     // 2. OpenAI (Dynamic if key exists)
-    if let Ok(key) = config::get_ai_api_key("openai") {
+    if let Ok(key) = config::get_ai_api_key(&app, "openai") {
         let remote_models = fetch_openai_models(&key).await;
         if !remote_models.is_empty() {
             if let Some(static_list) = models.get_mut("openai") {
@@ -323,7 +426,33 @@ pub async fn get_ai_models(
         }
     }
 
-    // 3. OpenRouter (Dynamic public)
+    // 3. Anthropic (Dynamic if key exists)
+    if let Ok(key) = config::get_ai_api_key(&app, "anthropic") {
+        let remote_models = fetch_anthropic_models(&key).await;
+        if !remote_models.is_empty() {
+            if let Some(static_list) = models.get_mut("anthropic") {
+                let mut set: HashSet<String> = static_list.iter().cloned().collect();
+                set.extend(remote_models);
+                *static_list = set.into_iter().collect();
+                static_list.sort();
+            }
+        }
+    }
+
+    // 4. MiniMax (Dynamic if key exists)
+    if let Ok(key) = config::get_ai_api_key(&app, "minimax") {
+        let remote_models = fetch_minimax_models(&key).await;
+        if !remote_models.is_empty() {
+            if let Some(static_list) = models.get_mut("minimax") {
+                let mut set: HashSet<String> = static_list.iter().cloned().collect();
+                set.extend(remote_models);
+                *static_list = set.into_iter().collect();
+                static_list.sort();
+            }
+        }
+    }
+
+    // 5. OpenRouter (Dynamic public)
     let openrouter_models = fetch_openrouter_models().await;
     if !openrouter_models.is_empty() {
         if let Some(static_list) = models.get_mut("openrouter") {
@@ -339,10 +468,10 @@ pub async fn get_ai_models(
         }
     }
 
-    // 4. Custom OpenAI (Dynamic if configured)
+    // 6. Custom OpenAI (Dynamic if configured)
     if let (Some(base_url), Ok(api_key)) = (
         app_config.ai_custom_openai_url,
-        config::get_ai_api_key("custom-openai"),
+        config::get_ai_api_key(&app, "custom-openai"),
     ) {
         if !base_url.is_empty() && !api_key.is_empty() {
             let custom_models = fetch_custom_openai_models(&base_url, &api_key).await;
@@ -424,13 +553,14 @@ async fn resolve_model(
 }
 
 async fn dispatch_provider(
+    app: &AppHandle,
     app_config: &config::AppConfig,
     gen_req: &AiGenerateRequest,
     system_prompt: &str,
     ollama_port: u16,
 ) -> Result<String, String> {
     let api_key = if gen_req.provider != "ollama" {
-        config::get_ai_api_key(&gen_req.provider)?
+        config::get_ai_api_key(app, &gen_req.provider)?
     } else {
         String::new()
     };
@@ -463,10 +593,10 @@ pub async fn generate_query(app: AppHandle, mut req: AiGenerateRequest) -> Resul
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
     req.model = resolve_model(&req.provider, &req.model, &app_config, ollama_port).await?;
 
-    let raw_prompt = config::get_system_prompt(app);
+    let raw_prompt = config::get_system_prompt(app.clone());
     let system_prompt = raw_prompt.replace("{{SCHEMA}}", &req.schema);
 
-    let result = dispatch_provider(&app_config, &req, &system_prompt, ollama_port).await;
+    let result = dispatch_provider(&app, &app_config, &req, &system_prompt, ollama_port).await;
 
     match &result {
         Ok(_) => log::info!("AI query generated successfully using {}", req.model),
@@ -483,7 +613,7 @@ pub async fn explain_query(app: AppHandle, mut req: AiExplainRequest) -> Result<
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
     req.model = resolve_model(&req.provider, &req.model, &app_config, ollama_port).await?;
 
-    let raw_prompt = config::get_explain_prompt(app);
+    let raw_prompt = config::get_explain_prompt(app.clone());
     let system_prompt = raw_prompt.replace("{{LANGUAGE}}", &req.language);
 
     let gen_req = AiGenerateRequest {
@@ -493,7 +623,7 @@ pub async fn explain_query(app: AppHandle, mut req: AiExplainRequest) -> Result<
         schema: String::new(),
     };
 
-    let result = dispatch_provider(&app_config, &gen_req, &system_prompt, ollama_port).await;
+    let result = dispatch_provider(&app, &app_config, &gen_req, &system_prompt, ollama_port).await;
 
     match &result {
         Ok(_) => log::info!(
@@ -516,7 +646,7 @@ pub async fn analyze_explain_plan(
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
     req.model = resolve_model(&req.provider, &req.model, &app_config, ollama_port).await?;
 
-    let raw_prompt = config::get_explainplan_prompt(app);
+    let raw_prompt = config::get_explainplan_prompt(app.clone());
     let system_prompt = raw_prompt.replace("{{LANGUAGE}}", &req.language);
 
     let gen_req = AiGenerateRequest {
@@ -526,7 +656,7 @@ pub async fn analyze_explain_plan(
         schema: String::new(),
     };
 
-    let result = dispatch_provider(&app_config, &gen_req, &system_prompt, ollama_port).await;
+    let result = dispatch_provider(&app, &app_config, &gen_req, &system_prompt, ollama_port).await;
 
     match &result {
         Ok(_) => log::info!(
@@ -553,7 +683,7 @@ async fn generate_with_simple_prompt(
     let ollama_port = app_config.ai_ollama_port.unwrap_or(11434);
     let resolved_model = resolve_model(&provider, &model, &app_config, ollama_port).await?;
 
-    let system_prompt = get_prompt(app);
+    let system_prompt = get_prompt(app.clone());
 
     let gen_req = AiGenerateRequest {
         provider: provider.clone(),
@@ -562,7 +692,7 @@ async fn generate_with_simple_prompt(
         schema: String::new(),
     };
 
-    let result = dispatch_provider(&app_config, &gen_req, &system_prompt, ollama_port).await;
+    let result = dispatch_provider(&app, &app_config, &gen_req, &system_prompt, ollama_port).await;
 
     match &result {
         Ok(v) => log::info!("{} generated: {}", label, v),
@@ -617,7 +747,7 @@ pub async fn suggest_table_name(
     };
 
     let system_prompt = "You are a database naming expert. Reply with only a snake_case table name, no explanation.";
-    let result = dispatch_provider(&app_config, &gen_req, system_prompt, ollama_port).await;
+    let result = dispatch_provider(&app, &app_config, &gen_req, system_prompt, ollama_port).await;
 
     match &result {
         Ok(name) => {
@@ -865,26 +995,39 @@ async fn generate_minimax(
         "temperature": 0.1
     });
 
-    let res = client
-        .post("https://api.minimax.io/v1/chat/completions")
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    let preferred = MINIMAX_PREFERRED_ENDPOINT.load(Ordering::Relaxed);
+    let mut errors = Vec::new();
 
-    if !res.status().is_success() {
-        let error_text = res.text().await.unwrap_or_default();
-        return Err(format!("MiniMax Error: {}", error_text));
+    for index in minimax_endpoint_order(preferred) {
+        let endpoint = MINIMAX_ENDPOINTS[index];
+        let url = format!("{}/chat/completions", endpoint.openai_base_url);
+        match client
+            .post(url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+        {
+            Ok(res) if res.status().is_success() => {
+                let json: serde_json::Value =
+                    res.json().await.map_err(|e| e.to_string())?;
+                let content = json["choices"][0]["message"]["content"]
+                    .as_str()
+                    .ok_or("Invalid response format from MiniMax")?;
+                MINIMAX_PREFERRED_ENDPOINT.store(index, Ordering::Relaxed);
+                return Ok(clean_response(content));
+            }
+            Ok(res) => {
+                let status = res.status();
+                let error_text = res.text().await.unwrap_or_default();
+                errors.push(format!("{} ({status}): {error_text}", endpoint.region));
+            }
+            Err(error) => errors.push(format!("{}: {error}", endpoint.region)),
+        }
     }
 
-    let json: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
-    let content = json["choices"][0]["message"]["content"]
-        .as_str()
-        .ok_or("Invalid response format from MiniMax")?;
-
-    Ok(clean_response(content))
+    Err(format!("MiniMax Error: {}", errors.join("; ")))
 }
 
 fn clean_response(text: &str) -> String {
@@ -918,15 +1061,38 @@ mod tests {
 
         // Check for new futuristic models from yaml
         let openai = models.get("openai").unwrap();
-        assert!(openai.contains(&"gpt-5.2".to_string()));
+        assert!(openai.contains(&"gpt-5.5".to_string()));
+
+        // Anthropic should include the flagship Fable 5 and current Opus/Sonnet/Haiku
+        let anthropic = models.get("anthropic").unwrap();
+        assert!(anthropic.contains(&"claude-fable-5".to_string()));
+        assert!(anthropic.contains(&"claude-opus-4-8".to_string()));
+        assert!(anthropic.contains(&"claude-sonnet-4-6".to_string()));
+        assert!(anthropic.contains(&"claude-haiku-4-5".to_string()));
 
         // Check MiniMax models
         let minimax = models.get("minimax").unwrap();
+        assert!(minimax.contains(&"MiniMax-M3".to_string()));
         assert!(minimax.contains(&"MiniMax-M2.7".to_string()));
         assert!(minimax.contains(&"MiniMax-M2.7-highspeed".to_string()));
+        // M3 should be listed first so it is selected as the default model
+        assert_eq!(minimax.first().map(String::as_str), Some("MiniMax-M3"));
 
         // Ollama is not in yaml, so it shouldn't be here yet
         assert!(!models.contains_key("ollama"));
+    }
+
+    #[test]
+    fn test_minimax_endpoint_order_prefers_last_successful_region() {
+        let global_first = minimax_endpoint_order(0);
+        assert_eq!(MINIMAX_ENDPOINTS[global_first[0]].region, "global");
+        assert_eq!(MINIMAX_ENDPOINTS[global_first[1]].region, "cn_zh");
+
+        let cn_first = minimax_endpoint_order(1);
+        assert_eq!(MINIMAX_ENDPOINTS[cn_first[0]].region, "cn_zh");
+        assert_eq!(MINIMAX_ENDPOINTS[cn_first[1]].region, "global");
+
+        assert_eq!(minimax_endpoint_order(usize::MAX), [0, 1]);
     }
 
     #[test]

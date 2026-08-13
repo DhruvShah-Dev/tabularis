@@ -42,4 +42,26 @@ export const versionLinks: Record<string, string> = {
     "https://tabularis.dev/blog/v0110-json-viewer-text-diff-triggers-japanese",
   "0.12.0":
     "https://tabularis.dev/blog/v0120-per-connection-appearance-related-records-sql-splitter",
+  "0.13.0":
+    "https://tabularis.dev/blog/v0130-kubernetes-tunnels-quick-navigator-dml-tabs",
+  "0.13.1":
+    "https://tabularis.dev/blog/v0131-signed-macos-postgres-explain-offset-pagination",
+  "0.13.2":
+    "https://tabularis.dev/blog/v0132-managed-notebooks-live-query-progress-faster-grid",
+  "0.13.3":
+    "https://tabularis.dev/blog/v0133-result-colors-gruvbox-themed-tabs-session-restore",
+  "0.13.4":
+    "https://tabularis.dev/blog/v0134-ssh-security-keys-detachable-results-smarter-editor",
+  "0.14.0":
+    "https://tabularis.dev/blog/v0140-stored-routines-connection-windows-destructive-query-guard",
+  "0.15.0":
+    "https://tabularis.dev/blog/v0150-import-connections-nested-groups-encrypted-exports",
+  "0.16.0":
+    "https://tabularis.dev/blog/v0160-hosted-plugin-registry-k8s-overrides-encrypted-backups",
+  "0.17.0":
+    "https://tabularis.dev/blog/v0170-visual-explain-diagnostics-row-editor-sidebar-sql-formatting",
+  "0.18.0":
+    "https://tabularis.dev/blog/v0180-user-privileges-connection-diagnostics-grid-selection",
+  "0.19.0":
+    "https://tabularis.dev/blog/v0190-connection-tags-column-masking-keyless-editing"
 };

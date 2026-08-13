@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { quoteTableRef } from "../../utils/identifiers";
@@ -34,16 +34,20 @@ import {
   Layers,
   Clock,
   Clipboard,
+  BookOpen,
+  UsersRound,
 } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { toErrorMessage } from "../../utils/errors";
 import { useAlert } from "../../hooks/useAlert";
 import { useSettings } from "../../hooks/useSettings";
 import { useDatabase } from "../../hooks/useDatabase";
+import { useEditor } from "../../hooks/useEditor";
 import { useSavedQueries } from "../../hooks/useSavedQueries";
 import { useQueryHistory } from "../../hooks/useQueryHistory";
 import type { SavedQuery } from "../../contexts/SavedQueriesContext";
 import type { QueryHistoryEntry } from "../../types/queryHistory";
+import type { NotebookMetadata } from "../../types/notebook";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { SchemaModal } from "../modals/SchemaModal";
 import { CreateTableModal } from "../modals/CreateTableModal";
@@ -58,32 +62,43 @@ import { ClipboardImportModal } from "../modals/ClipboardImportModal";
 import { ViewEditorModal } from "../modals/ViewEditorModal";
 import { TriggerEditorModal } from "../modals/TriggerEditorModal";
 import { ConfirmModal } from "../modals/ConfirmModal";
+import { RunRoutineModal } from "../modals/RunRoutineModal";
 import { Accordion } from "./sidebar/Accordion";
 import { SidebarTableItem } from "./sidebar/SidebarTableItem";
+import { buildTableItemSelector } from "../../utils/sidebarTableItem";
+import { fuzzyFilter } from "../../utils/fuzzy";
 import { SidebarViewItem } from "./sidebar/SidebarViewItem";
 import { SidebarRoutineItem } from "./sidebar/SidebarRoutineItem";
+import { SidebarRoutineGroupHeader } from "./sidebar/SidebarRoutineGroupHeader";
 import { SidebarSchemaItem } from "./sidebar/SidebarSchemaItem";
 import { SidebarDatabaseItem } from "./sidebar/SidebarDatabaseItem";
 import { SidebarTriggerItem } from "./sidebar/SidebarTriggerItem";
 import { QueryHistorySection } from "./sidebar/QueryHistorySection";
+import { NotebooksSection } from "./sidebar/NotebooksSection";
+import { renameNotebook, deleteNotebook, listNotebooks, NOTEBOOKS_CHANGED_EVENT } from "../../utils/notebookStore";
 import { useConnectionLayoutContext } from "../../hooks/useConnectionLayoutContext";
+import { useDrivers } from "../../hooks/useDrivers";
+import { useDatabaseObjectNavigation } from "../../hooks/useDatabaseObjectNavigation";
+import { getConnectionAccent } from "../../utils/driverUI";
 import type { TableColumn } from "../../types/schema";
 import type { ContextMenuData } from "../../types/sidebar";
+import type { TableTarget } from "../../types/databaseObjects";
 import type { RoutineInfo, TriggerInfo } from "../../contexts/DatabaseContext";
 import { groupRoutinesByType } from "../../utils/routines";
 import { formatObjectCount } from "../../utils/schema";
 import { groupByDate, formatHistoryTime } from "../../utils/dateGroups";
 import { SqlHighlight } from "../ui/SqlHighlight";
-import { isMultiDatabaseCapable } from "../../utils/database";
+import { isMultiDatabaseCapable, usesMultiDatabaseLayout, reconcileDatabaseSelection } from "../../utils/database";
 import { supportsManageTables } from "../../utils/driverCapabilities";
-import { newConsoleForDatabase, newConsoleForTable } from "../../utils/newConsole";
+import { newConsoleForDatabase } from "../../utils/newConsole";
+import { openEditor } from "../../utils/editorNavigation";
 import {
   DEFAULT_CREATE_TABLE_TARGET,
   getCreateTableRefreshPlan,
   type CreateTableTarget,
 } from "../../utils/createTable";
 
-export type SidebarTab = "structure" | "favorites" | "history";
+export type SidebarTab = "structure" | "favorites" | "history" | "notebooks";
 
 interface ExplorerSidebarProps {
   sidebarWidth: number;
@@ -124,12 +139,42 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     needsSchemaSelection,
     selectedDatabases,
     setSelectedDatabases,
+    refreshDatabaseSelection,
     databaseDataMap,
     loadDatabaseData,
     refreshDatabaseData,
     connectionDataMap,
+    connections,
     connect,
   } = useDatabase();
+  const { allDrivers } = useDrivers();
+  const { tabs, openNotebook, updateTab, closeTab, addTab, setActiveTabId } =
+    useEditor();
+
+  // Opens (or focuses) the users & privileges tab of the active connection.
+  const openUserManagement = () => {
+    if (!activeConnectionId) return;
+    const existing = tabs.find(
+      (tab) => tab.type === "users" && tab.connectionId === activeConnectionId,
+    );
+    if (existing) {
+      setActiveTabId(existing.id);
+    } else {
+      addTab({
+        type: "users",
+        title: t("userManagement.tabTitle"),
+        connectionId: activeConnectionId,
+      });
+    }
+  };
+
+  // Accent color for a connection, matching the tinted editor tab bar / split
+  // panel headers. Falls back to the driver manifest color.
+  const accentForConnection = (connId: string) => {
+    const conn = connections.find((c) => c.id === connId);
+    const driverId = conn?.params.driver ?? connectionDataMap[connId]?.driver;
+    return getConnectionAccent(conn, allDrivers.find((d) => d.id === driverId));
+  };
 
   const schemaLoadError =
     activeCapabilities?.schemas === true && schemas.length === 0 && activeConnectionId
@@ -146,7 +191,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   } = useQueryHistory();
   const { showAlert } = useAlert();
   const navigate = useNavigate();
+  const objectNavigation = useDatabaseObjectNavigation(
+    activeConnectionId,
+    activeDriver,
+  );
   const [schemaVersion, setSchemaVersion] = useState(0);
+  const sidebarBodyRef = useRef<HTMLDivElement>(null);
   const [schemaErrorExpanded, setSchemaErrorExpanded] = useState(false);
   const [schemaErrorCopied, setSchemaErrorCopied] = useState(false);
 
@@ -160,7 +210,10 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     label: string;
     data?: ContextMenuData;
   } | null>(null);
-  const [schemaModal, setSchemaModal] = useState<{ tableName: string; schema?: string } | null>(null);
+  const [schemaModal, setSchemaModal] =
+    useState<TableTarget | null>(null);
+  const [runRoutineModal, setRunRoutineModal] = useState<{ routine: RoutineInfo; schema?: string } | null>(null);
+  const [routineDropConfirm, setRoutineDropConfirm] = useState<{ name: string; routineType: string; schema?: string } | null>(null);
   const [isCreateTableModalOpen, setIsCreateTableModalOpen] = useState(false);
   const [createTableTarget, setCreateTableTarget] = useState<CreateTableTarget>(DEFAULT_CREATE_TABLE_TARGET);
   const [isClipboardImportOpen, setIsClipboardImportOpen] = useState(false);
@@ -177,7 +230,8 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     isOpen: boolean;
     tableName: string;
   }>({ isOpen: false, tableName: "" });
-  const [generateSQLModal, setGenerateSQLModal] = useState<string | null>(null);
+  const [generateSQLModal, setGenerateSQLModal] =
+    useState<TableTarget | null>(null);
   const setSidebarTab = onSidebarTabChange;
   const [historyToFavoriteSQL, setHistoryToFavoriteSQL] = useState<string | null>(null);
   const [historyToFavoriteDB, setHistoryToFavoriteDB] = useState<string | null>(null);
@@ -186,6 +240,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   const [favoriteDeleteConfirm, setFavoriteDeleteConfirm] = useState<string | null>(null);
   const [tableFilter, setTableFilter] = useState("");
   const [favoritesFilter, setFavoritesFilter] = useState("");
+  const [refreshingMatView, setRefreshingMatView] = useState<string | null>(null);
   const [selectedFavoriteId, setSelectedFavoriteId] = useState<string | null>(null);
   const [tablesOpen, setTablesOpen] = useState(true);
   const [viewsOpen, setViewsOpen] = useState(true);
@@ -212,6 +267,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   const [pendingDbSelection, setPendingDbSelection] = useState<Set<string>>(new Set());
   const [allAvailableDatabases, setAllAvailableDatabases] = useState<string[]>([]);
   const [isLoadingAllDbs, setIsLoadingAllDbs] = useState(false);
+  const [isRefreshingDbList, setIsRefreshingDbList] = useState(false);
+  // Guards against toast spam on rapid repeated clicks: isRefreshingDbList only
+  // blocks calls that overlap in flight, so several quick, individually-fast
+  // round trips could each complete and each show their own toast. This adds
+  // a short cooldown after a call finishes.
+  const lastDbListRefreshAtRef = useRef(0);
   const [viewEditorModal, setViewEditorModal] = useState<{
     isOpen: boolean;
     viewName?: string;
@@ -246,10 +307,65 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     setSchemaVersion((v) => v + 1);
   };
 
-  const runQuery = (sql: string, queryName?: string, tableName?: string, preventAutoRun: boolean = false, schema?: string, readOnly?: boolean) => {
-    navigate("/editor", {
-      state: { initialQuery: sql, queryName, tableName, preventAutoRun, schema, readOnly, targetConnectionId: activeConnectionId },
+  /** Table navigation goes through `objectNavigation`; this only opens consoles. */
+  const runQuery = (sql: string, queryName?: string, preventAutoRun: boolean = false, schema?: string) => {
+    openEditor(navigate, {
+      kind: "console",
+      initialQuery: sql,
+      queryName,
+      preventAutoRun,
+      schema,
+      targetConnectionId: activeConnectionId ?? undefined,
     });
+  };
+
+  // Notebook count for the tab badge — kept in sync with the active connection
+  // and refreshed whenever notebooks change (save/rename/delete/import).
+  const [notebookCount, setNotebookCount] = useState(0);
+  useEffect(() => {
+    if (!activeConnectionId) {
+      setNotebookCount(0);
+      return;
+    }
+    let cancelled = false;
+    const refresh = () => {
+      listNotebooks(activeConnectionId)
+        .then((nbs) => {
+          if (!cancelled) setNotebookCount(nbs.length);
+        })
+        .catch(() => {
+          if (!cancelled) setNotebookCount(0);
+        });
+    };
+    refresh();
+    window.addEventListener(NOTEBOOKS_CHANGED_EVENT, refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(NOTEBOOKS_CHANGED_EVENT, refresh);
+    };
+  }, [activeConnectionId]);
+
+  // The Notebooks section only lists the active connection's notebooks, so all
+  // actions stay within activeConnectionId.
+  const handleOpenNotebook = (nb: NotebookMetadata) => {
+    if (!activeConnectionId) return;
+    openNotebook(activeConnectionId, nb.id, nb.title);
+    navigate("/editor");
+  };
+
+  const handleRenameNotebook = async (notebookId: string, title: string) => {
+    if (!activeConnectionId) return;
+    await renameNotebook(notebookId, activeConnectionId, title);
+    const open = tabs.find((tb) => tb.notebookId === notebookId);
+    if (open) updateTab(open.id, { title });
+  };
+
+  const handleDeleteNotebook = async (notebookId: string) => {
+    if (!activeConnectionId) return;
+    // Clears cache + timers first, so closing the tab below won't re-save it.
+    await deleteNotebook(notebookId, activeConnectionId);
+    const open = tabs.find((tb) => tb.notebookId === notebookId);
+    if (open) closeTab(open.id);
   };
 
   useEffect(() => {
@@ -262,6 +378,21 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     return () => window.removeEventListener("tabularis:paste-import", handler);
   }, [activeConnectionId, activeCapabilities]);
 
+  // Focus the first visible "Filter tables…" input (flat / per-schema / per-db
+  // layouts) when the focus_table_filter shortcut fires.
+  useEffect(() => {
+    const handler = () => {
+      const input = sidebarBodyRef.current?.querySelector<HTMLInputElement>(
+        "[data-table-filter]",
+      );
+      input?.focus();
+      input?.select();
+    };
+    window.addEventListener("tabularis:focus-table-filter", handler);
+    return () =>
+      window.removeEventListener("tabularis:focus-table-filter", handler);
+  }, []);
+
   const handleTableClick = (tableName: string, schema?: string) => {
     setActiveTable(tableName, schema);
   };
@@ -270,95 +401,80 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     if (schema) {
       setActiveTable(tableName, schema);
     }
-    const quotedTable = quoteTableRef(tableName, activeDriver, schema);
-    navigate("/editor", {
-      state: {
-        initialQuery: `SELECT * FROM ${quotedTable}`,
-        tableName: tableName,
-        schema,
-        targetConnectionId: activeConnectionId,
-      },
-    });
+    objectNavigation?.open(tableName, schema);
   };
 
   const handleViewClick = (viewName: string) => {
     setActiveView(viewName);
   };
 
-  const handleOpenView = (viewName: string, schema?: string) => {
-    const quotedView = quoteTableRef(viewName, activeDriver, schema);
-    navigate("/editor", {
-      state: {
-        initialQuery: `SELECT * FROM ${quotedView}`,
-        tableName: viewName,
-        schema,
-        targetConnectionId: activeConnectionId,
-      },
-    });
+  const handleOpenView = (
+    viewName: string,
+    schema?: string,
+    materialized = false,
+  ) => {
+    objectNavigation?.open(viewName, schema, { materialized });
   };
 
   // Multi-database: open table/view without qualified prefix — backend uses USE <db> for isolation
   const handleOpenDatabaseTable = (tableName: string, database?: string) => {
     if (database) setActiveTable(tableName, database);
-    const quotedTable = quoteTableRef(tableName, activeDriver);
-    navigate("/editor", {
-      state: {
-        initialQuery: `SELECT * FROM ${quotedTable}`,
-        tableName,
-        schema: database,
-        title: database ? `${tableName} (${database})` : tableName,
-        targetConnectionId: activeConnectionId,
-      },
+    objectNavigation?.open(tableName, database, {
+      qualifySchema: false,
+      title: database ? `${tableName} (${database})` : tableName,
     });
   };
 
   const handleOpenDatabaseView = (viewName: string, database?: string) => {
-    const quotedView = quoteTableRef(viewName, activeDriver);
-    navigate("/editor", {
-      state: {
-        initialQuery: `SELECT * FROM ${quotedView}`,
-        tableName: viewName,
-        schema: database,
-        title: database ? `${viewName} (${database})` : viewName,
-        targetConnectionId: activeConnectionId,
-      },
+    objectNavigation?.open(viewName, database, {
+      qualifySchema: false,
+      title: database ? `${viewName} (${database})` : viewName,
     });
   };
 
-  const handleRoutineDoubleClick = async (routine: RoutineInfo, schema?: string) => {
+  const handleRoutineDoubleClick = (routine: RoutineInfo, schema?: string) => {
+    objectNavigation?.openRoutineDefinition(routine, schema);
+  };
+
+  const handleNewRoutine = async (routineType: string) => {
     try {
-      const definition = await invoke<string>("get_routine_definition", {
+      const template = await invoke<string>("get_routine_create_template", {
         connectionId: activeConnectionId,
-        routineName: routine.name,
-        routineType: routine.routine_type,
-        ...(schema ? { schema } : {}),
+        routineType,
+        ...(activeSchema ? { schema: activeSchema } : {}),
       });
-      runQuery(definition, `${routine.name} Definition`, undefined, true);
+      const tabName =
+        routineType === "FUNCTION"
+          ? t("routines.newFunction")
+          : t("routines.newProcedure");
+      runQuery(template, tabName, true, activeSchema ?? undefined);
     } catch (e) {
       console.error(e);
-      showAlert(
-        t("sidebar.failGetRoutineDefinition") + String(e),
-        { kind: "error" }
-      );
+      showAlert(t("routines.templateError") + String(e), { kind: "error" });
     }
   };
 
-  const handleTriggerDoubleClick = async (trigger: TriggerInfo, schema?: string) => {
+  const handleDropRoutine = async () => {
+    if (!routineDropConfirm) return;
+    const { name, routineType, schema } = routineDropConfirm;
+    setRoutineDropConfirm(null);
     try {
-      const definition = await invoke<string>("get_trigger_definition", {
+      await invoke("drop_routine", {
         connectionId: activeConnectionId,
-        triggerName: trigger.name,
-        tableName: trigger.table_name,
+        routineName: name,
+        routineType,
         ...(schema ? { schema } : {}),
       });
-      runQuery(definition, `${trigger.name} Definition`, undefined, true, schema, true);
+      showAlert(t("routines.dropSuccess", { name }), { kind: "info" });
+      if (refreshRoutines) refreshRoutines();
     } catch (e) {
       console.error(e);
-      showAlert(
-        t("sidebar.failGetTriggerDefinition") + String(e),
-        { kind: "error" }
-      );
+      showAlert(t("routines.dropError") + String(e), { kind: "error" });
     }
+  };
+
+  const handleTriggerDoubleClick = (trigger: TriggerInfo, schema?: string) => {
+    objectNavigation?.openTriggerDefinition(trigger, schema);
   };
 
   const handleContextMenu = (
@@ -386,7 +502,31 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     }
   };
 
-  const isMultiDb = isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1;
+  const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
+
+  useEffect(() => {
+    if (!activeTable) return;
+    const container = sidebarBodyRef.current;
+    if (!container) return;
+
+    const selector = buildTableItemSelector(activeTable, activeSchema);
+    // The target database/schema may have just been expanded and its tables
+    // loaded asynchronously, so the item might not be in the DOM on the first
+    // tick. Retry across frames until it appears; without this an upward scroll
+    // to a freshly expanded section silently does nothing.
+    let frame = 0;
+    let rafId = requestAnimationFrame(function tryScroll() {
+      const el = container.querySelector<HTMLElement>(selector);
+      if (el) {
+        el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return;
+      }
+      if (frame++ < 120) {
+        rafId = requestAnimationFrame(tryScroll);
+      }
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [activeTable, activeSchema]);
 
   return (
     <>
@@ -406,13 +546,23 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
             {splitView.connectionIds.map(connId => {
               const name = connectionDataMap[connId]?.connectionName ?? connId;
               const isActive = explorerConnectionId === connId;
+              const accent = accentForConnection(connId);
               return (
                 <button
                   key={connId}
                   onClick={() => setExplorerConnectionId(connId)}
-                  className={isActive
-                    ? 'text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/40'
-                    : 'text-xs px-2 py-0.5 rounded text-muted hover:text-primary hover:bg-surface-secondary'}
+                  className="text-xs px-2 py-0.5 rounded border transition-colors"
+                  style={isActive
+                    ? {
+                        backgroundColor: `${accent}33`,
+                        borderColor: `${accent}66`,
+                        color: accent,
+                      }
+                    : {
+                        backgroundColor: `${accent}14`,
+                        borderColor: 'transparent',
+                        color: `${accent}80`,
+                      }}
                 >
                   {name}
                 </button>
@@ -488,6 +638,18 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                         <Network size={16} className="rotate-90 text-orange-400 shrink-0" />
                         <span>View Schema Diagram</span>
                       </button>
+                      {activeCapabilities?.user_management === true && (
+                        <button
+                          onClick={() => {
+                            openUserManagement();
+                            setIsActionsDropdownOpen(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-secondary hover:bg-surface-secondary hover:text-primary transition-colors text-left whitespace-nowrap"
+                        >
+                          <UsersRound size={16} className="text-emerald-400 shrink-0" />
+                          <span>{t("userManagement.tabTitle")}</span>
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
@@ -526,8 +688,28 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                 >
                   <Network size={16} className="rotate-90" />
                 </button>
+                {activeCapabilities?.user_management === true && (
+                  <button
+                    onClick={openUserManagement}
+                    className="text-muted hover:text-emerald-400 transition-colors p-1 hover:bg-surface-secondary rounded"
+                    title={t("userManagement.tabTitle")}
+                  >
+                    <UsersRound size={16} />
+                  </button>
+                )}
               </>
             ))}
+            {/* User management is server-level, so unlike the per-database
+                actions above it stays available in multi-database mode. */}
+            {isMultiDb && activeCapabilities?.user_management === true && (
+              <button
+                onClick={openUserManagement}
+                className="text-muted hover:text-emerald-400 transition-colors p-1 hover:bg-surface-secondary rounded"
+                title={t("userManagement.tabTitle")}
+              >
+                <UsersRound size={16} />
+              </button>
+            )}
             <button
               onClick={onCollapse}
               className="text-muted hover:text-secondary transition-colors p-1 hover:bg-surface-secondary rounded"
@@ -544,34 +726,35 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
             { id: "structure" as const, icon: Layers, label: t("sidebar.structure") },
             { id: "favorites" as const, icon: Star, label: t("sidebar.favorites"), count: queries.length },
             { id: "history" as const, icon: Clock, label: t("sidebar.queryHistory"), count: historyEntries.length },
-          ]).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setSidebarTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 text-xs font-medium transition-colors relative min-w-0 ${
-                sidebarTab === tab.id
-                  ? "text-primary"
-                  : "text-muted hover:text-secondary"
-              }`}
-              title={`${tab.label}${tab.count !== undefined && tab.count > 0 ? ` (${tab.count})` : ""}`}
-            >
-              <tab.icon size={14} className="shrink-0" />
-              {sidebarWidth >= 200 && (
-                <span className="truncate">{tab.label}</span>
-              )}
-              {tab.count !== undefined && tab.count > 0 && (
-                <span className="text-[10px] text-muted shrink-0">
-                  {sidebarWidth >= 200 ? `(${tab.count})` : tab.count}
-                </span>
-              )}
-              {sidebarTab === tab.id && (
-                <div className="absolute bottom-0 left-1 right-1 h-0.5 bg-blue-500 rounded-full" />
-              )}
-            </button>
-          ))}
+            { id: "notebooks" as const, icon: BookOpen, label: t("sidebar.notebooks.tab"), count: notebookCount },
+          ]).map((tab) => {
+            const isActive = sidebarTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setSidebarTab(tab.id)}
+                className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium transition-colors relative min-w-0 ${
+                  isActive ? "flex-1 text-primary" : "shrink-0 text-muted hover:text-secondary"
+                }`}
+                title={`${tab.label}${tab.count !== undefined && tab.count > 0 ? ` (${tab.count})` : ""}`}
+                aria-label={tab.label}
+              >
+                <tab.icon size={14} className="shrink-0" />
+                {isActive && <span className="truncate">{tab.label}</span>}
+                {tab.count !== undefined && tab.count > 0 && (
+                  <span className="shrink-0 rounded-full bg-overlay px-1.5 text-[10px] leading-[1.4] text-muted">
+                    {tab.count}
+                  </span>
+                )}
+                {isActive && (
+                  <div className="absolute bottom-0 left-1 right-1 h-0.5 bg-blue-500 rounded-full" />
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex-1 overflow-y-auto py-2">
+        <div ref={sidebarBodyRef} className="flex-1 overflow-y-auto py-2">
           {/* Favorites tab */}
           {sidebarTab === "favorites" && (<div className="animate-fade-in">{(() => {
             const sorted = [...queries].sort((a, b) => {
@@ -625,7 +808,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                         <div
                           key={q.id}
                           onClick={() => setSelectedFavoriteId(q.id)}
-                          onDoubleClick={() => runQuery(q.sql, q.name, undefined, false, q.database ?? undefined)}
+                          onDoubleClick={() => runQuery(q.sql, q.name, false, q.database ?? undefined)}
                           onContextMenu={(e) =>
                             handleContextMenu(e, "query", q.id, q.name, q)
                           }
@@ -668,13 +851,30 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
               recoveryNotice={historyRecoveryNotice}
               onDismissRecoveryNotice={dismissHistoryRecoveryNotice}
               onDoubleClick={(entry) => {
-                runQuery(entry.sql, undefined, undefined, false, entry.database ?? undefined);
+                runQuery(entry.sql, undefined, false, entry.database ?? undefined);
               }}
               onContextMenu={(e, entry) => {
                 handleContextMenu(e, "history", entry.id, entry.sql, entry as unknown as ContextMenuData);
               }}
               onClearAll={() => setHistoryClearConfirm(true)}
             /></div>
+          )}
+
+          {/* Notebooks tab — saved notebooks for the active connection */}
+          {sidebarTab === "notebooks" && (
+            <NotebooksSection
+              connectionId={activeConnectionId}
+              openNotebookIds={
+                new Set(
+                  tabs
+                    .filter((tb) => tb.notebookId)
+                    .map((tb) => tb.notebookId as string),
+                )
+              }
+              onOpen={handleOpenNotebook}
+              onRename={handleRenameNotebook}
+              onDelete={handleDeleteNotebook}
+            />
           )}
 
           {/* Structure tab */}
@@ -826,7 +1026,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               setPendingSchemaSelection(new Set(selectedSchemas));
                               setIsSchemaFilterOpen(!isSchemaFilterOpen);
                             }}
-                            className={`p-1 rounded transition-colors ${
+                            className={`p-1 rounded transition-colors mr-1.5 ${
                               selectedSchemas.length < schemas.length
                                 ? "text-blue-400 hover:text-blue-300 bg-blue-500/10"
                                 : "text-muted hover:text-secondary hover:bg-surface-secondary"
@@ -939,7 +1139,9 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           onTableClick={(name, schema) => handleTableClick(name, schema)}
                           onTableDoubleClick={(name, schema) => handleOpenTable(name, schema)}
                           onViewClick={handleViewClick}
-                          onViewDoubleClick={(name, schema) => handleOpenView(name, schema)}
+                          onViewDoubleClick={(name, schema, materialized) =>
+                            handleOpenView(name, schema, materialized)
+                          }
                           onRoutineDoubleClick={(routine, schema) => handleRoutineDoubleClick(routine, schema)}
                           onTriggerDoubleClick={(trigger, schema) => handleTriggerDoubleClick(trigger, schema)}
                           onContextMenu={handleContextMenu}
@@ -1003,12 +1205,13 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                             setTriggerEditorModal({ isOpen: true, isNewTrigger: true, schema })
                           }
                           showTriggers={activeCapabilities?.triggers === true}
+                          refreshingMatView={refreshingMatView}
                         />
                       ))}
                     </>
                   )}
                 </div>
-              ) : isMultiDatabaseCapable(activeCapabilities) && selectedDatabases.length > 1 ? (
+              ) : usesMultiDatabaseLayout(activeCapabilities, selectedDatabases) ? (
                 /* Multi-database MySQL layout */
                 <div>
                   {/* Database header: label + manage button */}
@@ -1016,6 +1219,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                     <span className="text-xs font-semibold uppercase text-muted tracking-wider">
                       {t("sidebar.databases")} ({selectedDatabases.length})
                     </span>
+                    <div className="flex items-center gap-1">
                     <div className="relative">
                       <button
                         onClick={async () => {
@@ -1025,6 +1229,9 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                             try {
                               const all = await invoke<string[]>("get_available_databases", { connectionId: activeConnectionId });
                               setAllAvailableDatabases(all);
+                              // A database dropped on the server has no row to
+                              // untick: drop it from the pending set too (#518).
+                              setPendingDbSelection(new Set(reconcileDatabaseSelection(selectedDatabases, all).selection));
                             } catch (e) {
                               console.error("Failed to load available databases:", e);
                             } finally {
@@ -1122,6 +1329,34 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           </div>
                         </>
                       )}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const DB_LIST_REFRESH_COOLDOWN_MS = 1500;
+                        if (
+                          isRefreshingDbList ||
+                          Date.now() - lastDbListRefreshAtRef.current < DB_LIST_REFRESH_COOLDOWN_MS
+                        ) {
+                          return;
+                        }
+                        setIsRefreshingDbList(true);
+                        try {
+                          await refreshDatabaseSelection(activeConnectionId!);
+                        } finally {
+                          lastDbListRefreshAtRef.current = Date.now();
+                          setIsRefreshingDbList(false);
+                        }
+                      }}
+                      disabled={isRefreshingDbList}
+                      className="p-1 rounded transition-colors text-green-400 hover:text-green-300 hover:bg-green-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={t("sidebar.refreshDatabaseList")}
+                    >
+                      {isRefreshingDbList ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={14} />
+                      )}
+                    </button>
                     </div>
                   </div>
 
@@ -1276,7 +1511,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                     isOpen={tablesOpen}
                     onToggle={() => setTablesOpen(!tablesOpen)}
                     actions={
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 mr-2.5">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1308,15 +1543,16 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           <Search size={11} className="absolute left-2 text-muted pointer-events-none" />
                           <input
                             type="text"
+                            data-table-filter
                             value={tableFilter}
                             onChange={(e) => setTableFilter(e.target.value)}
                             placeholder={t("sidebar.filterTables")}
-                            className="w-full bg-surface-secondary text-xs text-secondary placeholder:text-muted rounded pl-6 pr-6 py-1 border border-default focus:outline-none focus:border-blue-500/50"
+                            className="w-full bg-surface-secondary text-xs text-secondary placeholder:text-muted rounded pl-6 pr-10 py-1 border border-default focus:outline-none focus:border-blue-500/50"
                           />
                           {tableFilter && (
                             <button
                               onClick={() => setTableFilter("")}
-                              className="absolute right-1.5 text-muted hover:text-primary"
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-primary p-0.5 rounded hover:bg-surface-secondary"
                             >
                               <X size={11} />
                             </button>
@@ -1325,9 +1561,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       </div>
                     )}
                     {(() => {
-                      const filtered = tableFilter
-                        ? tables.filter((tbl) => tbl.name.toLowerCase().includes(tableFilter.toLowerCase()))
-                        : tables;
+                      const filtered = fuzzyFilter(tables, tableFilter, (tbl) => tbl.name);
                       return filtered.length === 0 ? (
                         <div className="text-center p-2 text-xs text-muted italic">
                           {tableFilter ? t("sidebar.noTablesMatch") : t("sidebar.noTables")}
@@ -1410,7 +1644,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                     isOpen={viewsOpen}
                     onToggle={() => setViewsOpen(!viewsOpen)}
                     actions={
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 mr-2.5">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1464,7 +1698,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       isOpen={triggersOpenFlat}
                       onToggle={() => setTriggersOpenFlat(!triggersOpenFlat)}
                       actions={
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 mr-2.5">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1512,9 +1746,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                         </div>
                       )}
                       {(() => {
-                        const filtered = triggerFilterFlat
-                          ? triggers.filter((tr) => tr.name.toLowerCase().includes(triggerFilterFlat.toLowerCase()))
-                          : triggers;
+                        const filtered = fuzzyFilter(triggers, triggerFilterFlat, (tr) => tr.name);
                         return filtered.length === 0 ? (
                           <div className="text-center p-2 text-xs text-muted italic">
                             {triggerFilterFlat ? t("sidebar.noTriggersMatch") : t("sidebar.noTriggers")}
@@ -1543,7 +1775,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       isOpen={routinesOpen}
                       onToggle={() => setRoutinesOpen(!routinesOpen)}
                       actions={
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 mr-2.5">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1554,6 +1786,18 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           >
                             <RefreshCw size={14} />
                           </button>
+                          {activeCapabilities?.routine_management === true && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleContextMenu(e, "routines-new", "routines-new", t("routines.newRoutine"));
+                              }}
+                              className="p-1 rounded hover:bg-surface-secondary text-muted hover:text-primary transition-colors"
+                              title={t("routines.newRoutine")}
+                            >
+                              <Plus size={14} />
+                            </button>
+                          )}
                         </div>
                       }
                     >
@@ -1566,14 +1810,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           {/* Functions */}
                           {groupedRoutines.functions.length > 0 && (
                             <div className="mb-2">
-                              <button
-                                onClick={() => setFunctionsOpen(!functionsOpen)}
-                                className="flex items-center gap-1 px-2 py-1 w-full text-left text-xs font-semibold text-muted uppercase tracking-wider hover:text-secondary transition-colors"
-                              >
-                                {functionsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                <span>{t("sidebar.functions")}</span>
-                                <span className="ml-auto text-[10px] opacity-50">{groupedRoutines.functions.length}</span>
-                              </button>
+                              <SidebarRoutineGroupHeader
+                                label={t("sidebar.functions")}
+                                count={groupedRoutines.functions.length}
+                                isOpen={functionsOpen}
+                                onToggle={() => setFunctionsOpen(!functionsOpen)}
+                              />
                               {functionsOpen && groupedRoutines.functions.map((routine) => (
                                 <SidebarRoutineItem
                                   key={routine.name}
@@ -1589,14 +1831,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                           {/* Procedures */}
                           {groupedRoutines.procedures.length > 0 && (
                             <div>
-                              <button
-                                onClick={() => setProceduresOpen(!proceduresOpen)}
-                                className="flex items-center gap-1 px-2 py-1 w-full text-left text-xs font-semibold text-muted uppercase tracking-wider hover:text-secondary transition-colors"
-                              >
-                                {proceduresOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                <span>{t("sidebar.procedures")}</span>
-                                <span className="ml-auto text-[10px] opacity-50">{groupedRoutines.procedures.length}</span>
-                              </button>
+                              <SidebarRoutineGroupHeader
+                                label={t("sidebar.procedures")}
+                                count={groupedRoutines.procedures.length}
+                                isOpen={proceduresOpen}
+                                onToggle={() => setProceduresOpen(!proceduresOpen)}
+                              />
                               {proceduresOpen && groupedRoutines.procedures.map((routine) => (
                                 <SidebarRoutineItem
                                   key={routine.name}
@@ -1636,30 +1876,35 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       label: t("sidebar.showData"),
                       icon: PlaySquare,
                       action: () => {
-                        const quotedTable = quoteTableRef(contextMenu.id, activeDriver, ctxSchema);
-                        runQuery(`SELECT * FROM ${quotedTable}`, undefined, contextMenu.id, false, ctxSchema);
+                        objectNavigation?.open(contextMenu.id, ctxSchema);
                       },
                     },
                     {
                       label: t("sidebar.newConsole"),
                       icon: FileCode,
                       action: () => {
-                        const spec = newConsoleForTable(contextMenu.id, activeDriver, ctxSchema);
-                        runQuery(spec.sql, spec.title, undefined, true, spec.schema);
+                        objectNavigation?.newConsole(contextMenu.id, ctxSchema);
                       },
                     },
                     {
                       label: t("sidebar.countRows"),
                       icon: Hash,
                       action: () => {
-                        const quotedTable = quoteTableRef(contextMenu.id, activeDriver, ctxSchema);
-                        runQuery(`SELECT COUNT(*) as count FROM ${quotedTable}`, undefined, undefined, false, ctxSchema);
+                        objectNavigation?.count(contextMenu.id, ctxSchema);
                       },
                     },
                     {
                       label: t("sidebar.viewSchema"),
                       icon: FileText,
-                      action: () => setSchemaModal({ tableName: contextMenu.id, schema: ctxSchema }),
+                      disabled: !activeConnectionId,
+                      action: () => {
+                        if (!activeConnectionId) return;
+                        setSchemaModal({
+                          connectionId: activeConnectionId,
+                          tableName: contextMenu.id,
+                          schema: ctxSchema ?? activeSchema ?? undefined,
+                        });
+                      },
                     },
                     activeCapabilities?.no_connection_required !== true ? {
                       label: t("sidebar.viewERDiagram"),
@@ -1681,7 +1926,15 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                     supportsManageTables(activeCapabilities) ? {
                       label: t("sidebar.generateSQL"),
                       icon: FileCode,
-                      action: () => setGenerateSQLModal(contextMenu.id),
+                      disabled: !activeConnectionId,
+                      action: () => {
+                        if (!activeConnectionId) return;
+                        setGenerateSQLModal({
+                          connectionId: activeConnectionId,
+                          tableName: contextMenu.id,
+                          schema: ctxSchema ?? activeSchema ?? undefined,
+                        });
+                      },
                     } : null,
                     supportsManageTables(activeCapabilities) ? {
                       label: t("clipboardImport.contextMenuLabel"),
@@ -1840,16 +2093,20 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                 label: t("sidebar.showData"),
                                 icon: PlaySquare,
                                 action: () => {
-                                  const quotedView = quoteTableRef(contextMenu.id, activeDriver, viewCtxSchema);
-                                  runQuery(`SELECT * FROM ${quotedView}`, undefined, contextMenu.id);
+                                  objectNavigation?.open(
+                                    contextMenu.id,
+                                    viewCtxSchema,
+                                  );
                                 },
                               },
                               {
                                 label: t("sidebar.countRows"),
                                 icon: Hash,
                                 action: () => {
-                                  const quotedView = quoteTableRef(contextMenu.id, activeDriver, viewCtxSchema);
-                                  runQuery(`SELECT COUNT(*) as count FROM ${quotedView}`);
+                                  objectNavigation?.count(
+                                    contextMenu.id,
+                                    viewCtxSchema,
+                                  );
                                 },
                               },
                               {
@@ -1891,30 +2148,71 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               },
                             ];
                           })()
-                        : contextMenu.type === "routine"
-                          ? [
+                        : contextMenu.type === "materialized_view"
+                        ? (() => {
+                            const mvCtxSchema = contextMenu.data && "schema" in contextMenu.data ? contextMenu.data.schema : undefined;
+                            return [
                               {
-                                label: t("sidebar.viewDefinition"),
+                                label: t("sidebar.showData"),
+                                icon: PlaySquare,
+                                action: () => {
+                                  objectNavigation?.open(
+                                    contextMenu.id,
+                                    mvCtxSchema,
+                                    { materialized: true },
+                                  );
+                                },
+                              },
+                              {
+                                label: t("sidebar.countRows"),
+                                icon: Hash,
+                                action: () => {
+                                  objectNavigation?.count(
+                                    contextMenu.id,
+                                    mvCtxSchema,
+                                  );
+                                },
+                              },
+                              {
+                                label: t("sidebar.refreshMaterializedView"),
+                                icon: RefreshCw,
+                                action: async () => {
+                                  const mvName = contextMenu.id;
+                                  setRefreshingMatView(mvName);
+                                  try {
+                                    await invoke("refresh_materialized_view", {
+                                      connectionId: activeConnectionId,
+                                      viewName: mvName,
+                                      ...(mvCtxSchema ? { schema: mvCtxSchema } : {}),
+                                    });
+                                    showAlert(t("views.refreshSuccess", { view: mvName }), { kind: "info" });
+                                  } catch (e) {
+                                    console.error(e);
+                                    showAlert(t("views.refreshError") + String(e), { kind: "error" });
+                                  } finally {
+                                    setRefreshingMatView(null);
+                                  }
+                                },
+                              },
+                              {
+                                label: t("sidebar.showDefinition"),
                                 icon: FileText,
                                 action: async () => {
                                   try {
-                                    const routineType =
-                                      contextMenu.data && 'routine_type' in contextMenu.data
-                                        ? (contextMenu.data).routine_type
-                                        : "PROCEDURE";
-                                    const definition = await invoke<string>("get_routine_definition", {
+                                    const definition = await invoke<string>("get_materialized_view_definition", {
                                       connectionId: activeConnectionId,
-                                      routineName: contextMenu.id,
-                                      routineType: routineType,
-                                      ...(activeSchema ? { schema: activeSchema } : {}),
+                                      viewName: contextMenu.id,
+                                      ...(mvCtxSchema ? { schema: mvCtxSchema } : {}),
                                     });
-                                    runQuery(definition, `${contextMenu.id} Definition`, undefined, true);
+                                    objectNavigation?.openDefinition(
+                                      definition,
+                                      `${contextMenu.id} Definition`,
+                                      mvCtxSchema,
+                                      true,
+                                    );
                                   } catch (e) {
                                     console.error(e);
-                                    showAlert(
-                                      t("sidebar.failGetRoutineDefinition") + String(e),
-                                      { kind: "error" }
-                                    );
+                                    showAlert(t("views.failGetDefinition") + String(e), { kind: "error" });
                                   }
                                 },
                               },
@@ -1923,7 +2221,97 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                 icon: Copy,
                                 action: () => navigator.clipboard.writeText(contextMenu.id),
                               },
-                            ]
+                            ];
+                          })()
+                        : contextMenu.type === "routine"
+                          ? (() => {
+                              const routineData =
+                                contextMenu.data && 'routine_type' in contextMenu.data
+                                  ? (contextMenu.data as RoutineInfo & { schema?: string })
+                                  : null;
+                              const routineType = routineData?.routine_type ?? "PROCEDURE";
+                              const routineSchema = routineData?.schema ?? activeSchema ?? undefined;
+                              const canManageRoutines =
+                                activeCapabilities?.routine_management === true;
+                              return [
+                                canManageRoutines ? {
+                                  label: t("routines.menuRun"),
+                                  icon: Play,
+                                  action: () => {
+                                    if (routineData) {
+                                      setRunRoutineModal({
+                                        routine: routineData,
+                                        schema: routineSchema,
+                                      });
+                                    }
+                                  },
+                                } : null,
+                                {
+                                  label: t("sidebar.viewDefinition"),
+                                  icon: FileText,
+                                  action: () => {
+                                    objectNavigation?.openRoutineDefinition(
+                                      routineData ?? {
+                                        name: contextMenu.id,
+                                        routine_type: routineType,
+                                      },
+                                      routineSchema,
+                                    );
+                                  },
+                                },
+                                canManageRoutines ? {
+                                  label: t("routines.menuEdit"),
+                                  icon: Edit,
+                                  action: async () => {
+                                    try {
+                                      const script = await invoke<string>("get_routine_edit_script", {
+                                        connectionId: activeConnectionId,
+                                        routineName: contextMenu.id,
+                                        routineType: routineType,
+                                        ...(routineSchema ? { schema: routineSchema } : {}),
+                                      });
+                                      runQuery(script, `${contextMenu.id} Edit`, true, routineSchema);
+                                    } catch (e) {
+                                      console.error(e);
+                                      showAlert(
+                                        t("sidebar.failGetRoutineDefinition") + String(e),
+                                        { kind: "error" }
+                                      );
+                                    }
+                                  },
+                                } : null,
+                                canManageRoutines ? {
+                                  label: t("routines.menuDrop"),
+                                  icon: Trash2,
+                                  danger: true,
+                                  action: () => {
+                                    setRoutineDropConfirm({
+                                      name: contextMenu.id,
+                                      routineType,
+                                      schema: routineSchema,
+                                    });
+                                  },
+                                } : null,
+                                {
+                                  label: t("sidebar.copyName"),
+                                  icon: Copy,
+                                  action: () => navigator.clipboard.writeText(contextMenu.id),
+                                },
+                              ].filter(Boolean) as ContextMenuItem[];
+                            })()
+                          : contextMenu.type === "routines-new"
+                            ? [
+                                {
+                                  label: t("routines.newProcedure"),
+                                  icon: FileCode,
+                                  action: () => handleNewRoutine("PROCEDURE"),
+                                },
+                                {
+                                  label: t("routines.newFunction"),
+                                  icon: FileCode,
+                                  action: () => handleNewRoutine("FUNCTION"),
+                                },
+                              ]
                           : contextMenu.type === "trigger"
                             ? (() => {
                                 const triggerData = contextMenu.data && 'table_name' in contextMenu.data
@@ -1934,22 +2322,13 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                   {
                                     label: t("sidebar.viewTriggerDefinition"),
                                     icon: FileText,
-                                    action: async () => {
-                                      try {
-                                        const definition = await invoke<string>("get_trigger_definition", {
-                                          connectionId: activeConnectionId,
-                                          triggerName: contextMenu.id,
-                                          tableName: triggerData?.table_name ?? "",
-                                          ...(triggerSchema ? { schema: triggerSchema } : {}),
-                                        });
-                                        runQuery(definition, `${contextMenu.id} Definition`, undefined, true, triggerSchema, true);
-                                      } catch (e) {
-                                        console.error(e);
-                                        showAlert(
-                                          t("sidebar.failGetTriggerDefinition") + String(e),
-                                          { kind: "error" }
-                                        );
-                                      }
+                                    disabled: !triggerData,
+                                    action: () => {
+                                      if (!triggerData) return;
+                                      objectNavigation?.openTriggerDefinition(
+                                        triggerData,
+                                        triggerSchema,
+                                      );
                                     },
                                   },
                                   {
@@ -2005,7 +2384,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                   icon: FileCode,
                                   action: () => {
                                     const spec = newConsoleForDatabase(contextMenu.id);
-                                    runQuery(spec.sql, spec.title, undefined, true, spec.schema);
+                                    runQuery(spec.sql, spec.title, true, spec.schema);
                                   },
                                 },
                                 {
@@ -2051,17 +2430,17 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                   {
                                     label: t("sidebar.insertToEditor"),
                                     icon: FileInput,
-                                    action: () => runQuery(historyEntry.sql, undefined, undefined, true, historyEntry.database ?? undefined),
+                                    action: () => runQuery(historyEntry.sql, undefined, true, historyEntry.database ?? undefined),
                                   },
                                   {
                                     label: t("sidebar.runQuery"),
                                     icon: Play,
-                                    action: () => runQuery(historyEntry.sql, undefined, undefined, false, historyEntry.database ?? undefined),
+                                    action: () => runQuery(historyEntry.sql, undefined, false, historyEntry.database ?? undefined),
                                   },
                                   {
                                     label: t("sidebar.openInNewTab"),
                                     icon: Plus,
-                                    action: () => runQuery(historyEntry.sql, undefined, undefined, true, historyEntry.database ?? undefined),
+                                    action: () => runQuery(historyEntry.sql, undefined, true, historyEntry.database ?? undefined),
                                   },
                                   {
                                     label: t("sidebar.addToFavorites"),
@@ -2097,7 +2476,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                                 action: () => {
                                   if (contextMenu.data && "sql" in contextMenu.data) {
                                     const sq = contextMenu.data as SavedQuery;
-                                    runQuery(sq.sql, sq.name, undefined, false, sq.database ?? undefined);
+                                    runQuery(sq.sql, sq.name, false, sq.database ?? undefined);
                                   }
                                 },
                               },
@@ -2126,8 +2505,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
       {schemaModal && (
         <SchemaModal
           isOpen={true}
-          tableName={schemaModal.tableName}
-          schema={schemaModal.schema}
+          target={schemaModal}
           onClose={() => setSchemaModal(null)}
         />
       )}
@@ -2215,7 +2593,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
       {generateSQLModal && (
         <GenerateSQLModal
           isOpen={true}
-          tableName={generateSQLModal}
+          target={generateSQLModal}
           onClose={() => setGenerateSQLModal(null)}
         />
       )}
@@ -2240,6 +2618,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           onClose={() => setImportModal(null)}
           connectionId={activeConnectionId}
           databaseName={importModal.database || activeDatabaseName || "Database"}
+          targetDatabase={importModal.database || activeDatabaseName || undefined}
           filePath={importModal.filePath}
           onSuccess={() => {
             if (refreshTables) refreshTables();
@@ -2314,6 +2693,29 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           clearHistory();
           setHistoryClearConfirm(false);
         }}
+      />
+
+      {/* Run routine with parameters */}
+      {runRoutineModal && activeConnectionId && (
+        <RunRoutineModal
+          isOpen={true}
+          onClose={() => setRunRoutineModal(null)}
+          connectionId={activeConnectionId}
+          routine={runRoutineModal.routine}
+          schema={runRoutineModal.schema}
+          onRun={(sql) => {
+            runQuery(sql, `${t("routines.runTabPrefix")} ${runRoutineModal.routine.name}`, false, runRoutineModal.schema);
+          }}
+        />
+      )}
+
+      {/* Drop routine confirmation */}
+      <ConfirmModal
+        isOpen={routineDropConfirm !== null}
+        onClose={() => setRoutineDropConfirm(null)}
+        title={t("routines.dropConfirmTitle")}
+        message={t("routines.dropConfirmMessage", { name: routineDropConfirm?.name ?? "" })}
+        onConfirm={handleDropRoutine}
       />
     </>
   );

@@ -31,3 +31,7 @@ devdiary
 coverage
 plugins/**/target
 .gitnexus
+.pi/
+.atl/
+.opencode/
+AGENTS.override.md

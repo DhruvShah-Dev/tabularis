@@ -23,6 +23,35 @@ fn escape_identifier(name: &str) -> String {
     name.replace('"', "\"\"")
 }
 
+fn sqlite_column_from_row(row: &sqlx::sqlite::SqliteRow) -> TableColumn {
+    let pk: i32 = row.try_get("pk").unwrap_or(0);
+    let notnull: i32 = row.try_get("notnull").unwrap_or(0);
+    let dflt_value: Option<String> = row.try_get("dflt_value").ok();
+    let hidden: i32 = row.try_get("hidden").unwrap_or(0);
+
+    TableColumn {
+        name: row.try_get("name").unwrap_or_default(),
+        data_type: row.try_get("type").unwrap_or_default(),
+        is_pk: pk > 0,
+        is_nullable: notnull == 0,
+        is_auto_increment: false,
+        is_generated: hidden == 2 || hidden == 3,
+        default_value: dflt_value,
+        character_maximum_length: None,
+    }
+}
+
+async fn is_generated_column(
+    params: &ConnectionParams,
+    table: &str,
+    column: &str,
+) -> Result<bool, String> {
+    Ok(get_columns(params, table)
+        .await?
+        .iter()
+        .any(|col| col.name == column && col.is_generated))
+}
+
 pub async fn get_schemas(_params: &ConnectionParams) -> Result<Vec<String>, String> {
     Ok(vec![])
 }
@@ -61,37 +90,14 @@ pub async fn get_columns(
 ) -> Result<Vec<TableColumn>, String> {
     let pool = get_sqlite_pool(params).await?;
 
-    // PRAGMA table_info doesn't explicitly say "AUTO_INCREMENT"
-    // But INTEGER PRIMARY KEY is implicitly so in sqlite.
-    // Also if 'pk' > 0 and type is INTEGER.
-    let query = format!("PRAGMA table_info('{}')", table_name);
+    let query = format!("PRAGMA table_xinfo('{}')", table_name);
 
     let rows = sqlx::query(&query)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(rows
-        .iter()
-        .map(|r| {
-            let pk: i32 = r.try_get("pk").unwrap_or(0);
-            let notnull: i32 = r.try_get("notnull").unwrap_or(0);
-            let dtype: String = r.try_get("type").unwrap_or_default();
-            let dflt_value: Option<String> = r.try_get("dflt_value").ok();
-
-            let _is_auto = pk > 0 && dtype.to_uppercase().contains("INT");
-
-            TableColumn {
-                name: r.try_get("name").unwrap_or_default(),
-                data_type: r.try_get("type").unwrap_or_default(),
-                is_pk: pk > 0,
-                is_nullable: notnull == 0,
-                is_auto_increment: false,
-                default_value: dflt_value,
-                character_maximum_length: None,
-            }
-        })
-        .collect())
+    Ok(rows.iter().map(sqlite_column_from_row).collect())
 }
 
 pub async fn get_routines(_params: &ConnectionParams) -> Result<Vec<RoutineInfo>, String> {
@@ -157,29 +163,13 @@ pub async fn get_all_columns_batch(
     let mut result: HashMap<String, Vec<TableColumn>> = HashMap::new();
 
     for table_name in table_names {
-        let query = format!("PRAGMA table_info('{}')", table_name);
+        let query = format!("PRAGMA table_xinfo('{}')", table_name);
         let rows = sqlx::query(&query)
             .fetch_all(&pool)
             .await
             .map_err(|e| e.to_string())?;
 
-        let columns: Vec<TableColumn> = rows
-            .iter()
-            .map(|r| {
-                let pk: i32 = r.try_get("pk").unwrap_or(0);
-                let notnull: i32 = r.try_get("notnull").unwrap_or(0);
-                let dflt_value: Option<String> = r.try_get("dflt_value").ok();
-                TableColumn {
-                    name: r.try_get("name").unwrap_or_default(),
-                    data_type: r.try_get("type").unwrap_or_default(),
-                    is_pk: pk > 0,
-                    is_nullable: notnull == 0,
-                    is_auto_increment: false, // SQLite doesn't expose this via table_info easily, typically AUTOINCREMENT on INTEGER PRIMARY KEY
-                    default_value: dflt_value,
-                    character_maximum_length: None,
-                }
-            })
-            .collect();
+        let columns: Vec<TableColumn> = rows.iter().map(sqlite_column_from_row).collect();
 
         result.insert(table_name.clone(), columns);
     }
@@ -234,11 +224,29 @@ pub async fn get_indexes(
 ) -> Result<Vec<Index>, String> {
     let pool = get_sqlite_pool(params).await?;
 
+    use std::collections::HashMap;
+
     let list_query = format!("PRAGMA index_list('{}')", table_name);
     let indexes = sqlx::query(&list_query)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
+
+    // Expression columns come back from PRAGMA index_info with a NULL name;
+    // their text lives only in the CREATE INDEX DDL, so fetch it to recover them.
+    let ddl_rows =
+        sqlx::query("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ?1")
+            .bind(table_name)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    let mut index_sql: HashMap<String, String> = HashMap::new();
+    for row in &ddl_rows {
+        let name: String = row.try_get("name").unwrap_or_default();
+        if let Ok(Some(sql)) = row.try_get::<Option<String>, _>("sql") {
+            index_sql.insert(name, sql);
+        }
+    }
 
     let mut result = Vec::new();
 
@@ -253,13 +261,28 @@ pub async fn get_indexes(
             .await
             .map_err(|e| e.to_string())?;
 
+        let parsed_columns = index_sql.get(&name).map(|sql| parse_sqlite_index_columns(sql));
+
         for info in info_rows {
+            let seqno: i32 = info.try_get("seqno").unwrap_or(0);
+            let col_name = info.try_get::<Option<String>, _>("name").ok().flatten();
+            let is_expression = col_name.is_none();
+            let column_name = if is_expression {
+                parsed_columns
+                    .as_ref()
+                    .and_then(|cols| cols.get(seqno as usize))
+                    .cloned()
+                    .unwrap_or_default()
+            } else {
+                col_name.unwrap_or_default()
+            };
             result.push(Index {
                 name: name.clone(),
-                column_name: info.try_get("name").unwrap_or_default(),
+                column_name,
                 is_unique: unique > 0,
                 is_primary: origin == "pk",
-                seq_in_index: info.try_get::<i32, _>("seqno").unwrap_or(0),
+                seq_in_index: seqno,
+                is_expression,
             });
         }
     }
@@ -267,34 +290,148 @@ pub async fn get_indexes(
     Ok(result)
 }
 
+/// Extract top-level column/expression tokens from a `CREATE INDEX` column
+/// list, e.g. `... ON t (a, lower(b))` -> `["a", "lower(b)"]`.
+pub(super) fn parse_sqlite_index_columns(sql: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0i32;
+    let mut quote: Option<char> = None;
+    let mut started = false;
+
+    for ch in sql.chars() {
+        if let Some(q) = quote {
+            if started {
+                current.push(ch);
+            }
+            if ch == q {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '\'' | '"' | '`' => {
+                quote = Some(ch);
+                if started {
+                    current.push(ch);
+                }
+            }
+            '[' => {
+                quote = Some(']');
+                if started {
+                    current.push(ch);
+                }
+            }
+            '(' => {
+                depth += 1;
+                if depth == 1 {
+                    started = true; // column list opens; skip the '(' itself
+                } else {
+                    current.push(ch);
+                }
+            }
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    let t = current.trim();
+                    if !t.is_empty() {
+                        tokens.push(t.to_string());
+                    }
+                    break;
+                }
+                current.push(ch);
+            }
+            ',' if depth == 1 => {
+                let t = current.trim();
+                if !t.is_empty() {
+                    tokens.push(t.to_string());
+                }
+                current.clear();
+            }
+            _ => {
+                if started {
+                    current.push(ch);
+                }
+            }
+        }
+    }
+
+    tokens
+}
+
+fn sqlite_push_pk_val(
+    qb: &mut sqlx::QueryBuilder<sqlx::Sqlite>,
+    val: &serde_json::Value,
+) -> Result<(), String> {
+    match val {
+        serde_json::Value::Number(n) => {
+            if n.is_i64() {
+                qb.push_bind(n.as_i64());
+            } else {
+                qb.push_bind(n.as_f64());
+            }
+        }
+        serde_json::Value::String(s) => {
+            if let Some(n) = parse_unsafe_bigint_string(s) {
+                qb.push_bind(n);
+            } else {
+                qb.push_bind(s.clone());
+            }
+        }
+        serde_json::Value::Bool(b) => {
+            qb.push_bind(*b);
+        }
+        _ => return Err("Unsupported PK type".into()),
+    }
+    Ok(())
+}
+
+fn sqlite_push_pk_where(
+    qb: &mut sqlx::QueryBuilder<sqlx::Sqlite>,
+    pk_map: &HashMap<String, serde_json::Value>,
+) -> Result<(), String> {
+    if pk_map.is_empty() {
+        return Err("pk_map must not be empty".into());
+    }
+    let mut pairs: Vec<(&String, &serde_json::Value)> = pk_map.iter().collect();
+    pairs.sort_by_key(|(k, _)| k.as_str());
+    let mut first = true;
+    for (col, val) in &pairs {
+        if !first {
+            qb.push(" AND ");
+        }
+        // Keyless tables identify rows by all comparable columns, so the map
+        // may legitimately carry NULLs — `= NULL` never matches, use IS NULL.
+        if val.is_null() {
+            qb.push(format!("\"{}\" IS NULL", escape_identifier(col)));
+        } else {
+            qb.push(format!("\"{}\" = ", escape_identifier(col)));
+            sqlite_push_pk_val(qb, val)?;
+        }
+        first = false;
+    }
+    Ok(())
+}
+
 pub async fn save_blob_column_to_file(
     params: &ConnectionParams,
     table: &str,
     col_name: &str,
-    pk_col: &str,
-    pk_val: serde_json::Value,
+    pk_map: &HashMap<String, serde_json::Value>,
     file_path: &str,
 ) -> Result<(), String> {
     let pool = get_sqlite_pool(params).await?;
-
-    let query = format!(
-        "SELECT \"{}\" FROM \"{}\" WHERE \"{}\" = ?",
-        col_name, table, pk_col
-    );
-
-    let row = match pk_val {
-        serde_json::Value::Number(n) => {
-            if n.is_i64() {
-                sqlx::query(&query).bind(n.as_i64()).fetch_one(&pool).await
-            } else {
-                sqlx::query(&query).bind(n.as_f64()).fetch_one(&pool).await
-            }
-        }
-        serde_json::Value::String(s) => sqlx::query(&query).bind(s).fetch_one(&pool).await,
-        _ => return Err("Unsupported PK type".into()),
-    }
-    .map_err(|e| e.to_string())?;
-
+    let mut qb = sqlx::QueryBuilder::<sqlx::Sqlite>::new(format!(
+        "SELECT \"{}\" FROM \"{}\" WHERE ",
+        escape_identifier(col_name),
+        escape_identifier(table)
+    ));
+    sqlite_push_pk_where(&mut qb, pk_map)?;
+    let row = qb
+        .build()
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
     let bytes: Vec<u8> = row.try_get(0).map_err(|e| e.to_string())?;
     std::fs::write(file_path, bytes).map_err(|e| e.to_string())
 }
@@ -303,29 +440,20 @@ pub async fn fetch_blob_column_as_data_url(
     params: &ConnectionParams,
     table: &str,
     col_name: &str,
-    pk_col: &str,
-    pk_val: serde_json::Value,
+    pk_map: &HashMap<String, serde_json::Value>,
 ) -> Result<String, String> {
     let pool = get_sqlite_pool(params).await?;
-
-    let query = format!(
-        "SELECT \"{}\" FROM \"{}\" WHERE \"{}\" = ?",
-        col_name, table, pk_col
-    );
-
-    let row = match pk_val {
-        serde_json::Value::Number(n) => {
-            if n.is_i64() {
-                sqlx::query(&query).bind(n.as_i64()).fetch_one(&pool).await
-            } else {
-                sqlx::query(&query).bind(n.as_f64()).fetch_one(&pool).await
-            }
-        }
-        serde_json::Value::String(s) => sqlx::query(&query).bind(s).fetch_one(&pool).await,
-        _ => return Err("Unsupported PK type".into()),
-    }
-    .map_err(|e| e.to_string())?;
-
+    let mut qb = sqlx::QueryBuilder::<sqlx::Sqlite>::new(format!(
+        "SELECT \"{}\" FROM \"{}\" WHERE ",
+        escape_identifier(col_name),
+        escape_identifier(table)
+    ));
+    sqlite_push_pk_where(&mut qb, pk_map)?;
+    let row = qb
+        .build()
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
     let bytes: Vec<u8> = row.try_get(0).map_err(|e| e.to_string())?;
     Ok(crate::drivers::common::encode_blob_full(&bytes))
 }
@@ -333,40 +461,41 @@ pub async fn fetch_blob_column_as_data_url(
 pub async fn delete_record(
     params: &ConnectionParams,
     table: &str,
-    pk_col: &str,
-    pk_val: serde_json::Value,
+    pk_map: &HashMap<String, serde_json::Value>,
 ) -> Result<u64, String> {
     let pool = get_sqlite_pool(params).await?;
-
-    let query = format!("DELETE FROM \"{}\" WHERE \"{}\" = ?", table, pk_col);
-
-    let result = match pk_val {
-        serde_json::Value::Number(n) => {
-            if n.is_i64() {
-                sqlx::query(&query).bind(n.as_i64()).execute(&pool).await
-            } else {
-                sqlx::query(&query).bind(n.as_f64()).execute(&pool).await
-            }
-        }
-        serde_json::Value::String(s) => sqlx::query(&query).bind(s).execute(&pool).await,
-        _ => return Err("Unsupported PK type".into()),
-    };
-
-    result.map(|r| r.rows_affected()).map_err(|e| e.to_string())
+    let mut qb = sqlx::QueryBuilder::<sqlx::Sqlite>::new(format!(
+        "DELETE FROM \"{}\" WHERE ",
+        escape_identifier(table)
+    ));
+    sqlite_push_pk_where(&mut qb, pk_map)?;
+    let result = qb
+        .build()
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(result.rows_affected())
 }
 
 pub async fn update_record(
     params: &ConnectionParams,
     table: &str,
-    pk_col: &str,
-    pk_val: serde_json::Value,
+    pk_map: &HashMap<String, serde_json::Value>,
     col_name: &str,
     new_val: serde_json::Value,
     max_blob_size: u64,
 ) -> Result<u64, String> {
+    if is_generated_column(params, table, col_name).await? {
+        return Err(format!("Cannot update generated column: {col_name}"));
+    }
+
     let pool = get_sqlite_pool(params).await?;
 
-    let mut qb = sqlx::QueryBuilder::new(format!("UPDATE \"{}\" SET \"{}\" = ", table, col_name));
+    let mut qb = sqlx::QueryBuilder::new(format!(
+        "UPDATE \"{}\" SET \"{}\" = ",
+        escape_identifier(table),
+        escape_identifier(col_name)
+    ));
 
     match new_val {
         serde_json::Value::Number(n) => {
@@ -377,18 +506,13 @@ pub async fn update_record(
             }
         }
         serde_json::Value::String(s) => {
-            // Check for special sentinel value to use DEFAULT
             if s == "__USE_DEFAULT__" {
                 qb.push("DEFAULT");
             } else if let Some(bytes) =
                 crate::drivers::common::decode_blob_wire_format(&s, max_blob_size)
             {
-                // Blob wire format: decode to raw bytes so the DB stores binary data,
-                // not the internal wire format string.
                 qb.push_bind(bytes);
             } else if let Some(n) = parse_unsafe_bigint_string(&s) {
-                // Bigints outside JS safe range come back from the UI as strings
-                // (see drivers::common::i64_to_json). Bind them as native i64.
                 qb.push_bind(n);
             } else {
                 qb.push_bind(s);
@@ -403,28 +527,10 @@ pub async fn update_record(
         _ => return Err("Unsupported Value type".into()),
     }
 
-    qb.push(format!(" WHERE \"{}\" = ", pk_col));
+    qb.push(" WHERE ");
+    sqlite_push_pk_where(&mut qb, pk_map)?;
 
-    match pk_val {
-        serde_json::Value::Number(n) => {
-            if n.is_i64() {
-                qb.push_bind(n.as_i64());
-            } else {
-                qb.push_bind(n.as_f64());
-            }
-        }
-        serde_json::Value::String(s) => {
-            if let Some(n) = parse_unsafe_bigint_string(&s) {
-                qb.push_bind(n);
-            } else {
-                qb.push_bind(s);
-            }
-        }
-        _ => return Err("Unsupported PK type".into()),
-    }
-
-    let query = qb.build();
-    let result = query.execute(&pool).await.map_err(|e| e.to_string())?;
+    let result = qb.build().execute(&pool).await.map_err(|e| e.to_string())?;
     Ok(result.rows_affected())
 }
 
@@ -435,11 +541,20 @@ pub async fn insert_record(
     max_blob_size: u64,
 ) -> Result<u64, String> {
     let pool = get_sqlite_pool(params).await?;
+    let generated_columns: std::collections::HashSet<String> = get_columns(params, table)
+        .await?
+        .into_iter()
+        .filter(|col| col.is_generated)
+        .map(|col| col.name)
+        .collect();
 
     let mut cols = Vec::new();
     let mut vals = Vec::new();
 
     for (k, v) in data {
+        if generated_columns.contains(&k) {
+            return Err(format!("Cannot insert into generated column: {k}"));
+        }
         cols.push(format!("\"{}\"", k));
         vals.push(v);
     }
@@ -529,6 +644,7 @@ async fn exec_on_sqlite_conn(
             affected_rows: exec_result.rows_affected(),
             truncated: false,
             pagination: None,
+            additional_results: None,
         });
     }
 
@@ -604,6 +720,7 @@ async fn exec_on_sqlite_conn(
         affected_rows: 0,
         truncated,
         pagination,
+        additional_results: None,
     })
 }
 
@@ -627,16 +744,19 @@ pub async fn execute_batch(
     queries: &[String],
     limit: Option<u32>,
     page: u32,
+    on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
 ) -> Result<Vec<crate::models::BatchStatementResult>, String> {
     let pool = get_sqlite_pool(params).await?;
     let mut conn = pool.acquire().await.map_err(|e| e.to_string())?;
     let mut results = Vec::with_capacity(queries.len());
-    for q in queries {
+    for (idx, q) in queries.iter().enumerate() {
         let start = std::time::Instant::now();
         let outcome = exec_on_sqlite_conn(&mut *conn, q, limit, page).await;
-        results.push(crate::models::BatchStatementResult::from_outcome(
-            start, outcome,
-        ));
+        let res = crate::models::BatchStatementResult::from_outcome(start, outcome);
+        if let Some(cb) = on_progress {
+            cb(idx, &res);
+        }
+        results.push(res);
     }
     Ok(results)
 }
@@ -730,30 +850,14 @@ pub async fn get_view_columns(
 ) -> Result<Vec<TableColumn>, String> {
     let pool = get_sqlite_pool(params).await?;
 
-    let query = format!("PRAGMA table_info('{}')", view_name);
+    let query = format!("PRAGMA table_xinfo('{}')", view_name);
 
     let rows = sqlx::query(&query)
         .fetch_all(&pool)
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(rows
-        .iter()
-        .map(|r| {
-            let pk: i32 = r.try_get("pk").unwrap_or(0);
-            let notnull: i32 = r.try_get("notnull").unwrap_or(0);
-            let dflt_value: Option<String> = r.try_get("dflt_value").ok();
-            TableColumn {
-                name: r.try_get("name").unwrap_or_default(),
-                data_type: r.try_get("type").unwrap_or_default(),
-                is_pk: pk > 0,
-                is_nullable: notnull == 0,
-                is_auto_increment: false,
-                default_value: dflt_value,
-                character_maximum_length: None,
-            }
-        })
-        .collect())
+    Ok(rows.iter().map(sqlite_column_from_row).collect())
 }
 
 pub async fn get_triggers(params: &ConnectionParams) -> Result<Vec<TriggerInfo>, String> {
@@ -874,12 +978,17 @@ impl SqliteDriver {
                 default_port: None,
                 capabilities: DriverCapabilities {
                     schemas: false,
+                    single_database: false,
                     views: true,
+                    materialized_views: false,
                     routines: false,
+                    routine_management: false,
                     file_based: true,
                     folder_based: false,
                     connection_string: false,
                     connection_string_example: String::new(),
+                    connection_uri: false,
+                    connection_uri_schemes: Vec::new(),
                     identifier_quote: "\"".into(),
                     alter_primary_key: true,
                     auto_increment_keyword: "AUTOINCREMENT".into(),
@@ -889,16 +998,22 @@ impl SqliteDriver {
                     create_foreign_keys: false,
                     no_connection_required: false,
                     manage_tables: true,
+                    explain: true,
                     readonly: false,
                     triggers: true,
+                    supports_ssl: false,
+                    user_management: false,
                     sql_dialect: SqlDialect::Sqlite,
                 },
                 is_builtin: true,
+                engine: Some("sqlite".to_string()),
+                paradigms: vec!["sql".to_string()],
                 default_username: String::new(),
                 color: "#06b6d4".to_string(),
                 icon: "sqlite".to_string(),
                 settings: vec![],
                 ui_extensions: None,
+                type_mappings: std::collections::HashMap::new(),
             },
         }
     }
@@ -1143,8 +1258,9 @@ impl DatabaseDriver for SqliteDriver {
         limit: Option<u32>,
         page: u32,
         _schema: Option<&str>,
+        on_progress: Option<&crate::drivers::driver_trait::BatchProgressFn>,
     ) -> Result<Vec<crate::models::BatchStatementResult>, String> {
-        execute_batch(params, queries, limit, page).await
+        execute_batch(params, queries, limit, page, on_progress).await
     }
 
     async fn explain_query(
@@ -1153,7 +1269,7 @@ impl DatabaseDriver for SqliteDriver {
         query: &str,
         _analyze: bool,
         _schema: Option<&str>,
-    ) -> Result<crate::models::ExplainPlan, String> {
+    ) -> Result<crate::models::ExplainQueryOutput, String> {
         explain_query(params, query).await
     }
 
@@ -1172,34 +1288,23 @@ impl DatabaseDriver for SqliteDriver {
         &self,
         params: &crate::models::ConnectionParams,
         table: &str,
-        pk_col: &str,
-        pk_val: serde_json::Value,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
         col_name: &str,
         new_val: serde_json::Value,
         _schema: Option<&str>,
         max_blob_size: u64,
     ) -> Result<u64, String> {
-        update_record(
-            params,
-            table,
-            pk_col,
-            pk_val,
-            col_name,
-            new_val,
-            max_blob_size,
-        )
-        .await
+        update_record(params, table, pk_map, col_name, new_val, max_blob_size).await
     }
 
     async fn delete_record(
         &self,
         params: &crate::models::ConnectionParams,
         table: &str,
-        pk_col: &str,
-        pk_val: serde_json::Value,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
         _schema: Option<&str>,
     ) -> Result<u64, String> {
-        delete_record(params, table, pk_col, pk_val).await
+        delete_record(params, table, pk_map).await
     }
 
     async fn save_blob_to_file(
@@ -1207,12 +1312,11 @@ impl DatabaseDriver for SqliteDriver {
         params: &crate::models::ConnectionParams,
         table: &str,
         col_name: &str,
-        pk_col: &str,
-        pk_val: serde_json::Value,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
         _schema: Option<&str>,
         file_path: &str,
     ) -> Result<(), String> {
-        save_blob_column_to_file(params, table, col_name, pk_col, pk_val, file_path).await
+        save_blob_column_to_file(params, table, col_name, pk_map, file_path).await
     }
 
     async fn fetch_blob_as_data_url(
@@ -1220,11 +1324,10 @@ impl DatabaseDriver for SqliteDriver {
         params: &crate::models::ConnectionParams,
         table: &str,
         col_name: &str,
-        pk_col: &str,
-        pk_val: serde_json::Value,
+        pk_map: &std::collections::HashMap<String, serde_json::Value>,
         _schema: Option<&str>,
     ) -> Result<String, String> {
-        fetch_blob_column_as_data_url(params, table, col_name, pk_col, pk_val).await
+        fetch_blob_column_as_data_url(params, table, col_name, pk_map).await
     }
 
     async fn get_create_table_sql(
@@ -1328,6 +1431,7 @@ impl DatabaseDriver for SqliteDriver {
 
     async fn get_create_foreign_key_sql(
         &self,
+        _params: &crate::models::ConnectionParams,
         _table: &str,
         _fk_name: &str,
         _column: &str,

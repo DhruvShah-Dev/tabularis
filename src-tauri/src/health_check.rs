@@ -32,6 +32,28 @@ pub async fn unregister_connection(connection_id: &str) {
     ACTIVE_CONNECTIONS.write().await.remove(connection_id);
 }
 
+/// Event broadcast to every window whenever the set of active (open)
+/// connections changes. Payload is the full list of active connection ids so
+/// each window can reconcile its cross-window view in one shot.
+pub const ACTIVE_CONNECTIONS_CHANGED_EVENT: &str = "connections:active-changed";
+
+/// Snapshot the currently active (open) connection ids.
+pub async fn active_connections() -> Vec<String> {
+    ACTIVE_CONNECTIONS.read().await.iter().cloned().collect()
+}
+
+/// Broadcast the current active-connection set to all windows.
+pub async fn emit_active_changed<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let ids = active_connections().await;
+    if let Err(e) = app.emit(ACTIVE_CONNECTIONS_CHANGED_EVENT, ids) {
+        log::error!(
+            "Health check: failed to emit {} event: {}",
+            ACTIVE_CONNECTIONS_CHANGED_EVENT,
+            e
+        );
+    }
+}
+
 /// Start the periodic ping loop. If a loop is already running it is stopped first.
 pub async fn start_ping_loop(app: tauri::AppHandle, interval_secs: u64) {
     // Stop any existing loop
@@ -142,6 +164,8 @@ async fn ping_single_connection(app: &tauri::AppHandle, connection_id: &str) -> 
 
     let expanded_params =
         crate::commands::expand_ssh_connection_params(app, &saved_conn.params).await?;
+    let expanded_params =
+        crate::commands::expand_k8s_connection_params(app, &expanded_params).await?;
     let params =
         crate::commands::resolve_connection_params_with_id(&expanded_params, connection_id)?;
 
@@ -171,9 +195,10 @@ async fn handle_connection_failure(app: &tauri::AppHandle, connection_id: &str, 
         if let Ok(expanded) =
             crate::commands::expand_ssh_connection_params(app, &saved_conn.params).await
         {
-            if let Ok(params) =
-                crate::commands::resolve_connection_params_with_id(&expanded, connection_id)
-            {
+            let expanded = crate::commands::expand_k8s_connection_params(app, &expanded).await;
+            if let Ok(params) = expanded.and_then(|params| {
+                crate::commands::resolve_connection_params_with_id(&params, connection_id)
+            }) {
                 crate::pool_manager::close_pool_with_id(&params, Some(connection_id)).await;
             }
         }
@@ -190,4 +215,7 @@ async fn handle_connection_failure(app: &tauri::AppHandle, connection_id: &str, 
             e
         );
     }
+
+    // Broadcast the updated active-connection set so every window reconciles.
+    emit_active_changed(app).await;
 }

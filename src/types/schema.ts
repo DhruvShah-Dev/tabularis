@@ -4,6 +4,7 @@ export interface TableColumn {
   is_pk: boolean;
   is_nullable: boolean;
   is_auto_increment: boolean;
+  is_generated?: boolean;
   character_maximum_length?: number;
 }
 
@@ -19,4 +20,6 @@ export interface Index {
   column_name: string;
   is_unique: boolean;
   is_primary: boolean;
+  seq_in_index?: number;
+  is_expression?: boolean;
 }
