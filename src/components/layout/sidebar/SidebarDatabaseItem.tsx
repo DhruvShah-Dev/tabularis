@@ -261,7 +261,7 @@ export const SidebarDatabaseItem = ({
                   <div className="px-2 py-1">
                     <div className="relative flex items-center">
                       <Search size={11} className="absolute left-2 text-muted pointer-events-none" />
-                      <input
+                      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                         type="text"
                         data-table-filter
                         value={tableFilter}
@@ -382,7 +382,7 @@ export const SidebarDatabaseItem = ({
                     <div className="px-2 py-1">
                       <div className="relative flex items-center">
                         <Search size={11} className="absolute left-2 text-muted pointer-events-none" />
-                        <input
+                        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                           type="text"
                           value={triggerFilter}
                           onChange={(e) => setTriggerFilter(e.target.value)}

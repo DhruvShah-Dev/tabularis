@@ -903,7 +903,7 @@ function EditForm({
     <div className="space-y-3">
       <div>
         <label className={LabelClass}>{t("k8sConnections.name")}</label>
-        <input
+        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
           value={name}
           onChange={(event) => setName(event.target.value)}
           className={InputClass}
@@ -999,7 +999,7 @@ function EditForm({
 
       <div>
         <label className={LabelClass}>{t("k8sConnections.port")}</label>
-        <input
+        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
           type="number"
           value={port ?? ""}
           onChange={(event) =>

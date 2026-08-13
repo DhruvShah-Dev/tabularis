@@ -407,7 +407,7 @@ const VisualQueryBuilderContent = () => {
                       <option value="IN">IN</option>
                     </select>
                     <div className="flex-1 relative">
-                      <input
+                      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                         type="text"
                         value={condition.value}
                         onChange={(e) => setWhereConditions(whereConditions.map(c => c.id === condition.id ? { ...c, value: e.target.value } : c))}
@@ -526,7 +526,7 @@ const VisualQueryBuilderContent = () => {
                 <Hash size={16} className="text-orange-400" />
                 LIMIT
               </div>
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                 type="number"
                 value={limit}
                 onChange={(e) => setLimit(e.target.value)}

@@ -133,7 +133,7 @@ export function StackedResultItem({
 
         {/* Editable label */}
         {isEditing ? (
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             ref={inputRef}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}

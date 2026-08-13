@@ -74,7 +74,7 @@ export function FontPicker({
           )}
         </div>
         <div className="space-y-2">
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             id={inputId}
             type="text"
             placeholder={t("settings.fonts.customPlaceholder")}

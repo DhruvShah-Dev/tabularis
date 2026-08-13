@@ -229,7 +229,7 @@ export const ModifyColumnModal = ({
             <label className="block text-xs uppercase font-bold text-muted mb-1">
               {t("modifyColumn.name")}
             </label>
-            <input
+            <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
               value={form.name}
               onChange={(e) => { setForm({ ...form, name: e.target.value }); setError(""); }}
               className={`w-full bg-base border rounded-lg px-3 py-2 text-primary text-sm focus:border-blue-500 focus:outline-none font-mono ${!form.name.trim() && error ? 'border-red-500' : 'border-strong'}`}
@@ -274,7 +274,7 @@ export const ModifyColumnModal = ({
               <label className="block text-xs uppercase font-bold text-muted mb-1">
                 {t("modifyColumn.length")}
               </label>
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                 value={form.length}
                 onChange={(e) => setForm({ ...form, length: e.target.value })}
                 disabled={
@@ -295,7 +295,7 @@ export const ModifyColumnModal = ({
               <label className="block text-xs uppercase font-bold text-muted mb-1">
                 {t("modifyColumn.default")}
               </label>
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                 value={form.isAutoInc ? "" : form.defaultValue}
                 onChange={(e) =>
                   setForm({ ...form, defaultValue: e.target.value })
