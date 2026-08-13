@@ -31,9 +31,10 @@ export function getQuoteChar(
  */
 /** True when identifiers in generated SQL fragments should be double-quoted (PostgreSQL). */
 export function shouldQuoteIdentifiers(
-  driver: string | null | undefined,
+  driver: string | PluginManifest | null | undefined,
 ): boolean {
-  return driver === "postgres";
+  const driverStr = typeof driver === "object" ? driver?.id : driver;
+  return driverStr === "postgres" || driverStr === "postgresql";
 }
 
 // PostgreSQL folds unquoted identifiers to lowercase and only needs quotes for
@@ -50,7 +51,7 @@ const PG_RESERVED = new Set([
  */
 export function formatSqlIdentifier(
   identifier: string,
-  driver: string | null | undefined,
+  driver: string | PluginManifest | null | undefined,
 ): string {
   if (!shouldQuoteIdentifiers(driver)) return identifier;
   if (PG_SAFE_IDENTIFIER.test(identifier) && !PG_RESERVED.has(identifier)) {
@@ -61,7 +62,7 @@ export function formatSqlIdentifier(
 
 export function quoteIdentifier(
   identifier: string,
-  driver: string | null | undefined,
+  driver: string | PluginManifest | null | undefined,
 ): string {
   const quote = getQuoteChar(driver);
   const escaped =
@@ -78,7 +79,7 @@ export function quoteIdentifier(
  */
 export function quoteTableRef(
   table: string,
-  driver: string | null | undefined,
+  driver: string | PluginManifest | null | undefined,
   schema?: string | null,
 ): string {
   if (schema) {
