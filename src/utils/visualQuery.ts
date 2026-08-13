@@ -68,7 +68,6 @@ function formatTableRef(
   tableName: string,
   driver: string | null | undefined,
 ): string {
-  if (!driver) return tableName;
   return tableName
     .split('.')
     .map((part) => formatSqlIdentifier(part, driver))
@@ -90,6 +89,48 @@ function formatGeneratedColumnRef(
   const [alias, ...nameParts] = column.split('.');
   if (nameParts.length === 0) return formatSqlIdentifier(column, driver);
   return `${alias}.${formatSqlIdentifier(nameParts.join('.'), driver)}`;
+}
+
+function formatAggregateArgument(
+  argument: string,
+  driver: string | null | undefined,
+): string {
+  const trimmed = argument.trim();
+  if (
+    trimmed === '*' ||
+    trimmed.includes('"') ||
+    trimmed.includes('`') ||
+    trimmed.includes('/') ||
+    /[\s(),+\-*]/.test(trimmed)
+  ) {
+    return argument;
+  }
+
+  return argument.replace(trimmed, formatGeneratedColumnRef(trimmed, driver));
+}
+
+function formatHavingColumnRef(
+  column: string,
+  driver: string | null | undefined,
+): string {
+  const aggregateMatch = column.match(/^([A-Z_][A-Z0-9_]*)\((.*)\)$/i);
+  if (!aggregateMatch) return formatGeneratedColumnRef(column, driver);
+
+  const [, aggregateFunction, argument] = aggregateMatch;
+  const distinctMatch = argument.match(/^(\s*DISTINCT\s+)(.+)$/i);
+  if (distinctMatch) {
+    const [, distinctPrefix, distinctArgument] = distinctMatch;
+    return `${aggregateFunction}(${distinctPrefix}${formatAggregateArgument(distinctArgument, driver)})`;
+  }
+
+  return `${aggregateFunction}(${formatAggregateArgument(argument, driver)})`;
+}
+
+function formatAlias(
+  alias: string,
+  driver: string | null | undefined,
+): string {
+  return formatSqlIdentifier(alias, driver);
 }
 
 /**
@@ -157,7 +198,7 @@ export function collectSelectedColumns(
             }
 
             if (agg?.alias) {
-              colExpr += ` AS ${agg.alias}`;
+              colExpr += ` AS ${formatAlias(agg.alias, driver)}`;
             }
 
             if (agg?.order !== undefined) {
@@ -167,7 +208,7 @@ export function collectSelectedColumns(
             nonAggregatedCols.push(columnRef);
 
             if (colAlias?.alias) {
-              colExpr += ` AS ${colAlias.alias}`;
+              colExpr += ` AS ${formatAlias(colAlias.alias, driver)}`;
             }
 
             if (colAlias?.order !== undefined) {
@@ -326,13 +367,16 @@ export function generateGroupByClause(
 /**
  * Generates HAVING clause for aggregate conditions
  */
-export function generateHavingClause(conditions: WhereCondition[]): string {
+export function generateHavingClause(
+  conditions: WhereCondition[],
+  driver?: string | null,
+): string {
   const aggregateConditions = conditions.filter((c) => c.isAggregate && c.column && c.value);
 
   if (aggregateConditions.length === 0) return '';
 
   const clauses = aggregateConditions.map((c, idx) => {
-    const condition = `${c.column} ${c.operator} ${c.value}`;
+    const condition = `${formatHavingColumnRef(c.column, driver)} ${c.operator} ${c.value}`;
     return idx === 0 ? condition : `${c.logicalOperator} ${condition}`;
   });
 
@@ -384,7 +428,7 @@ export function generateVisualQuerySQL(
   sql += generateFromClause(nodes, edges, aliases, driver);
   sql += generateWhereClause(whereConditions, driver);
   sql += generateGroupByClause(hasAggregation, nonAggregatedCols, groupBy, driver);
-  sql += generateHavingClause(whereConditions);
+  sql += generateHavingClause(whereConditions, driver);
   sql += generateOrderByClause(orderBy, driver);
   sql += generateLimitClause(limit);
 
