@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Info, AlertCircle, X, Copy, Check } from "lucide-react";
 import { Modal } from "../ui/Modal";
@@ -24,9 +24,10 @@ export const AlertModal = ({ isOpen, onClose, title, message, kind }: AlertModal
   const { Icon, bgClass, textClass } = iconConfig[kind];
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (!isOpen) setCopied(false);
-  }, [isOpen]);
+  const handleClose = () => {
+    setCopied(false);
+    onClose();
+  };
 
   const handleCopy = async () => {
     await copyTextToClipboard(message);
@@ -35,7 +36,7 @@ export const AlertModal = ({ isOpen, onClose, title, message, kind }: AlertModal
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose}>
+    <Modal isOpen={isOpen} onClose={handleClose}>
       <div className="bg-elevated border border-strong rounded-xl shadow-2xl w-[480px] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-default bg-base">
@@ -45,7 +46,7 @@ export const AlertModal = ({ isOpen, onClose, title, message, kind }: AlertModal
             </div>
             <h2 className="text-lg font-semibold text-primary">{title}</h2>
           </div>
-          <button onClick={onClose} className="text-secondary hover:text-primary transition-colors">
+          <button onClick={handleClose} className="text-secondary hover:text-primary transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -65,7 +66,7 @@ export const AlertModal = ({ isOpen, onClose, title, message, kind }: AlertModal
             {copied ? t("common.copied") : t("common.copy")}
           </button>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
           >
             {t("common.ok", "OK")}
