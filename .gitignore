@@ -34,3 +34,4 @@ plugins/**/target
 .pi/
 .atl/
 .opencode/
+AGENTS.override.md
