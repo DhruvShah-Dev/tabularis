@@ -1,6 +1,6 @@
 # PostgreSQL Plugin Migration — Phase Docs Index
 
-**Master Plan:** [postgres-plugin-migration-alt.md](../postgres-plugin-migration-alt.md)
+**Master Plan:** [postgres-plugin-migration.md](../postgres-plugin-migration.md)
 
 ## Phase Documents
 
@@ -8,9 +8,9 @@
 | ----- | -------- | ------ |
 | Prerequisites | [00-prerequisites.md](./00-prerequisites.md) | ✅ Complete (PR #576) |
 | Phase 0 | [01-phase-0-baseline-tests.md](./01-phase-0-baseline-tests.md) | ✅ Complete |
-| Phase 1 | [02-phase-1-plugin-build.md](./02-phase-1-plugin-build.md) | 🟡 In Progress |
-| Phase 2 | [03-phase-2-issue-16.md](./03-phase-2-issue-16.md) | Planning |
-| Phase 3 | [04-phase-3-deprecate-builtin.md](./04-phase-3-deprecate-builtin.md) | Planning |
+| Phase 1 | [02-phase-1-plugin-build.md](./02-phase-1-plugin-build.md) | ✅ Complete — extracted to [`tabularis-postgresql-plugin`](https://github.com/TabularisDB/tabularis-postgresql-plugin) |
+| Phase 2 | [03-phase-2-issue-16.md](./03-phase-2-issue-16.md) | Tracked at [`tabularis-postgresql-plugin#9`](https://github.com/TabularisDB/tabularis-postgresql-plugin/issues/9) |
+| Phase 3 | [04-phase-3-deprecate-builtin.md](./04-phase-3-deprecate-builtin.md) | Deferred — tracked at [tabularis#631](https://github.com/TabularisDB/tabularis/issues/631) |
 
 ## Test Architecture
 

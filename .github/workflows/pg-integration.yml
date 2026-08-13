@@ -17,6 +17,12 @@ on:
       - 'src-tauri/**'
       - '.github/workflows/pg-integration.yml'
       - 'tests/fixtures/**'
+  workflow_dispatch:
+    inputs:
+      regenerate_golden:
+        description: 'Regenerate golden files and upload as an artifact for review (does not commit)'
+        type: boolean
+        default: false
 
 jobs:
   test-postgres:
@@ -70,11 +76,11 @@ jobs:
         working-directory: src-tauri
         env:
           RUST_TEST_THREADS: "1"
-          REGENERATE_GOLDEN: "1"
+          REGENERATE_GOLDEN: ${{ (github.event_name == 'workflow_dispatch' && inputs.regenerate_golden) && '1' || '' }}
         run: cargo test --test postgres_integration -- --include-ignored
 
       - name: Upload golden files
-        if: always()
+        if: github.event_name == 'workflow_dispatch' && inputs.regenerate_golden
         uses: actions/upload-artifact@v4
         with:
           name: golden-files
