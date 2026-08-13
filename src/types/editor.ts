@@ -15,6 +15,7 @@ export interface TableColumn {
   is_pk: boolean;
   is_nullable: boolean;
   is_auto_increment: boolean;
+  is_generated?: boolean;
   default_value?: string;
   character_maximum_length?: number;
 }
@@ -126,4 +127,57 @@ export interface Tab {
 export interface EditorPreferences {
   tabs: Tab[];
   active_tab_id: string | null;
+}
+
+interface EditorNavigationBase {
+  initialQuery: string;
+  schema?: string;
+  targetConnectionId?: string;
+}
+
+export interface TableEditorNavigationRequest
+  extends EditorNavigationBase {
+  kind: "table";
+  tableName: string;
+  materialized?: boolean;
+  title?: string;
+}
+
+export interface ConsoleEditorNavigationRequest
+  extends EditorNavigationBase {
+  kind: "console";
+  queryName?: string;
+  preventAutoRun?: boolean;
+}
+
+export interface DefinitionEditorNavigationRequest
+  extends EditorNavigationBase {
+  kind: "definition";
+  queryName: string;
+  readOnly?: boolean;
+}
+
+export type EditorNavigationRequest =
+  | TableEditorNavigationRequest
+  | ConsoleEditorNavigationRequest
+  | DefinitionEditorNavigationRequest;
+
+export interface AddTabInput {
+  type: "table" | "console";
+  title: string;
+  query: string;
+  activeTable: string | null;
+  schema?: string;
+  readOnly?: boolean;
+  materialized?: boolean;
+}
+
+export interface EditorNavigationIntent {
+  targetConnectionId?: string;
+  key: string;
+  addTabInput: AddTabInput;
+  execution: {
+    autoRun: boolean;
+    patchReadOnlyOnDuplicate: boolean;
+  };
 }

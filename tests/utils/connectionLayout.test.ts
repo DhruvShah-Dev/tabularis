@@ -19,6 +19,7 @@ import {
   defaultSplitSizes,
   resizeSplitSizes,
   getPanelDropEdge,
+  resolveRenderedSplitLayout,
   MAX_SPLIT_CONNECTIONS,
   MIN_SPLIT_PANE_SIZE,
   type SplitNode,
@@ -70,6 +71,50 @@ const makeConnectionData = (overrides?: Partial<ConnectionData>): ConnectionData
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('connectionLayout', () => {
+  describe('resolveRenderedSplitLayout', () => {
+    const splitView = view(['a', 'b']);
+
+    it('returns the split view itself on editor routes', () => {
+      expect(
+        resolveRenderedSplitLayout({
+          splitView,
+          isSplitVisible: true,
+          pathname: '/editor',
+        }),
+      ).toBe(splitView);
+    });
+
+    it.each(['/', '/connections', '/settings'])(
+      'hides the split layout on %s',
+      pathname => {
+        expect(
+          resolveRenderedSplitLayout({
+            splitView,
+            isSplitVisible: true,
+            pathname,
+          }),
+        ).toBeNull();
+      },
+    );
+
+    it('hides absent and explicitly hidden split views', () => {
+      expect(
+        resolveRenderedSplitLayout({
+          splitView: null,
+          isSplitVisible: true,
+          pathname: '/editor',
+        }),
+      ).toBeNull();
+      expect(
+        resolveRenderedSplitLayout({
+          splitView,
+          isSplitVisible: false,
+          pathname: '/editor',
+        }),
+      ).toBeNull();
+    });
+  });
+
   describe('layoutFromIds / flattenLayout / makeSplitView', () => {
     it('builds a flat split and flattens back to the same ids', () => {
       const layout = layoutFromIds(['a', 'b', 'c'], 'vertical')!;

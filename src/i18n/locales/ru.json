@@ -747,6 +747,7 @@
       "categories_notebook": "Ноутбук",
       "pasteImportClipboard": "Импортировать из буфера обмена",
       "quickNavigator": "Быстрый навигатор",
+      "commandPaletteActions": "Поиск действий",
       "triggerSuggestions": "Показать подсказки",
       "formatSql": "Форматировать SQL",
       "refreshTable": "Обновить таблицу"
@@ -847,6 +848,7 @@
     "nameRequired": "Название подключения обязательно",
     "dbNameRequired": "Название базы данных обязательно",
     "connectionUriRequiresKeychain": "URI подключения должны храниться в системном хранилище ключей. Включите «Сохранять пароли в Keychain», чтобы продолжить.",
+    "connectionUriRequired": "Требуется URI подключения",
     "dbType": "Тип базы данных",
     "host": "Хост",
     "port": "Порт",
@@ -1077,8 +1079,6 @@
       "noResults": "Совпадающие элементы не найдены",
       "count_one": "1 элемент",
       "count_other": "{{count}} элементов",
-      "navigationHint": "↑↓ для навигации, Enter для открытия",
-      "escHint": "Esc для закрытия",
       "type_table": "таблица",
       "type_view": "представление",
       "type_routine": "процедура",
@@ -1474,7 +1474,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [поля]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "Не удалось сгенерировать SQL: диалект базы данных для этого подключения неизвестен."
   },
   "modifyColumn": {
     "titleAdd": "Добавить столбец",
@@ -2061,6 +2062,27 @@
     "runButton": "Выполнить",
     "runTabPrefix": "Выполнить",
     "returnValue": "возвращает"
+  },
+  "commandPalette": {
+    "title": "Панель команд",
+    "objectsTitle": "Объекты базы данных",
+    "searchLabel": "Поиск команд",
+    "placeholder": "Искать действия...",
+    "executionError": "Не удалось выполнить действие",
+    "objectsLoadError": "Не удалось загрузить некоторые объекты: {{names}}",
+    "noResults": "Подходящие действия не найдены",
+    "navigationHint": "Навигация",
+    "escapeHint": "Закрыть",
+    "categories": {
+      "navigation": "Навигация",
+      "connection": "Подключение",
+      "table": "Таблица"
+    },
+    "commands": {
+      "openSettings": "Открыть настройки",
+      "openConnections": "Открыть менеджер подключений",
+      "openTableInConsole": "Открыть текущую таблицу в SQL-консоли"
+    }
   },
   "pagination": {
     "firstPage": "Первая страница",

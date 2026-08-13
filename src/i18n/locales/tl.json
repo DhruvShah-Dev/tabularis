@@ -786,7 +786,8 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "I-import mula sa Clipboard",
       "quickNavigator": "Quick Navigator",
-      "formatSql": "I-format ang SQL"
+      "formatSql": "I-format ang SQL",
+      "commandPaletteActions": "Maghanap ng mga aksyon"
     },
     "aiActivity": "AI Activity",
     "backup": {
@@ -884,6 +885,7 @@
     "nameRequired": "Kailangan ang pangalan ng connection",
     "dbNameRequired": "Kailangan ang pangalan ng database",
     "connectionUriRequiresKeychain": "Dapat i-save ang mga connection URI sa OS keychain. I-enable ang “I-save ang mga password sa Keychain” para magpatuloy.",
+    "connectionUriRequired": "Kailangan ang connection URI",
     "dbType": "Uri ng Database",
     "host": "Host",
     "port": "Port",
@@ -1182,8 +1184,6 @@
       "noResults": "Walang tumugmang elemento na nahanap",
       "count_one": "1 elemento",
       "count_other": "{{count}} elemento",
-      "navigationHint": "↑↓ para mag-navigate, Enter para buksan",
-      "escHint": "Esc para isara",
       "type_table": "table",
       "type_view": "view",
       "type_routine": "routine",
@@ -1499,7 +1499,8 @@
     "tabSelectAll": "Select *",
     "tabSelectFields": "Select [fields]",
     "tabUpdate": "Update",
-    "tabDelete": "Delete"
+    "tabDelete": "Delete",
+    "unknownDialect": "Hindi makabuo ng SQL: hindi alam ang dialect ng database para sa koneksyong ito."
   },
   "modifyColumn": {
     "titleAdd": "Magdagdag ng Column",
@@ -2060,6 +2061,27 @@
     "runButton": "Patakbuhin",
     "runTabPrefix": "Patakbuhin",
     "returnValue": "nagbabalik ng"
+  },
+  "commandPalette": {
+    "title": "Command Palette",
+    "objectsTitle": "Mga Object ng Database",
+    "searchLabel": "Maghanap ng mga command",
+    "placeholder": "Maghanap ng mga aksyon...",
+    "executionError": "Hindi makumpleto ang aksyon",
+    "objectsLoadError": "Hindi na-load ang ilang object: {{names}}",
+    "noResults": "Walang nakitang katugmang aksyon",
+    "navigationHint": "Mag-navigate",
+    "escapeHint": "Isara",
+    "categories": {
+      "navigation": "Navigation",
+      "connection": "Koneksyon",
+      "table": "Talahanayan"
+    },
+    "commands": {
+      "openSettings": "Buksan ang settings",
+      "openConnections": "Buksan ang connection manager",
+      "openTableInConsole": "Buksan ang kasalukuyang talahanayan sa SQL console"
+    }
   },
   "pagination": {
     "firstPage": "Unang pahina",

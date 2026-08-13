@@ -767,6 +767,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Importar da Área de Transferência",
       "quickNavigator": "Navegador Rápido",
+      "commandPaletteActions": "Buscar ações",
       "triggerSuggestions": "Acionar sugestões",
       "formatSql": "Formatar SQL",
       "refreshTable": "Atualizar tabela"
@@ -867,6 +868,7 @@
     "namePlaceholder": "Informe o nome da sua conexão",
     "nameRequired": "O nome da conexão é obrigatório",
     "dbNameRequired": "O nome do banco de dados é obrigatório",
+    "connectionUriRequired": "O URI da conexão é obrigatório",
     "dbType": "Tipo de Banco de Dados",
     "host": "Host",
     "port": "Porta",
@@ -1165,8 +1167,6 @@
       "noResults": "Nenhum elemento correspondente encontrado",
       "count_one": "1 elemento",
       "count_other": "{{count}} elementos",
-      "navigationHint": "↑↓ para navegar, Enter para abrir",
-      "escHint": "Esc para fechar",
       "type_table": "tabela",
       "type_view": "view",
       "type_routine": "rotina",
@@ -1484,7 +1484,8 @@
     "tabSelectAll": "Select *",
     "tabSelectFields": "Select [campos]",
     "tabUpdate": "Update",
-    "tabDelete": "Delete"
+    "tabDelete": "Delete",
+    "unknownDialect": "Não foi possível gerar o SQL: o dialeto do banco de dados desta conexão é desconhecido."
   },
   "modifyColumn": {
     "titleAdd": "Adicionar Coluna",
@@ -2041,6 +2042,27 @@
     "runButton": "Executar",
     "runTabPrefix": "Executar",
     "returnValue": "retorna"
+  },
+  "commandPalette": {
+    "title": "Paleta de Comandos",
+    "objectsTitle": "Objetos do banco de dados",
+    "searchLabel": "Buscar comandos",
+    "placeholder": "Buscar ações...",
+    "executionError": "Não foi possível concluir a ação",
+    "objectsLoadError": "Não foi possível carregar alguns objetos: {{names}}",
+    "noResults": "Nenhuma ação correspondente encontrada",
+    "navigationHint": "Navegar",
+    "escapeHint": "Fechar",
+    "categories": {
+      "navigation": "Navegação",
+      "connection": "Conexão",
+      "table": "Tabela"
+    },
+    "commands": {
+      "openSettings": "Abrir configurações",
+      "openConnections": "Abrir gerenciador de conexões",
+      "openTableInConsole": "Abrir a tabela atual no console SQL"
+    }
   },
   "pagination": {
     "firstPage": "Primeira página",

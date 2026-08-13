@@ -754,6 +754,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Aus Zwischenablage importieren",
       "quickNavigator": "Schnellnavigation",
+      "commandPaletteActions": "Aktionen suchen",
       "triggerSuggestions": "Vorschläge anzeigen",
       "formatSql": "SQL formatieren",
       "refreshTable": "Tabelle aktualisieren"
@@ -854,6 +855,7 @@
     "nameRequired": "Verbindungsname ist erforderlich",
     "dbNameRequired": "Datenbankname ist erforderlich",
     "connectionUriRequiresKeychain": "Verbindungs-URIs müssen im Keychain des Betriebssystems gespeichert werden. Aktiviere „Passwörter im Keychain speichern“, um fortzufahren.",
+    "connectionUriRequired": "Verbindungs-URI ist erforderlich",
     "dbType": "Datenbanktyp",
     "host": "Host",
     "port": "Port",
@@ -1083,8 +1085,6 @@
       "noResults": "Keine passenden Elemente gefunden",
       "count_one": "1 Element",
       "count_other": "{{count}} Elemente",
-      "navigationHint": "↑↓ zum Navigieren, Enter zum Öffnen",
-      "escHint": "Esc zum Schließen",
       "type_table": "Tabelle",
       "type_view": "View",
       "type_routine": "Routine",
@@ -1469,7 +1469,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [Felder]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "SQL kann nicht generiert werden: Der Datenbankdialekt dieser Verbindung ist unbekannt."
   },
   "modifyColumn": {
     "titleAdd": "Spalte hinzufügen",
@@ -1990,6 +1991,27 @@
     "runButton": "Ausführen",
     "runTabPrefix": "Ausführen",
     "returnValue": "Rückgabe"
+  },
+  "commandPalette": {
+    "title": "Befehlspalette",
+    "objectsTitle": "Datenbankobjekte",
+    "searchLabel": "Befehle suchen",
+    "placeholder": "Aktionen suchen...",
+    "executionError": "Die Aktion konnte nicht ausgeführt werden",
+    "objectsLoadError": "Einige Objekte konnten nicht geladen werden: {{names}}",
+    "noResults": "Keine passenden Aktionen gefunden",
+    "navigationHint": "Navigieren",
+    "escapeHint": "Schließen",
+    "categories": {
+      "navigation": "Navigation",
+      "connection": "Verbindung",
+      "table": "Tabelle"
+    },
+    "commands": {
+      "openSettings": "Einstellungen öffnen",
+      "openConnections": "Verbindungsverwaltung öffnen",
+      "openTableInConsole": "Aktuelle Tabelle in SQL-Konsole öffnen"
+    }
   },
   "pagination": {
     "firstPage": "Erste Seite",

@@ -99,7 +99,7 @@ The app UI is available in English, Italian, Spanish, Chinese (Simplified), Fren
 - [Development](#development)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
-- [Sponsors](#sponsors)
+- [Sponsors and supporters](#sponsors-and-supporters)
 - [Origin Story](#origin-story)
 - [License](#license)
 
@@ -398,10 +398,11 @@ Contributions are welcome, see [CONTRIBUTING.md](./CONTRIBUTING.md). Good places
 
 <!-- SPONSORS:START -->
 
-## Sponsors
+## Sponsors and supporters
 
 - <a href="https://www.serversmtp.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/turbosmtp_compact.png" height="28" alt="turboSMTP" /></a> **[turboSMTP](https://www.serversmtp.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Professional SMTP relay — your emails delivered straight to the inbox, never to spam
 - <a href="https://www.kilo.ai/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/kilocode_compact.png" height="28" alt="Kilo Code" /></a> **[Kilo Code](https://www.kilo.ai/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Open source AI coding agent — build, ship, and iterate faster with 500+ models
+- <a href="https://openai.com/codex/?utm_source=tabularis&utm_medium=referral&utm_campaign=supporter" target="_blank"><img src="https://tabularis.dev/img/sponsors/openai_compact.svg" height="28" alt="OpenAI" /></a> **[OpenAI](https://openai.com/codex/?utm_source=tabularis&utm_medium=referral&utm_campaign=supporter)** — Supporting Tabularis through the Codex for Open Source program.
 - <a href="https://m.do.co/c/f6ab3d158275?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/digitalocean_compact.png" height="28" alt="DigitalOcean" /></a> **[DigitalOcean](https://m.do.co/c/f6ab3d158275?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Simple, predictable cloud infrastructure for developers and growing teams.
 - <a href="https://vercel.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/vercel_compact.svg" height="28" alt="Vercel" /></a> **[Vercel](https://vercel.com/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — The platform for the modern web — ship, preview, and scale frontend apps with zero config.
 - <a href="https://usero.io/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor" target="_blank"><img src="https://tabularis.dev/img/sponsors/usero_compact.png" height="28" alt="Usero" /></a> **[Usero](https://usero.io/?utm_source=tabularis&utm_medium=referral&utm_campaign=sponsor)** — Feedback becomes code. Automatically.

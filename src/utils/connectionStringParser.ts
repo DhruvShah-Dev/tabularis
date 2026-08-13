@@ -90,7 +90,7 @@ function connectionStringImportEnabled(
   );
 }
 
-function uriPassthroughEnabled(
+export function uriPassthroughEnabled(
   capabilities?: DriverCapabilities | null,
 ): boolean {
   if (!capabilities) return false;

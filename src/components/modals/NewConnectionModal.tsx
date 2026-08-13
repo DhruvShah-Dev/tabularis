@@ -73,6 +73,7 @@ import { getDriverIcon, getDriverColorStyle } from "../../utils/driverUI";
 import {
   parseConnectionString,
   toConnectionParams,
+  uriPassthroughEnabled,
 } from "../../utils/connectionStringParser";
 import { useConnectionCatalogue } from "../../hooks/useConnectionCatalogue";
 import { ConnectionCatalogue } from "./connection/ConnectionCatalogue";
@@ -587,6 +588,10 @@ export const NewConnectionModal = ({
   // A raw URI is self-contained: it carries the database (or deliberately omits
   // it, as Atlas URIs do) and the credentials, so it replaces those form fields.
   const hasConnectionUri = !!formData.connection_uri?.trim();
+  // Drivers with the `connection_uri` capability consume the raw URI verbatim:
+  // host/port/username/database all derive from it, so the form only asks for
+  // the connection string and an optional token (password) field.
+  const isUriPassthrough = uriPassthroughEnabled(activeDriver?.capabilities);
   const isNetworkDriver =
     !noConnectionRequired &&
     activeDriver?.capabilities?.file_based === false &&
@@ -2104,6 +2109,12 @@ export const NewConnectionModal = ({
         setTestResult("error");
         return;
       }
+      if (isUriPassthrough && !hasConnectionUri) {
+        setStatus("error");
+        setMessage(t("newConnection.connectionUriRequired"));
+        setTestResult("error");
+        return;
+      }
       if (isMultiDb) {
         if (!loadAllDatabases && selectedDatabasesState.length === 0) {
           setStatus("error");
@@ -2518,28 +2529,29 @@ export const NewConnectionModal = ({
             </div>
           )}
 
-          {/* Host + Port */}
-          <div
-            className={clsx(
-              "grid gap-3",
-              driver === "postgres" ? "grid-cols-4" : "grid-cols-3",
-            )}
-          >
-            <FieldInput
-              className="col-span-2"
-              label={t("newConnection.host")}
-              value={formData.host}
-              onChange={(v) => updateField("host", v)}
-              placeholder="localhost"
-            />
-            <FieldInput
-              label={t("newConnection.port")}
-              value={formData.port}
-              onChange={(v) => updateField("port", v)}
-              type="number"
-              placeholder={driver === "mysql" ? "3306" : "5432"}
-            />
-          </div>
+          {!isUriPassthrough && (
+            <div
+              className={clsx(
+                "grid gap-3",
+                driver === "postgres" ? "grid-cols-4" : "grid-cols-3",
+              )}
+            >
+              <FieldInput
+                className="col-span-2"
+                label={t("newConnection.host")}
+                value={formData.host}
+                onChange={(v) => updateField("host", v)}
+                placeholder="localhost"
+              />
+              <FieldInput
+                label={t("newConnection.port")}
+                value={formData.port}
+                onChange={(v) => updateField("port", v)}
+                type="number"
+                placeholder={driver === "mysql" ? "3306" : "5432"}
+              />
+            </div>
+          )}
 
           {/* Plugin-owned extra connection fields (opaque `extra` map) */}
           <SlotAnchor
@@ -2549,13 +2561,20 @@ export const NewConnectionModal = ({
           />
 
           {/* User + Password */}
-          <div className="grid grid-cols-2 gap-3">
-            <FieldInput
-              label={t("newConnection.username")}
-              value={formData.username}
-              onChange={(v) => updateField("username", v)}
-              placeholder={t("newConnection.usernamePlaceholder")}
-            />
+          <div
+            className={clsx(
+              "grid gap-3",
+              isUriPassthrough ? "grid-cols-1" : "grid-cols-2",
+            )}
+          >
+            {!isUriPassthrough && (
+              <FieldInput
+                label={t("newConnection.username")}
+                value={formData.username}
+                onChange={(v) => updateField("username", v)}
+                placeholder={t("newConnection.usernamePlaceholder")}
+              />
+            )}
             <FieldInput
               label={t("newConnection.password")}
               value={formData.password}
@@ -2573,7 +2592,7 @@ export const NewConnectionModal = ({
           </div>
 
           {/* Database (single) — only shown for non-multi-db drivers */}
-          {!isMultiDb && !singleDatabase && (
+          {!isUriPassthrough && !isMultiDb && !singleDatabase && (
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] uppercase font-semibold tracking-wider text-muted">

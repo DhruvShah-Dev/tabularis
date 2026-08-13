@@ -731,7 +731,8 @@
       "categories_notebook": "노트북",
       "pasteImportClipboard": "클립보드에서 가져오기",
       "quickNavigator": "빠른 탐색기",
-      "formatSql": "SQL 포맷"
+      "formatSql": "SQL 포맷",
+      "commandPaletteActions": "작업 검색"
     },
     "aiActivity": "AI 활동",
     "backup": {
@@ -829,6 +830,7 @@
     "nameRequired": "연결 이름은 필수입니다",
     "dbNameRequired": "데이터베이스 이름은 필수입니다",
     "connectionUriRequiresKeychain": "연결 URI는 OS 키체인에 저장해야 합니다. “키체인에 비밀번호 저장”을 활성화하세요.",
+    "connectionUriRequired": "연결 URI는 필수입니다",
     "dbType": "데이터베이스 종류",
     "host": "호스트",
     "port": "포트",
@@ -1126,8 +1128,6 @@
       "noResults": "일치하는 항목이 없습니다",
       "count_one": "항목 1개",
       "count_other": "항목 {{count}}개",
-      "navigationHint": "↑↓로 이동, Enter로 열기",
-      "escHint": "Esc로 닫기",
       "type_table": "테이블",
       "type_view": "뷰",
       "type_routine": "루틴",
@@ -1443,7 +1443,8 @@
     "tabSelectAll": "Select *",
     "tabSelectFields": "Select [필드]",
     "tabUpdate": "Update",
-    "tabDelete": "Delete"
+    "tabDelete": "Delete",
+    "unknownDialect": "SQL을 생성할 수 없습니다: 이 연결의 데이터베이스 방언을 알 수 없습니다."
   },
   "modifyColumn": {
     "titleAdd": "컬럼 추가",
@@ -1994,6 +1995,27 @@
     "runButton": "실행",
     "runTabPrefix": "실행",
     "returnValue": "반환"
+  },
+  "commandPalette": {
+    "title": "명령 팔레트",
+    "objectsTitle": "데이터베이스 객체",
+    "searchLabel": "명령 검색",
+    "placeholder": "작업 검색...",
+    "executionError": "작업을 완료할 수 없습니다",
+    "objectsLoadError": "일부 객체를 불러오지 못했습니다: {{names}}",
+    "noResults": "일치하는 작업이 없습니다",
+    "navigationHint": "이동",
+    "escapeHint": "닫기",
+    "categories": {
+      "navigation": "탐색",
+      "connection": "연결",
+      "table": "테이블"
+    },
+    "commands": {
+      "openSettings": "설정 열기",
+      "openConnections": "연결 관리자 열기",
+      "openTableInConsole": "현재 테이블을 SQL 콘솔에서 열기"
+    }
   },
   "pagination": {
     "firstPage": "첫 페이지",
