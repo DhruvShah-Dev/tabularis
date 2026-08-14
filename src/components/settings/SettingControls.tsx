@@ -217,7 +217,7 @@ export function SettingNumberInput({
 }: SettingNumberInputProps) {
   return (
     <div className="flex items-center gap-2">
-      <input
+      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
         type="number"
         min={min}
         max={max}

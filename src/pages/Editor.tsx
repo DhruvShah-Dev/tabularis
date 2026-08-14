@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
+import { shouldShowStatementSuccess } from "../utils/resultPresentation";
 import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import {
@@ -3570,7 +3571,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                 <FileCode size={12} className="text-accent-secondary shrink-0" />
               )}
               {editingTabId === tab.id ? (
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                   type="text"
                   draggable={false}
                   value={editingTabTitle}
@@ -4205,14 +4206,11 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
               </div>
             ) : activeTab.error ? (
               <ErrorDisplay error={activeTab.error} t={t} />
-            ) : activeTab.result &&
-              activeTab.result.columns.length === 0 &&
-              !(
-                activeTab.pendingInsertions &&
-                Object.keys(activeTab.pendingInsertions).length > 0
-              ) ? (
+            ) : shouldShowStatementSuccess(activeTab) ? (
               // Non-SELECT statement (INSERT/UPDATE/DELETE/DDL): no result set,
               // so surface an explicit success message instead of an empty grid.
+              // Table tabs stay in data mode even when an empty result omits
+              // columns, keeping the Add Row action available.
               <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-center px-4">
                 <CheckCircle2 size={32} className="text-green-500" />
                 <p className="text-sm font-medium text-primary">
@@ -4300,7 +4298,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                           title={t("editor.jumpToPage")}
                         >
                           {isEditingPage ? (
-                            <input
+                            <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                               autoFocus
                               type="text"
                               className="w-full bg-transparent text-center focus:outline-none text-white p-0 m-0 border-none h-full"

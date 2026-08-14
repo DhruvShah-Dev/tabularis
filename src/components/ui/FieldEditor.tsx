@@ -177,7 +177,7 @@ export const FieldEditor = ({
       className={className}
     />
   ) : (
-    <textarea
+    <textarea autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
       value={String(value ?? "")}
       onChange={(e) => onChange(e.target.value)}
       placeholder={defaultPlaceholder}

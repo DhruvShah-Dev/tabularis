@@ -278,7 +278,7 @@ export const TriggerEditorModal = ({
                 <label htmlFor="trigger-name" className="text-xs uppercase font-bold text-muted mb-1 block">
                   {t("triggers.triggerName")}
                 </label>
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                   id="trigger-name"
                   type="text"
                   value={name}
@@ -295,7 +295,7 @@ export const TriggerEditorModal = ({
                 <label htmlFor="trigger-table" className="text-xs uppercase font-bold text-muted mb-1 block">
                   {t("triggers.tableName")}
                 </label>
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                   id="trigger-table"
                   type="text"
                   value={tableName}

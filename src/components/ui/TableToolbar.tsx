@@ -440,7 +440,7 @@ const TableToolbarInternal = ({
           <div className="flex items-center gap-2 flex-1 bg-base border border-default rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors relative">
             <Filter size={14} className="text-muted shrink-0" />
             <span className="hidden @[440px]:inline text-xs text-blue-400 font-mono shrink-0">WHERE</span>
-            <input
+            <input autoComplete="off"
               ref={filterInputRef}
               type="text"
               spellCheck={false}
@@ -495,7 +495,7 @@ const TableToolbarInternal = ({
         <div className="relative flex items-center gap-1.5 flex-1 bg-base border border-default rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors">
           <ArrowUpDown size={14} className="text-muted shrink-0" />
           <span className="hidden @[440px]:inline text-xs text-blue-400 font-mono shrink-0">ORDER BY</span>
-          <input
+          <input autoComplete="off"
             ref={sortInputRef}
             type="text"
             spellCheck={false}
@@ -537,7 +537,7 @@ const TableToolbarInternal = ({
         <div className="flex items-center gap-1.5 w-20 @[560px]:w-32 bg-base border border-default rounded px-2 py-1 focus-within:border-blue-500/50 transition-colors shrink-0">
           <ListFilter size={14} className="text-muted shrink-0" />
           <span className="hidden @[440px]:inline text-xs text-blue-400 font-mono shrink-0">LIMIT</span>
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             type="number"
             value={limitInput}
             onChange={(e) => setLimitInput(e.target.value)}
