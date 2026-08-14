@@ -61,6 +61,8 @@ pub mod models;
 pub mod models_tests;
 pub mod notebooks;
 pub mod paths; // Added
+#[cfg(test)]
+pub mod paths_tests;
 pub mod persistence;
 pub mod plugins;
 pub mod pool_manager;
@@ -621,6 +623,7 @@ pub fn run() {
             plugins::commands::open_plugins_dir,
             plugins::commands::read_plugin_file,
             plugins::commands::fetch_tabularium_plugin_preview,
+            plugins::commands::fetch_plugin_readme,
             plugins::deep_link::consume_pending_deep_link_install,
             plugins::manager::get_plugin_startup_errors,
             // JSON Viewer

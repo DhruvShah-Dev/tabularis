@@ -207,6 +207,7 @@ vi.mock("lucide-react", () => ({
   ChevronsUpDown: () => null,
   ArrowLeft: () => null,
   Boxes: () => null,
+  BookOpen: () => null,
   CheckCircle2: () => null,
   FolderPlus: () => null,
   FlaskConical: () => null,

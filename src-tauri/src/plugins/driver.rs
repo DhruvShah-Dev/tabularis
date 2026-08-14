@@ -980,6 +980,7 @@ impl DatabaseDriver for RpcDriver {
 
     async fn get_create_foreign_key_sql(
         &self,
+        params: &ConnectionParams,
         table: &str,
         fk_name: &str,
         column: &str,
@@ -989,7 +990,7 @@ impl DatabaseDriver for RpcDriver {
         on_update: Option<&str>,
         schema: Option<&str>,
     ) -> Result<Vec<String>, String> {
-        let res = self.process.call("get_create_foreign_key_sql", json!({ "table": table, "fk_name": fk_name, "column": column, "ref_table": ref_table, "ref_column": ref_column, "on_delete": on_delete, "on_update": on_update, "schema": schema })).await?;
+        let res = self.process.call("get_create_foreign_key_sql", json!({ "params": params, "table": table, "fk_name": fk_name, "column": column, "ref_table": ref_table, "ref_column": ref_column, "on_delete": on_delete, "on_update": on_update, "schema": schema })).await?;
         serde_json::from_value(res).map_err(|e| e.to_string())
     }
 
@@ -1422,6 +1423,36 @@ mod tests {
         assert_eq!(context.tables.len(), 1);
         assert_eq!(context.tables[0].name, "users");
         assert_eq!(context.total_table_count, 1);
+    }
+
+    #[tokio::test]
+    async fn rpc_driver_forwards_params_to_get_create_foreign_key_sql() {
+        let uri = "libsql://db.example.invalid?authToken=tok";
+        let expected = uri.to_string();
+        let driver = test_driver(move |request| {
+            assert_eq!(request.method, "get_create_foreign_key_sql");
+            assert_eq!(request.params["params"]["connection_uri"], expected);
+            assert_eq!(request.params["table"], "orders");
+            json!(["ALTER TABLE ..."])
+        });
+        let mut params = test_connection_params();
+        params.connection_uri = Some(uri.to_string());
+
+        let sql = driver
+            .get_create_foreign_key_sql(
+                &params,
+                "orders",
+                "fk_user",
+                "user_id",
+                "users",
+                "id",
+                Some("CASCADE"),
+                Some("CASCADE"),
+                None,
+            )
+            .await
+            .expect("fk sql");
+        assert_eq!(sql, vec!["ALTER TABLE ...".to_string()]);
     }
 
     #[tokio::test]

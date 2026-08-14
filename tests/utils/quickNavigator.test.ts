@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { getNavigatorItems, filterNavigatorItems, type NavigatorItemParams } from "../../src/utils/quickNavigator";
+import {
+  getNavigatorItems,
+  toDatabaseObject,
+  type NavigatorItemParams,
+} from "../../src/utils/quickNavigator";
 import type { SchemaData } from "../../src/contexts/DatabaseContext";
 
 describe("quickNavigator utility", () => {
@@ -110,36 +114,89 @@ describe("quickNavigator utility", () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ name: "products", type: "table", schema: "sales_db", item: mockDbData.tables[0] });
     });
-  });
 
-  describe("filterNavigatorItems", () => {
-    const mockItems = [
-      { name: "users", type: "table" as const, schema: "public", item: {} },
-      { name: "user_sessions", type: "table" as const, schema: "auth", item: {} },
-      { name: "active_sessions", type: "view" as const, schema: "public", item: {} },
-    ];
+    it("should normalize every layout through the same object shape", () => {
+      const data: SchemaData = {
+        tables: [{ name: "users" }],
+        views: [{ name: "active_users" }],
+        routines: [{ name: "find_user", routine_type: "FUNCTION" }],
+        triggers: [{
+          name: "audit_user",
+          table_name: "users",
+          event: "UPDATE",
+          timing: "AFTER",
+        }],
+        isLoading: false,
+        isLoaded: true,
+      };
+      const base: NavigatorItemParams = {
+        activeConnectionId: "conn-1",
+        hasSchemas: false,
+        isMultiDb: false,
+        schemas: [],
+        schemaDataMap: {},
+        configuredDatabases: [],
+        databaseDataMap: {},
+        ...data,
+        activeSchema: "public",
+      };
+      const schemaItems = getNavigatorItems({
+        ...base,
+        hasSchemas: true,
+        schemas: ["public"],
+        schemaDataMap: { public: data },
+      });
+      const databaseItems = getNavigatorItems({
+        ...base,
+        isMultiDb: true,
+        configuredDatabases: ["public"],
+        databaseDataMap: { public: data },
+      });
 
-    it("should return all items if search query is empty", () => {
-      expect(filterNavigatorItems(mockItems, "")).toEqual(mockItems);
+      expect(schemaItems).toEqual(getNavigatorItems(base));
+      expect(databaseItems).toEqual(getNavigatorItems(base));
     });
 
-    it("should filter items by name case-insensitively", () => {
-      const result = filterNavigatorItems(mockItems, "SESSION");
-      expect(result).toHaveLength(2);
-      expect(result[0].name).toBe("user_sessions");
-      expect(result[1].name).toBe("active_sessions");
-    });
+    it("should convert a navigator item to the canonical database object", () => {
+      const [item] = getNavigatorItems({
+        activeConnectionId: "conn-1",
+        hasSchemas: false,
+        isMultiDb: true,
+        schemas: [],
+        schemaDataMap: {},
+        configuredDatabases: ["main"],
+        databaseDataMap: {
+          main: {
+            tables: [{ name: "users" }],
+            views: [],
+            routines: [],
+            triggers: [],
+            isLoading: false,
+            isLoaded: true,
+          },
+        },
+        tables: [],
+        views: [],
+        routines: [],
+        triggers: [],
+        activeSchema: "main",
+      });
 
-    it("should filter items by schema name case-insensitively", () => {
-      const result = filterNavigatorItems(mockItems, "auth");
-      expect(result).toHaveLength(1);
-      expect(result[0].name).toBe("user_sessions");
-    });
-
-    it("should tolerate typos", () => {
-      const result = filterNavigatorItems(mockItems, "sesion").map((i) => i.name);
-      expect(result).toContain("user_sessions");
-      expect(result).toContain("active_sessions");
+      expect(
+        toDatabaseObject(item, {
+          connectionId: "conn-1",
+          driver: "sqlite",
+          isMultiDatabase: true,
+        }),
+      ).toEqual({
+        type: "table",
+        connectionId: "conn-1",
+        driver: "sqlite",
+        name: "users",
+        qualifySchema: false,
+        schema: "main",
+        title: "users (main)",
+      });
     });
   });
 });

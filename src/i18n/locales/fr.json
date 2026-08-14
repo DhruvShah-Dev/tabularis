@@ -64,6 +64,7 @@
     "continue": "Continuer",
     "back": "Retour",
     "copy": "Copier",
+    "copied": "Copié !",
     "showDetails": "Afficher les détails",
     "hideDetails": "Masquer les détails",
     "beta": "Bêta"
@@ -787,6 +788,7 @@
       "categories_notebook": "Notebook",
       "pasteImportClipboard": "Importer depuis le Presse-papiers",
       "quickNavigator": "Navigateur rapide",
+      "commandPaletteActions": "Rechercher des actions",
       "triggerSuggestions": "Afficher les suggestions",
       "formatSql": "Formater SQL",
       "refreshTable": "Actualiser la table"
@@ -887,6 +889,7 @@
     "nameRequired": "Le nom de la connexion est requis",
     "dbNameRequired": "Le nom de la base de données est requis",
     "connectionUriRequiresKeychain": "Les URI de connexion doivent être enregistrées dans le trousseau du système. Activez « Enregistrer les mots de passe dans le trousseau » pour continuer.",
+    "connectionUriRequired": "L'URI de connexion est requise",
     "dbType": "Type de base de données",
     "host": "Hôte",
     "port": "Port",
@@ -1188,8 +1191,6 @@
       "noResults": "Aucun élément correspondant trouvé",
       "count_one": "1 élément",
       "count_other": "{{count}} éléments",
-      "navigationHint": "↑↓ pour naviguer, Entrée pour ouvrir",
-      "escHint": "Échap pour fermer",
       "type_table": "table",
       "type_view": "vue",
       "type_routine": "routine",
@@ -1506,7 +1507,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [champs]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "Impossible de générer le SQL : le dialecte de base de données de cette connexion est inconnu."
   },
   "modifyColumn": {
     "titleAdd": "Ajouter une colonne",
@@ -2068,6 +2070,27 @@
     "runTabPrefix": "Exécuter",
     "returnValue": "retourne"
   },
+  "commandPalette": {
+    "title": "Palette de commandes",
+    "objectsTitle": "Objets de base de données",
+    "searchLabel": "Rechercher des commandes",
+    "placeholder": "Rechercher des actions...",
+    "executionError": "L’action n’a pas pu être exécutée",
+    "objectsLoadError": "Certains objets n’ont pas pu être chargés : {{names}}",
+    "noResults": "Aucune action correspondante",
+    "navigationHint": "Naviguer",
+    "escapeHint": "Fermer",
+    "categories": {
+      "navigation": "Navigation",
+      "connection": "Connexion",
+      "table": "Table"
+    },
+    "commands": {
+      "openSettings": "Ouvrir les paramètres",
+      "openConnections": "Ouvrir le gestionnaire de connexions",
+      "openTableInConsole": "Ouvrir la table actuelle dans la console SQL"
+    }
+  },
   "pagination": {
     "firstPage": "Première page",
     "previousPage": "Page précédente",
@@ -2148,7 +2171,14 @@
     "notInstalled": "Ce pilote n'est pas encore installé. Installez-le pour configurer une connexion.",
     "installVersion": "Installer v{{version}}",
     "installingVersion": "Installation de v{{version}}…",
-    "retryInstall": "Réessayer l'installation"
+    "retryInstall": "Réessayer l'installation",
+    "viewDetails": "Plus de détails",
+    "installTitle": "Installer le pilote",
+    "readmeSubtitle": "README du plugin",
+    "readmeLoading": "Chargement du README…",
+    "readmeUnavailable": "Aucun README n'est disponible pour ce plugin.",
+    "readmeFallbackLocale": "Ce README n'est pas encore disponible dans votre langue — affiché en « {{locale}} ».",
+    "openDocumentation": "Ouvrir la documentation complète"
   },
   "connectionErrors": {
     "ssh-auth": {
