@@ -56,7 +56,7 @@ pub(super) fn build_pk_predicate(
     pk_val: serde_json::Value,
     placeholder_idx: usize,
     pk_type: Option<&str>,
-) -> Result<(String, TypedPgParam), String> {
+) -> Result<(String, Option<TypedPgParam>), String> {
     let col = format!("\"{}\"", escape_identifier(pk_col));
     match pk_val {
         serde_json::Value::Number(n) => {
@@ -64,7 +64,7 @@ pub(super) fn build_pk_predicate(
             let param = bound
                 .param
                 .ok_or_else(|| "Internal PostgreSQL numeric binding error".to_string())?;
-            Ok((format!("{} = {}", col, bound.sql), param))
+            Ok((format!("{} = {}", col, bound.sql), Some(param)))
         }
         serde_json::Value::String(s) => {
             let base = pk_type.map(|t| extract_base_type(t).to_lowercase());
@@ -73,8 +73,26 @@ pub(super) fn build_pk_predicate(
                 if let Ok(uuid) = s.parse::<uuid::Uuid>() {
                     return Ok((
                         format!("{} = ${}", col, placeholder_idx),
-                        (Box::new(uuid), Type::UUID),
+                        Some((Box::new(uuid), Type::UUID)),
                     ));
+                }
+            }
+
+            // Keyless tables (#598) identify rows by every column, so the
+            // predicate can target numeric/temporal columns whose values reach
+            // the driver as JSON strings (numeric serializes as string to
+            // preserve arbitrary precision). Route them through the same
+            // coercions as SET binding — a plain TEXT bind trips SQLSTATE
+            // 42883, e.g. "operator does not exist: numeric = text".
+            if let Some(pk_type) = pk_type {
+                if let Some(bound) = bind_pg_numeric_string(&s, pk_type, placeholder_idx)
+                    .or_else(|| bind_pg_temporal_string(&s, pk_type, placeholder_idx))
+                {
+                    let bound = bound?;
+                    let param = bound
+                        .param
+                        .ok_or_else(|| "Internal PostgreSQL numeric binding error".to_string())?;
+                    return Ok((format!("{} = {}", col, bound.sql), Some(param)));
                 }
             }
 
@@ -90,16 +108,24 @@ pub(super) fn build_pk_predicate(
                 if let Some(n) = parse_unsafe_bigint_string(&s) {
                     return Ok((
                         format!("{} = CAST(${} AS bigint)", col, placeholder_idx),
-                        (Box::new(n), Type::INT8),
+                        Some((Box::new(n), Type::INT8)),
                     ));
                 }
             }
 
             Ok((
                 format!("{} = ${}", col, placeholder_idx),
-                (Box::new(s), Type::TEXT),
+                Some((Box::new(s), Type::TEXT)),
             ))
         }
+        serde_json::Value::Bool(b) => Ok((
+            format!("{} = ${}", col, placeholder_idx),
+            Some((Box::new(b), Type::BOOL)),
+        )),
+        // Keyless tables identify rows by all comparable columns, so the map
+        // may legitimately carry NULLs — `= NULL` never matches, use IS NULL.
+        // No parameter is bound, so the placeholder index is not consumed.
+        serde_json::Value::Null => Ok((format!("{} IS NULL", col), None)),
         _ => Err("Unsupported PK type".into()),
     }
 }
@@ -133,7 +159,11 @@ pub(super) fn build_pk_map_predicate(
             pk_types.get(key).map(|s| s.as_str()),
         )?;
         predicates.push(pred);
-        params.push(param);
+        // IS NULL predicates bind no parameter, so they don't advance the
+        // placeholder index.
+        if let Some(param) = param {
+            params.push(param);
+        }
     }
     Ok((predicates.join(" AND "), params))
 }

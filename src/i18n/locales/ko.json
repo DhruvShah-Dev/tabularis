@@ -41,6 +41,7 @@
     "continue": "계속",
     "back": "뒤로",
     "copy": "복사",
+    "copied": "복사됨!",
     "showDetails": "세부 정보 표시",
     "hideDetails": "세부 정보 숨기기",
     "beta": "베타"
@@ -355,6 +356,22 @@
   "settings": {
     "title": "설정",
     "general": "일반",
+    "privacy": "개인 정보",
+    "columnMasking": "열 마스킹",
+    "columnMaskingDesc": "결과 그리드에서 민감한 열(비밀번호, 이메일, 토큰 등)의 내용을 숨깁니다. 복사 및보내기에는 여전히 실제 값이 사용됩니다.",
+    "columnMaskingEnabled": "민감한 열 마스킹",
+    "columnMaskingEnabledDesc": "이름이 민감한 패턴과 일치하는 열에 실제 값 대신 자리 표시자를 표시합니다.",
+    "maskingPatterns": "민감한 열 이름 패턴",
+    "maskingPatternsDesc": "한 줄에 하나의 패턴. 열 이름에 패턴이 포함되면 마스킹됩니다(대소문자 구분 안 함).",
+    "maskingOverrides": "연결별 재정의",
+    "maskingOverridesDesc": "특정 연결에서 지정한 열을 항상 마스킹(포함)하거나 마스킹하지 않도록(제외) 설정합니다. 한 줄에 테이블.열 하나씩 입력하며, 제외가 포함과 패턴보다 우선합니다.",
+    "maskingConnection": "연결",
+    "maskingConnectionDesc": "이 재정의를 적용할 연결을 선택합니다.",
+    "maskingInclude": "항상 마스킹",
+    "maskingIncludeDesc": "이름이 어떤 패턴과도 일치하지 않아도 이 연결에서 항상 마스킹되는 열입니다.",
+    "maskingExclude": "마스킹 안 함",
+    "maskingExcludeDesc": "이름이 패턴과 일치해도 이 연결에서 마스킹되지 않는 열입니다.",
+    "maskingOverridePlaceholder": "예: users.password",
     "info": "정보",
     "dataEditor": "데이터 에디터",
     "pageSize": "결과 페이지 크기 (제한)",
@@ -630,12 +647,14 @@
       "confirmRemove": "\"{{name}}\"을(를) 제거하시겠습니까? 플러그인 파일이 삭제됩니다.",
       "enabled": "활성화됨",
       "disabled": "비활성화됨",
+      "openFolder": "플러그인 폴더 열기",
       "installError": {
         "title": "설치 실패",
         "subtitle": "플러그인을 설치하는 중 오류가 발생했습니다. 아래 세부 정보를 확인하세요.",
         "details": "오류 세부 정보",
         "copy": "복사",
-        "copied": "복사됨!"
+        "copied": "복사됨!",
+        "reload": "플러그인 새로고침"
       },
       "uninstallError": {
         "title": "제거 실패",
@@ -712,7 +731,8 @@
       "categories_notebook": "노트북",
       "pasteImportClipboard": "클립보드에서 가져오기",
       "quickNavigator": "빠른 탐색기",
-      "formatSql": "SQL 포맷"
+      "formatSql": "SQL 포맷",
+      "commandPaletteActions": "작업 검색"
     },
     "aiActivity": "AI 활동",
     "backup": {
@@ -810,6 +830,7 @@
     "nameRequired": "연결 이름은 필수입니다",
     "dbNameRequired": "데이터베이스 이름은 필수입니다",
     "connectionUriRequiresKeychain": "연결 URI는 OS 키체인에 저장해야 합니다. “키체인에 비밀번호 저장”을 활성화하세요.",
+    "connectionUriRequired": "연결 URI는 필수입니다",
     "dbType": "데이터베이스 종류",
     "host": "호스트",
     "port": "포트",
@@ -952,6 +973,9 @@
     "waiting": "보안 키를 기다리는 중 — 터치하여 확인하세요."
   },
   "dataGrid": {
+    "noRowIdentity": "행을 편집할 수 없습니다: \"{{table}}\"에 기본 키가 없으므로 편집하려면 결과에 테이블의 모든 열이 포함되어야 합니다. 모든 열을 선택하거나(예: SELECT *) 기본 키를 추가하세요.",
+    "keylessRowNotFound": "\"{{column}}\" 업데이트 중 원래 값과 일치하는 행이 없습니다. 테이블에 기본 키가 없고 데이터가 변경되었을 수 있습니다. 새로 고친 후 다시 시도하세요.",
+    "keylessDeleteNotFound": "삭제 중 원래 값과 일치하는 행이 없습니다. 테이블에 기본 키가 없고 데이터가 변경되었을 수 있습니다. 새로 고친 후 다시 시도하세요.",
     "newRow": "신규",
     "noData": "표시할 데이터가 없습니다",
     "editRow": "행 편집",
@@ -997,7 +1021,11 @@
     "setEmpty": "빈 값으로 설정",
     "setServerNow": "현재 타임스탬프 삽입",
     "previewReferenced": "참조된 레코드 미리보기",
-    "openReferenced": "{{table}}에서 참조된 행 열기"
+    "openReferenced": "{{table}}에서 참조된 행 열기",
+    "revealCell": "셀 표시",
+    "maskCell": "셀 마스킹",
+    "revealColumn": "열 표시",
+    "maskColumn": "열 마스킹"
   },
   "editRow": {
     "title": "행 편집",
@@ -1100,8 +1128,6 @@
       "noResults": "일치하는 항목이 없습니다",
       "count_one": "항목 1개",
       "count_other": "항목 {{count}}개",
-      "navigationHint": "↑↓로 이동, Enter로 열기",
-      "escHint": "Esc로 닫기",
       "type_table": "테이블",
       "type_view": "뷰",
       "type_routine": "루틴",
@@ -1417,7 +1443,8 @@
     "tabSelectAll": "Select *",
     "tabSelectFields": "Select [필드]",
     "tabUpdate": "Update",
-    "tabDelete": "Delete"
+    "tabDelete": "Delete",
+    "unknownDialect": "SQL을 생성할 수 없습니다: 이 연결의 데이터베이스 방언을 알 수 없습니다."
   },
   "modifyColumn": {
     "titleAdd": "컬럼 추가",
@@ -1968,6 +1995,27 @@
     "runButton": "실행",
     "runTabPrefix": "실행",
     "returnValue": "반환"
+  },
+  "commandPalette": {
+    "title": "명령 팔레트",
+    "objectsTitle": "데이터베이스 객체",
+    "searchLabel": "명령 검색",
+    "placeholder": "작업 검색...",
+    "executionError": "작업을 완료할 수 없습니다",
+    "objectsLoadError": "일부 객체를 불러오지 못했습니다: {{names}}",
+    "noResults": "일치하는 작업이 없습니다",
+    "navigationHint": "이동",
+    "escapeHint": "닫기",
+    "categories": {
+      "navigation": "탐색",
+      "connection": "연결",
+      "table": "테이블"
+    },
+    "commands": {
+      "openSettings": "설정 열기",
+      "openConnections": "연결 관리자 열기",
+      "openTableInConsole": "현재 테이블을 SQL 콘솔에서 열기"
+    }
   },
   "pagination": {
     "firstPage": "첫 페이지",

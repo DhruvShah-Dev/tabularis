@@ -5,6 +5,7 @@ import {
   quoteTableRef,
   formatSqlIdentifier,
 } from '../../src/utils/identifiers';
+import type { PluginManifest } from '../../src/types/plugins';
 
 describe('getQuoteChar', () => {
   it('should return backtick for mysql', () => {
@@ -112,6 +113,17 @@ describe('formatSqlIdentifier', () => {
     expect(formatSqlIdentifier('Status', 'postgres')).toBe('"Status"');
     expect(formatSqlIdentifier('AccountEventLog', 'postgres')).toBe('"AccountEventLog"');
     expect(formatSqlIdentifier('AccountId', 'postgres')).toBe('"AccountId"');
+  });
+
+  it('should quote identifiers for postgresql driver ids', () => {
+    expect(formatSqlIdentifier('AccountId', 'postgresql')).toBe('"AccountId"');
+    expect(formatSqlIdentifier('user', 'postgresql')).toBe('"user"');
+  });
+
+  it('should quote identifiers for PostgreSQL plugin manifests', () => {
+    const manifest = { id: 'postgresql' } as PluginManifest;
+
+    expect(formatSqlIdentifier('AccountId', manifest)).toBe('"AccountId"');
   });
 
   it('should quote reserved words for postgres', () => {

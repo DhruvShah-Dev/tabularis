@@ -3,10 +3,11 @@
  * Pure functions for generating SQL from visual query state
  */
 
-import { formatSqlIdentifier } from "./identifiers";
+import { formatSqlIdentifier, quoteTableRef } from "./identifiers";
 
 export interface TableNodeData {
   label: string;
+  schema?: string | null;
   columns: { name: string; type: string }[];
   selectedColumns: Record<string, boolean>;
   columnAggregations?: Record<string, ColumnAggregation>;
@@ -67,7 +68,6 @@ function formatTableRef(
   tableName: string,
   driver: string | null | undefined,
 ): string {
-  if (!driver) return tableName;
   return tableName
     .split('.')
     .map((part) => formatSqlIdentifier(part, driver))
@@ -91,6 +91,48 @@ function formatGeneratedColumnRef(
   return `${alias}.${formatSqlIdentifier(nameParts.join('.'), driver)}`;
 }
 
+function formatAggregateArgument(
+  argument: string,
+  driver: string | null | undefined,
+): string {
+  const trimmed = argument.trim();
+  if (
+    trimmed === '*' ||
+    trimmed.includes('"') ||
+    trimmed.includes('`') ||
+    trimmed.includes('/') ||
+    /[\s(),+\-*]/.test(trimmed)
+  ) {
+    return argument;
+  }
+
+  return argument.replace(trimmed, formatGeneratedColumnRef(trimmed, driver));
+}
+
+function formatHavingColumnRef(
+  column: string,
+  driver: string | null | undefined,
+): string {
+  const aggregateMatch = column.match(/^([A-Z_][A-Z0-9_]*)\((.*)\)$/i);
+  if (!aggregateMatch) return formatGeneratedColumnRef(column, driver);
+
+  const [, aggregateFunction, argument] = aggregateMatch;
+  const distinctMatch = argument.match(/^(\s*DISTINCT\s+)(.+)$/i);
+  if (distinctMatch) {
+    const [, distinctPrefix, distinctArgument] = distinctMatch;
+    return `${aggregateFunction}(${distinctPrefix}${formatAggregateArgument(distinctArgument, driver)})`;
+  }
+
+  return `${aggregateFunction}(${formatAggregateArgument(argument, driver)})`;
+}
+
+function formatAlias(
+  alias: string,
+  driver: string | null | undefined,
+): string {
+  return formatSqlIdentifier(alias, driver);
+}
+
 /**
  * Collects tables and their aliases from nodes
  */
@@ -105,9 +147,18 @@ export function collectTableAliases(nodes: QueryNode[]): Record<string, string> 
 /**
  * Generates table list with aliases
  */
-export function generateTableList(nodes: QueryNode[], aliases: Record<string, string>): string[] {
+function formatNodeTableRef(data: TableNodeData, driver?: string | null): string {
+  if (!data.schema) return formatTableRef(data.label, driver);
+  return quoteTableRef(data.label, driver, data.schema);
+}
+
+export function generateTableList(
+  nodes: QueryNode[],
+  aliases: Record<string, string>,
+  driver?: string | null,
+): string[] {
   return nodes.map((node) => {
-    const tableName = node.data.label;
+    const tableName = formatNodeTableRef(node.data, driver);
     const alias = aliases[node.id];
     return `${tableName} ${alias}`;
   });
@@ -147,7 +198,7 @@ export function collectSelectedColumns(
             }
 
             if (agg?.alias) {
-              colExpr += ` AS ${agg.alias}`;
+              colExpr += ` AS ${formatAlias(agg.alias, driver)}`;
             }
 
             if (agg?.order !== undefined) {
@@ -157,7 +208,7 @@ export function collectSelectedColumns(
             nonAggregatedCols.push(columnRef);
 
             if (colAlias?.alias) {
-              colExpr += ` AS ${colAlias.alias}`;
+              colExpr += ` AS ${formatAlias(colAlias.alias, driver)}`;
             }
 
             if (colAlias?.order !== undefined) {
@@ -201,10 +252,7 @@ export function generateFromClause(
 ): string {
   if (nodes.length === 0) return '';
 
-  const tableList = nodes.map((node) => {
-    const tableName = formatTableRef(node.data.label, driver);
-    return `${tableName} ${aliases[node.id]}`;
-  });
+  const tableList = generateTableList(nodes, aliases, driver);
 
   if (edges.length === 0) {
     return '\nFROM\n  ' + tableList.join(',\n  ');
@@ -214,7 +262,7 @@ export function generateFromClause(
   const firstData = firstNode.data;
   const processedNodes = new Set<string>([firstNode.id]);
 
-  let sql = `\nFROM\n  ${formatTableRef(firstData.label, driver)} ${aliases[firstNode.id]}`;
+  let sql = `\nFROM\n  ${formatNodeTableRef(firstData, driver)} ${aliases[firstNode.id]}`;
 
   const edgesToProcess = [...edges];
   let madeProgress = true;
@@ -235,7 +283,7 @@ export function generateFromClause(
           const sourceAlias = aliases[edge.source];
           const edgeData = edge.data;
           const joinType = edgeData?.joinType || 'INNER';
-          sql += `\n${joinType} JOIN ${formatTableRef(targetData.label, driver)} ${targetAlias} ON ${formatColumnRef(sourceAlias, edge.sourceHandle ?? '', driver)} = ${formatColumnRef(targetAlias, edge.targetHandle ?? '', driver)}`;
+          sql += `\n${joinType} JOIN ${formatNodeTableRef(targetData, driver)} ${targetAlias} ON ${formatColumnRef(sourceAlias, edge.sourceHandle ?? '', driver)} = ${formatColumnRef(targetAlias, edge.targetHandle ?? '', driver)}`;
           processedNodes.add(edge.target);
           edgesToProcess.splice(i, 1);
           madeProgress = true;
@@ -249,7 +297,7 @@ export function generateFromClause(
           const targetAlias = aliases[edge.target];
           const edgeData = edge.data;
           const joinType = edgeData?.joinType || 'INNER';
-          sql += `\n${joinType} JOIN ${formatTableRef(sourceData.label, driver)} ${sourceAlias} ON ${formatColumnRef(sourceAlias, edge.sourceHandle ?? '', driver)} = ${formatColumnRef(targetAlias, edge.targetHandle ?? '', driver)}`;
+          sql += `\n${joinType} JOIN ${formatNodeTableRef(sourceData, driver)} ${sourceAlias} ON ${formatColumnRef(sourceAlias, edge.sourceHandle ?? '', driver)} = ${formatColumnRef(targetAlias, edge.targetHandle ?? '', driver)}`;
           processedNodes.add(edge.source);
           edgesToProcess.splice(i, 1);
           madeProgress = true;
@@ -266,7 +314,7 @@ export function generateFromClause(
   nodes.forEach((node) => {
     if (!processedNodes.has(node.id)) {
       const data = node.data;
-      sql += `,\n  ${formatTableRef(data.label, driver)} ${aliases[node.id]}`;
+      sql += `,\n  ${formatNodeTableRef(data, driver)} ${aliases[node.id]}`;
     }
   });
 
@@ -319,13 +367,16 @@ export function generateGroupByClause(
 /**
  * Generates HAVING clause for aggregate conditions
  */
-export function generateHavingClause(conditions: WhereCondition[]): string {
+export function generateHavingClause(
+  conditions: WhereCondition[],
+  driver?: string | null,
+): string {
   const aggregateConditions = conditions.filter((c) => c.isAggregate && c.column && c.value);
 
   if (aggregateConditions.length === 0) return '';
 
   const clauses = aggregateConditions.map((c, idx) => {
-    const condition = `${c.column} ${c.operator} ${c.value}`;
+    const condition = `${formatHavingColumnRef(c.column, driver)} ${c.operator} ${c.value}`;
     return idx === 0 ? condition : `${c.logicalOperator} ${condition}`;
   });
 
@@ -377,7 +428,7 @@ export function generateVisualQuerySQL(
   sql += generateFromClause(nodes, edges, aliases, driver);
   sql += generateWhereClause(whereConditions, driver);
   sql += generateGroupByClause(hasAggregation, nonAggregatedCols, groupBy, driver);
-  sql += generateHavingClause(whereConditions);
+  sql += generateHavingClause(whereConditions, driver);
   sql += generateOrderByClause(orderBy, driver);
   sql += generateLimitClause(limit);
 

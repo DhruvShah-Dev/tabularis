@@ -23,6 +23,29 @@
     "fromPlaceholder": "从",
     "toPlaceholder": "到"
   },
+  "tags": {
+    "label": "标签",
+    "new": "新建标签",
+    "add": "添加",
+    "namePlaceholder": "标签名称…",
+    "manage": "管理标签",
+    "done": "完成",
+    "deleteTitle": "删除标签",
+    "deleteConfirm": "删除标签“{{name}}”？它将从所有连接中移除。"
+  },
+  "environment": {
+    "label": "环境",
+    "none": "无环境",
+    "development": "开发",
+    "staging": "预发布",
+    "production": "生产",
+    "short": { "development": "DEV", "staging": "STAGING", "production": "PROD" },
+    "banner": "生产 — {{name}}",
+    "warnTitle": "生产数据库",
+    "warnMessage": "您即将修改“{{name}}”上的生产数据。确定要继续吗？",
+    "warnConfirm": "仍然执行",
+    "warnSnooze": "此连接不再询问（本次会话）"
+  },
   "common": {
     "save": "保存",
     "close": "关闭",
@@ -40,6 +63,7 @@
     "continue": "继续",
     "back": "返回",
     "copy": "复制",
+    "copied": "已复制！",
     "showDetails": "显示详情",
     "hideDetails": "隐藏详情",
     "beta": "测试版"
@@ -368,6 +392,22 @@
   "settings": {
     "title": "设置",
     "general": "通用",
+    "privacy": "隐私",
+    "columnMasking": "列掩码",
+    "columnMaskingDesc": "在结果网格中隐藏敏感列（密码、邮箱、令牌等）的内容。复制和导出仍使用真实值。",
+    "columnMaskingEnabled": "掩码敏感列",
+    "columnMaskingEnabledDesc": "对名称匹配敏感模式的列显示占位符而非真实值。",
+    "maskingPatterns": "敏感列名模式",
+    "maskingPatternsDesc": "每行一个模式。列名包含任一模式时即被掩码（不区分大小写）。",
+    "maskingOverrides": "按连接覆盖",
+    "maskingOverridesDesc": "对某个连接强制掩码（包含）或从不掩码（排除）指定列。每行一条“表.列”；排除优先于包含和模式。",
+    "maskingConnection": "连接",
+    "maskingConnectionDesc": "选择这些覆盖规则应用的连接。",
+    "maskingInclude": "始终掩码",
+    "maskingIncludeDesc": "在此连接中始终掩码的列，即使其名称不匹配任何模式。",
+    "maskingExclude": "从不掩码",
+    "maskingExcludeDesc": "在此连接中从不掩码的列，即使其名称匹配某个模式。",
+    "maskingOverridePlaceholder": "例如 users.password",
     "info": "信息",
     "dataEditor": "数据编辑器",
     "pageSize": "结果页面大小（限制）",
@@ -595,12 +635,14 @@
       "confirmRemove": "确定要移除 \"{{name}}\" 吗？这将删除插件文件。",
       "enabled": "已启用",
       "disabled": "已禁用",
+      "openFolder": "打开插件文件夹",
       "installError": {
         "title": "安装失败",
         "subtitle": "安装插件时发生错误。请参阅下面的详细信息。",
         "details": "错误详情",
         "copy": "复制",
-        "copied": "已复制！"
+        "copied": "已复制！",
+        "reload": "重新加载插件"
       },
       "uninstallError": {
         "title": "卸载失败",
@@ -677,6 +719,7 @@
       "notebookRunAll": "运行所有单元格",
       "categories_notebook": "笔记本",
       "quickNavigator": "快速导航",
+      "commandPaletteActions": "搜索操作",
       "triggerSuggestions": "触发建议",
       "formatSql": "格式化 SQL",
       "refreshTable": "刷新表格"
@@ -780,6 +823,7 @@
     "nameRequired": "连接名称是必需的",
     "dbNameRequired": "数据库名称是必需的",
     "connectionUriRequiresKeychain": "连接 URI 必须保存在操作系统密钥链中。请启用“在密钥链中保存密码”后继续。",
+    "connectionUriRequired": "连接 URI 是必需的",
     "dbType": "数据库类型",
     "host": "主机",
     "port": "端口",
@@ -922,6 +966,9 @@
     "waiting": "正在等待您的安全密钥 — 触摸以确认。"
   },
   "dataGrid": {
+    "noRowIdentity": "无法编辑行:\"{{table}}\" 没有主键,因此编辑要求结果包含表的所有列。请选择所有列(例如 SELECT *)或添加主键。",
+    "keylessRowNotFound": "更新 \"{{column}}\" 时没有行与原始值匹配。该表没有主键,数据可能已更改,请刷新后重试。",
+    "keylessDeleteNotFound": "删除时没有行与原始值匹配。该表没有主键,数据可能已更改,请刷新后重试。",
     "newRow": "新建",
     "noData": "无数据显示",
     "editRow": "编辑行",
@@ -966,7 +1013,11 @@
     "setEmpty": "设为空",
     "setServerNow": "插入当前时间戳",
     "previewReferenced": "预览相关记录",
-    "openReferenced": "在 {{table}} 中打开引用的行"
+    "openReferenced": "在 {{table}} 中打开引用的行",
+    "revealCell": "显示单元格",
+    "maskCell": "掩码单元格",
+    "revealColumn": "显示列",
+    "maskColumn": "掩码列"
   },
   "editRow": {
     "title": "编辑行",
@@ -1001,8 +1052,6 @@
       "noResults": "未找到匹配的元素",
       "count_one": "1 个元素",
       "count_other": "{{count}} 个元素",
-      "navigationHint": "↑↓ 导航，Enter 打开",
-      "escHint": "Esc 关闭",
       "type_table": "表",
       "type_view": "视图",
       "type_routine": "例程",
@@ -1369,7 +1418,8 @@
     "tabSelectAll": "SELECT *",
     "tabSelectFields": "SELECT [字段]",
     "tabUpdate": "UPDATE",
-    "tabDelete": "DELETE"
+    "tabDelete": "DELETE",
+    "unknownDialect": "无法生成 SQL：此连接的数据库方言未知。"
   },
   "modifyColumn": {
     "titleAdd": "添加列",
@@ -1882,6 +1932,27 @@
     "runTabPrefix": "运行",
     "returnValue": "返回值"
   },
+  "commandPalette": {
+    "title": "命令面板",
+    "objectsTitle": "数据库对象",
+    "searchLabel": "搜索命令",
+    "placeholder": "搜索操作...",
+    "executionError": "无法完成操作",
+    "objectsLoadError": "无法加载部分对象：{{names}}",
+    "noResults": "未找到匹配的操作",
+    "navigationHint": "导航",
+    "escapeHint": "关闭",
+    "categories": {
+      "navigation": "导航",
+      "connection": "连接",
+      "table": "表"
+    },
+    "commands": {
+      "openSettings": "打开设置",
+      "openConnections": "打开连接管理器",
+      "openTableInConsole": "在 SQL 控制台中打开当前表"
+    }
+  },
   "pagination": {
     "firstPage": "第一页",
     "previousPage": "上一页",
@@ -1952,6 +2023,7 @@
     "driverCount_other": "{{count}} 个驱动程序",
     "connectTo": "连接到 {{name}}",
     "unavailableOnPlatform": "在您的平台上不可用",
+    "unavailable": "不可用",
     "backToCatalogue": "返回目录",
     "pickDriver": "多个驱动程序可连接到 {{name}}。请选择一个：",
     "latestVersion": "最新 v{{version}}",
@@ -1961,7 +2033,14 @@
     "notInstalled": "此驱动程序尚未安装。请安装以配置连接。",
     "installVersion": "安装 v{{version}}",
     "installingVersion": "正在安装 v{{version}}…",
-    "retryInstall": "重试安装"
+    "retryInstall": "重试安装",
+    "viewDetails": "更多详情",
+    "installTitle": "安装驱动程序",
+    "readmeSubtitle": "插件 README",
+    "readmeLoading": "正在加载 README…",
+    "readmeUnavailable": "此插件没有可用的 README。",
+    "readmeFallbackLocale": "此 README 尚不支持您的语言 — 以“{{locale}}”显示。",
+    "openDocumentation": "打开完整文档"
   },
   "connectionErrors": {
     "ssh-auth": {

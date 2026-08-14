@@ -27,14 +27,86 @@ struct InstalledPluginManifest {
 }
 
 pub fn get_plugins_dir() -> Result<PathBuf, String> {
-    let proj_dirs = ProjectDirs::from("com", "debba", "tabularis")
-        .ok_or_else(|| "Could not determine project directories".to_string())?;
-    let plugins_dir = proj_dirs.data_dir().join("plugins");
+    let plugins_dir = crate::paths::get_app_data_dir().join("plugins");
     if !plugins_dir.exists() {
         fs::create_dir_all(&plugins_dir)
             .map_err(|e| format!("Failed to create plugins directory: {}", e))?;
     }
     Ok(plugins_dir)
+}
+
+/// Plugins directory used by builds before the project dirs were unified under
+/// `tabularis` (the old `com.debba.tabularis` identifier). On Linux this equals
+/// the current directory, so callers must guard against migrating onto itself.
+fn legacy_plugins_dir() -> Option<PathBuf> {
+    ProjectDirs::from("com", "debba", "tabularis").map(|pd| pd.data_dir().join("plugins"))
+}
+
+fn dir_has_entries(dir: &Path) -> bool {
+    fs::read_dir(dir)
+        .map(|mut entries| entries.next().is_some())
+        .unwrap_or(false)
+}
+
+/// Move plugin folders from `legacy` into `target`. No-op when there is nothing
+/// to move, when the paths are identical (Linux), or when `target` already holds
+/// plugins (never clobber an existing install). Returns the number of folders
+/// moved. Best-effort: per-entry failures are logged and skipped.
+pub(crate) fn migrate_plugins_between(legacy: &Path, target: &Path) -> usize {
+    if legacy == target || !legacy.is_dir() || dir_has_entries(target) {
+        return 0;
+    }
+
+    let entries = match fs::read_dir(legacy) {
+        Ok(entries) => entries,
+        Err(e) => {
+            log::error!("Plugin migration: failed to read {:?}: {}", legacy, e);
+            return 0;
+        }
+    };
+    if let Err(e) = fs::create_dir_all(target) {
+        log::error!("Plugin migration: failed to create {:?}: {}", target, e);
+        return 0;
+    }
+
+    let mut moved = 0;
+    for entry in entries.flatten() {
+        let dest = target.join(entry.file_name());
+        if dest.exists() {
+            continue;
+        }
+        match fs::rename(entry.path(), &dest) {
+            Ok(()) => moved += 1,
+            Err(e) => log::error!(
+                "Plugin migration: failed to move {:?} -> {:?}: {}",
+                entry.path(),
+                dest,
+                e
+            ),
+        }
+    }
+    // Best-effort cleanup of the now-empty legacy directory.
+    let _ = fs::remove_dir(legacy);
+    moved
+}
+
+/// One-time migration: relocate plugins from the legacy `com.debba.tabularis`
+/// project dir into the unified `tabularis` data dir. Safe to call on every
+/// startup — it only does work the first time after upgrading.
+pub fn migrate_legacy_plugins_dir() {
+    let Some(legacy) = legacy_plugins_dir() else {
+        return;
+    };
+    let target = crate::paths::get_app_data_dir().join("plugins");
+    let moved = migrate_plugins_between(&legacy, &target);
+    if moved > 0 {
+        log::info!(
+            "Migrated {} plugin(s) from legacy directory {:?} to {:?}",
+            moved,
+            legacy,
+            target
+        );
+    }
 }
 
 /// Canonical plugin bundle manifest. JSON content. The preferred manifest; the
@@ -81,15 +153,11 @@ pub(crate) fn read_plugin_info_from_dir(path: &Path) -> Result<InstalledPluginIn
     })
 }
 
-pub fn read_installed_plugin(plugin_id: &str) -> Result<InstalledPluginInfo, String> {
-    let plugins_dir = get_plugins_dir()?;
-    read_plugin_info_from_dir(&plugins_dir.join(plugin_id))
-}
-
 pub async fn download_and_install(
     plugin_id: &str,
     download_url: &str,
     expected_sha256: Option<&str>,
+    expected_version: Option<&str>,
 ) -> Result<(), String> {
     let plugins_dir = get_plugins_dir()?;
     let tmp_dir = plugins_dir.join(format!(".tmp-{}", plugin_id));
@@ -150,7 +218,7 @@ pub async fn download_and_install(
 
     // Verify SHA-256 if the registry advertised one. The Tabularium
     // registry signs releases with a sha256 in the integrity envelope
-    // (see https://tabularium.wiki/docs/#/consuming) — refusing to install
+    // (see https://docs.tabularium.wiki/consuming/) — refusing to install
     // on mismatch is what protects users from a tampered upstream asset.
     // The legacy GitHub-hosted registry doesn't publish hashes, so this
     // check is opt-in per call.
@@ -230,16 +298,40 @@ pub async fn download_and_install(
         }
     }
 
-    // Validate the bundle ships a manifest and that it deserialises into a
-    // well-formed one with the required fields (notably `version` — the
-    // strict-mode drift catch).
+    // Validate the bundle ships a manifest that deserialises with the required
+    // fields (notably `version` — the strict-mode drift catch), and that its
+    // identity/version match what the registry advertised. All of this happens
+    // while the bundle is still in the temp dir: a bad archive must never
+    // replace an existing installation or linger as a half-installed plugin.
     if !has_manifest(&tmp_dir) {
         fs::remove_dir_all(&tmp_dir).ok();
         return Err("Plugin archive does not contain a .tabularium manifest".to_string());
     }
-    if let Err(e) = read_manifest::<InstalledPluginManifest>(&tmp_dir) {
+    let manifest = match read_manifest::<InstalledPluginManifest>(&tmp_dir) {
+        Ok(m) => m,
+        Err(e) => {
+            fs::remove_dir_all(&tmp_dir).ok();
+            return Err(format!("Invalid plugin manifest: {}", e));
+        }
+    };
+    // The canonical schema uses `name` as the identity; legacy manifests may
+    // carry an explicit `id`.
+    let manifest_id = manifest.id.clone().unwrap_or_else(|| manifest.name.clone());
+    if manifest_id != plugin_id {
         fs::remove_dir_all(&tmp_dir).ok();
-        return Err(format!("Invalid plugin manifest: {}", e));
+        return Err(format!(
+            "Plugin archive mismatch: registry expected id '{}' but the archive manifest reports '{}'. Installation aborted.",
+            plugin_id, manifest_id
+        ));
+    }
+    if let Some(expected) = expected_version {
+        if manifest.version != expected {
+            fs::remove_dir_all(&tmp_dir).ok();
+            return Err(format!(
+                "Plugin archive version mismatch: registry expected version '{}' but the archive manifest reports '{}'. The published asset appears inconsistent. Installation aborted.",
+                expected, manifest.version
+            ));
+        }
     }
 
     // Remove existing plugin dir if present
@@ -258,10 +350,15 @@ pub async fn download_and_install(
 
 pub fn uninstall(plugin_id: &str) -> Result<(), String> {
     let plugins_dir = get_plugins_dir()?;
-    let plugin_dir = plugins_dir.join(plugin_id);
+    let mut plugin_dir = plugins_dir.join(plugin_id);
 
+    // The directory normally matches the plugin id, but manually copied or
+    // legacy bundles may live in a folder named differently from the manifest
+    // id — those still show up as installed (list_installed reads manifests),
+    // so resolve them by scanning manifests before giving up.
     if !plugin_dir.exists() {
-        return Err(format!("Plugin '{}' is not installed", plugin_id));
+        plugin_dir = find_plugin_dir_by_id(&plugins_dir, plugin_id)
+            .ok_or_else(|| format!("Plugin '{}' is not installed", plugin_id))?;
     }
 
     fs::remove_dir_all(&plugin_dir)
@@ -269,6 +366,29 @@ pub fn uninstall(plugin_id: &str) -> Result<(), String> {
 
     log::info!("Plugin '{}' uninstalled successfully", plugin_id);
     Ok(())
+}
+
+/// Scans the plugins directory for a bundle whose manifest id matches
+/// `plugin_id`, regardless of the directory name.
+fn find_plugin_dir_by_id(plugins_dir: &Path, plugin_id: &str) -> Option<PathBuf> {
+    let entries = fs::read_dir(plugins_dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() || !has_manifest(&path) {
+            continue;
+        }
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with(".tmp-") {
+                continue;
+            }
+        }
+        if let Ok(info) = read_plugin_info_from_dir(&path) {
+            if info.id == plugin_id {
+                return Some(path);
+            }
+        }
+    }
+    None
 }
 
 pub fn list_installed() -> Result<Vec<InstalledPluginInfo>, String> {

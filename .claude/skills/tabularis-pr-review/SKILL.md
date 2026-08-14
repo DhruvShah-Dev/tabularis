@@ -37,7 +37,7 @@ For each factual assertion in the description, prove it:
 - "Reads `default_port` from the manifest" → check the type (`src/types/plugins.ts`) — is it nullable? What's the fallback?
 - New Tauri command → confirm it's registered in `src-tauri/src/lib.rs` `invoke_handler`.
 
-### 4. Impact analysis (per CLAUDE.md)
+### 4. Impact analysis (per AGENTS.md)
 For each non-trivial symbol the PR touches, run `gitnexus_impact({target, direction: "upstream"})` and note blast radius / risk. Flag HIGH/CRITICAL.
 
 ### 5. Check out the PR branch — this is mandatory before running tests

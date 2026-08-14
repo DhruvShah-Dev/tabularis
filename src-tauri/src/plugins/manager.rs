@@ -3,7 +3,6 @@ use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 
-use directories::ProjectDirs;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
@@ -90,19 +89,17 @@ pub async fn load_plugins_with_configs(
     plugin_configs: HashMap<String, PluginConfig>,
     enabled_ids: Option<&[String]>,
 ) {
-    let proj_dirs = match ProjectDirs::from("com", "debba", "tabularis") {
-        Some(d) => d,
-        None => return,
-    };
+    // Migrate before resolving the shared directory so both the GUI and the
+    // standalone MCP process discover plugins installed by older builds.
+    crate::plugins::installer::migrate_legacy_plugins_dir();
 
-    let plugins_dir = proj_dirs.data_dir().join("plugins");
-
-    if !plugins_dir.exists() {
-        if let Err(e) = fs::create_dir_all(&plugins_dir) {
-            log::error!("Failed to create plugins directory: {}", e);
+    let plugins_dir = match crate::plugins::installer::get_plugins_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            log::error!("{}", e);
             return;
         }
-    }
+    };
 
     let entries = match fs::read_dir(&plugins_dir) {
         Ok(e) => e,

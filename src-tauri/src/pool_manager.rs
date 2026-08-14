@@ -1,4 +1,5 @@
 use crate::models::ConnectionParams;
+use crate::sqlite_database::expand_sqlite_filename;
 use deadpool_postgres::{Hook as PgHook, HookError as PgHookError, Manager as PgPoolManager, Pool as PgPool};
 use once_cell::sync::Lazy;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
@@ -652,7 +653,7 @@ impl ServerCertVerifier for VerifyCaCertVerifier {
 }
 
 fn build_sqlite_connectoptions(params: &ConnectionParams) -> SqliteConnectOptions {
-    SqliteConnectOptions::new().filename(params.database.to_string())
+    SqliteConnectOptions::new().filename(expand_sqlite_filename(params.database.primary()))
 }
 
 /// Return the connection's startup script if it is set and not blank.
@@ -800,7 +801,6 @@ async fn get_mysql_pool_for_database_with_id(
     // trust store is used; a process-level rustls CryptoProvider is not
     // required here. The Postgres deadpool path still installs one in
     // build_postgres_configurations via the same helper.
-    let options = build_mysql_options(params, override_db)?;
     let connect_timeout = Duration::from_millis(mysql_numeric_setting(
         "connectTimeout",
         DEFAULT_MYSQL_CONNECT_TIMEOUT_MS,
