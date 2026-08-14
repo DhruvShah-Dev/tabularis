@@ -4,6 +4,14 @@
  */
 
 import { formatSqlIdentifier, quoteTableRef } from "./identifiers";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
+
+/** Driver argument accepted throughout this module: a bare driver id
+ * string, a resolved manifest, or a bare capabilities object. Capability-
+ * driven when available (issue #614): a postgres-compatible driver
+ * registered under a different id (e.g. a standalone PostgreSQL plugin) is
+ * quoted the same as the builtin "postgres" driver. */
+type DriverArg = string | PluginManifest | DriverCapabilities | null | undefined;
 
 export interface TableNodeData {
   label: string;
@@ -66,7 +74,7 @@ export interface SelectedColumn {
 
 function formatTableRef(
   tableName: string,
-  driver: string | null | undefined,
+  driver: DriverArg,
 ): string {
   return tableName
     .split('.')
@@ -77,14 +85,14 @@ function formatTableRef(
 function formatColumnRef(
   alias: string,
   column: string,
-  driver: string | null | undefined,
+  driver: DriverArg,
 ): string {
   return `${alias}.${formatSqlIdentifier(column, driver)}`;
 }
 
 function formatGeneratedColumnRef(
   column: string,
-  driver: string | null | undefined,
+  driver: DriverArg,
 ): string {
   const [alias, ...nameParts] = column.split('.');
   if (nameParts.length === 0) return formatSqlIdentifier(column, driver);
@@ -93,7 +101,7 @@ function formatGeneratedColumnRef(
 
 function formatAggregateArgument(
   argument: string,
-  driver: string | null | undefined,
+  driver: DriverArg,
 ): string {
   const trimmed = argument.trim();
   if (
@@ -111,7 +119,7 @@ function formatAggregateArgument(
 
 function formatHavingColumnRef(
   column: string,
-  driver: string | null | undefined,
+  driver: DriverArg,
 ): string {
   const aggregateMatch = column.match(/^([A-Z_][A-Z0-9_]*)\((.*)\)$/i);
   if (!aggregateMatch) return formatGeneratedColumnRef(column, driver);
@@ -128,7 +136,7 @@ function formatHavingColumnRef(
 
 function formatAlias(
   alias: string,
-  driver: string | null | undefined,
+  driver: DriverArg,
 ): string {
   return formatSqlIdentifier(alias, driver);
 }
@@ -147,7 +155,7 @@ export function collectTableAliases(nodes: QueryNode[]): Record<string, string> 
 /**
  * Generates table list with aliases
  */
-function formatNodeTableRef(data: TableNodeData, driver?: string | null): string {
+function formatNodeTableRef(data: TableNodeData, driver?: DriverArg): string {
   if (!data.schema) return formatTableRef(data.label, driver);
   return quoteTableRef(data.label, driver, data.schema);
 }
@@ -155,7 +163,7 @@ function formatNodeTableRef(data: TableNodeData, driver?: string | null): string
 export function generateTableList(
   nodes: QueryNode[],
   aliases: Record<string, string>,
-  driver?: string | null,
+  driver?: DriverArg,
 ): string[] {
   return nodes.map((node) => {
     const tableName = formatNodeTableRef(node.data, driver);
@@ -170,7 +178,7 @@ export function generateTableList(
 export function collectSelectedColumns(
   nodes: QueryNode[],
   aliases: Record<string, string>,
-  driver?: string | null,
+  driver?: DriverArg,
 ): { columns: SelectedColumn[]; hasAggregation: boolean; nonAggregatedCols: string[] } {
   const selectedColsWithOrder: SelectedColumn[] = [];
   const nonAggregatedCols: string[] = [];
@@ -248,7 +256,7 @@ export function generateFromClause(
   nodes: QueryNode[],
   edges: QueryEdge[],
   aliases: Record<string, string>,
-  driver?: string | null,
+  driver?: DriverArg,
 ): string {
   if (nodes.length === 0) return '';
 
@@ -326,7 +334,7 @@ export function generateFromClause(
  */
 export function generateWhereClause(
   conditions: WhereCondition[],
-  driver?: string | null,
+  driver?: DriverArg,
 ): string {
   const normalConditions = conditions.filter((c) => !c.isAggregate && c.column && c.value);
 
@@ -347,7 +355,7 @@ export function generateGroupByClause(
   hasAggregation: boolean,
   nonAggregatedCols: string[],
   manualGroupBy: string[],
-  driver?: string | null,
+  driver?: DriverArg,
 ): string {
   const formattedManualGroupBy = manualGroupBy.map((column) =>
     formatGeneratedColumnRef(column, driver),
@@ -369,7 +377,7 @@ export function generateGroupByClause(
  */
 export function generateHavingClause(
   conditions: WhereCondition[],
-  driver?: string | null,
+  driver?: DriverArg,
 ): string {
   const aggregateConditions = conditions.filter((c) => c.isAggregate && c.column && c.value);
 
@@ -388,7 +396,7 @@ export function generateHavingClause(
  */
 export function generateOrderByClause(
   orderBy: OrderByClause[],
-  driver?: string | null,
+  driver?: DriverArg,
 ): string {
   if (orderBy.length === 0) return '';
 
@@ -416,7 +424,7 @@ export function generateVisualQuerySQL(
   orderBy: OrderByClause[],
   groupBy: string[],
   limit: string,
-  driver?: string | null,
+  driver?: DriverArg,
 ): string {
   if (nodes.length === 0) return '';
 

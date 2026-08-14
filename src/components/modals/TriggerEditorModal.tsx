@@ -8,6 +8,7 @@ import { Modal } from "../ui/Modal";
 import { SqlEditorWrapper } from "../ui/SqlEditorWrapper";
 import { useDatabase } from "../../hooks/useDatabase";
 import { quoteIdentifier } from "../../utils/identifiers";
+import type { DriverCapabilities } from "../../types/plugins";
 
 interface TriggerEditorModalProps {
   isOpen: boolean;
@@ -17,6 +18,12 @@ interface TriggerEditorModalProps {
   tableName?: string;
   schema?: string;
   driver?: string;
+  /** Capability-driven identifier quoting (issue #614): when available,
+   * takes precedence over the bare `driver` id/fallback so a
+   * postgres-compatible driver registered under a different id (e.g. a
+   * standalone PostgreSQL plugin) is quoted the same as the builtin
+   * "postgres" driver. */
+  capabilities?: DriverCapabilities | null;
   isNewTrigger?: boolean;
   onSuccess?: () => void;
 }
@@ -50,6 +57,7 @@ export const TriggerEditorModal = ({
   tableName: initialTableName,
   schema: schemaProp,
   driver,
+  capabilities,
   isNewTrigger = false,
   onSuccess,
 }: TriggerEditorModalProps) => {
@@ -120,7 +128,7 @@ export const TriggerEditorModal = ({
 
   const buildTriggerSql = (): string => {
     if (useRawSql) return rawSql;
-    const q = (id: string) => quoteIdentifier(id, driver ?? "postgres");
+    const q = (id: string) => quoteIdentifier(id, capabilities ?? driver ?? "postgres");
     // MySQL handles schema via the connection — including it in the ON clause causes error 1435
     const isMysql = driver === "mysql";
     const schemaPrefix = (!isMysql && resolvedSchema) ? `${q(resolvedSchema)}.` : "";

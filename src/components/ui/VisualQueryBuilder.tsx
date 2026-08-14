@@ -39,7 +39,7 @@ interface TableColumn {
 }
 
 const VisualQueryBuilderContent = () => {
-  const { activeConnectionId, activeDriver, activeSchema } = useDatabase();
+  const { activeConnectionId, activeDriver, activeCapabilities, activeSchema } = useDatabase();
   const { activeTab, activeTabId, updateTab } = useEditor();
   const { screenToFlowPosition } = useReactFlow();
   
@@ -166,13 +166,13 @@ const VisualQueryBuilderContent = () => {
       orderBy,
       groupBy,
       limit,
-      activeDriver,
+      activeCapabilities ?? activeDriver,
     );
 
     if (sql) {
       updateTab(activeTabId, { query: sql });
     }
-  }, [nodes, edges, activeTabId, updateTab, whereConditions, orderBy, groupBy, limit, activeDriver]);
+  }, [nodes, edges, activeTabId, updateTab, whereConditions, orderBy, groupBy, limit, activeDriver, activeCapabilities]);
 
   const onConnect = useCallback(
     (params: Connection) => {

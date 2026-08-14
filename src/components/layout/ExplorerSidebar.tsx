@@ -195,7 +195,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   const navigate = useNavigate();
   const objectNavigation = useDatabaseObjectNavigation(
     activeConnectionId,
-    activeDriver,
+    activeCapabilities ?? activeDriver,
   );
   const [schemaVersion, setSchemaVersion] = useState(0);
   const sidebarBodyRef = useRef<HTMLDivElement>(null);
@@ -1580,6 +1580,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               onContextMenu={handleContextMenu}
                               connectionId={activeConnectionId!}
                               driver={activeDriver!}
+                              capabilities={activeCapabilities}
                               canManage={supportsManageTables(activeCapabilities)}
                               onAddColumn={(t_name) =>
                                 setModifyColumnModal({ isOpen: true, tableName: t_name, column: null })
@@ -1686,6 +1687,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                             onContextMenu={handleContextMenu}
                             connectionId={activeConnectionId!}
                             driver={activeDriver!}
+                            capabilities={activeCapabilities}
                           />
                         ))}
                       </div>
@@ -1965,7 +1967,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       icon: Trash2,
                       danger: true,
                       action: async () => {
-                        const quotedTable = quoteTableRef(contextMenu.id, activeDriver, ctxSchema);
+                        const quotedTable = quoteTableRef(contextMenu.id, activeCapabilities ?? activeDriver, ctxSchema);
                         if (
                           await ask(
                             t("sidebar.deleteTableConfirm", { table: contextMenu.id }),
@@ -2656,6 +2658,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           tableName={triggerEditorModal.tableName}
           schema={triggerEditorModal.schema}
           driver={activeDriver ?? undefined}
+          capabilities={activeCapabilities}
           isNewTrigger={triggerEditorModal.isNewTrigger}
           onSuccess={() => {
             if (refreshTriggers) refreshTriggers();

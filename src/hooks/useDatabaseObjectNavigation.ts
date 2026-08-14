@@ -4,6 +4,7 @@ import type {
   RoutineInfo,
   TriggerInfo,
 } from "../contexts/DatabaseContext";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 import {
   createDefinitionRequest,
   createQueryableObjectRequests,
@@ -27,7 +28,7 @@ interface QueryableObjectNavigationOptions {
  */
 export function useDatabaseObjectNavigation(
   connectionId: string | null,
-  driver: string | null,
+  driver: string | PluginManifest | DriverCapabilities | null,
 ) {
   const runtime = useDatabaseObjectActionRuntime();
 

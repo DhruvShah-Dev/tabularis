@@ -6,6 +6,7 @@ import type {
   ViewInfo,
 } from "../contexts/DatabaseContext";
 import type { DatabaseObject } from "./databaseObjectActions";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 
 interface NavigatorItemBase {
   name: string;
@@ -139,7 +140,7 @@ export function getNavigatorItems(params: NavigatorItemParams): NavigatorItem[] 
 
 interface DatabaseObjectContext {
   connectionId: string;
-  driver: string | null;
+  driver: string | PluginManifest | DriverCapabilities | null;
   isMultiDatabase: boolean;
 }
 
