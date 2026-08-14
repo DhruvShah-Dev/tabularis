@@ -5,8 +5,8 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::connection_migrations::{
-        migrate_connection_ssl_mode_in_place, migrate_postgres_ssl_mode_spelling_at_path,
-        stale_postgres_ssl_mode_replacement,
+        connections_file_changed_concurrently, migrate_connection_ssl_mode_in_place,
+        migrate_postgres_ssl_mode_spelling_at_path, stale_postgres_ssl_mode_replacement,
     };
     use crate::drivers::driver_trait::SqlDialect;
     use crate::models::{ConnectionParams, ConnectionsFile, DatabaseSelection, SavedConnection};
@@ -176,6 +176,13 @@ mod tests {
         // Second pass: the value is already correct, nothing to rewrite.
         assert!(!migrate_connection_ssl_mode_in_place(&mut conn, &dialects));
         assert_eq!(conn.params.ssl_mode.as_deref(), Some("require"));
+    }
+
+    #[test]
+    fn connections_file_changed_concurrently_detects_any_byte_difference() {
+        assert!(!connections_file_changed_concurrently("{}", "{}"));
+        assert!(connections_file_changed_concurrently("{}", "{ }"));
+        assert!(connections_file_changed_concurrently("", "{}"));
     }
 
     // --- migrate_postgres_ssl_mode_spelling_at_path: path-based core ---

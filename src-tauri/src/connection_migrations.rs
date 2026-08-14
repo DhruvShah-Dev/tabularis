@@ -2,10 +2,11 @@
 //! disk that a previous version of the app saved incorrectly. Each migration
 //! is path-based (no `AppHandle` dependency) so it can run from both the GUI
 //! process's Tauri commands and the standalone `--mcp` server process, which
-//! reads (and, as of a follow-up commit, writes) the same `connections.json`
-//! but has no Tauri context.
+//! reads and (as of the SSL-mode migration below) writes the same
+//! `connections.json` but has no Tauri context.
 
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 
 use crate::drivers::driver_trait::SqlDialect;
@@ -75,6 +76,22 @@ pub(crate) fn migrate_connection_ssl_mode_in_place(
     true
 }
 
+/// True if `connections.json` changed since `content_before` was captured —
+/// i.e. another process wrote a concurrent edit while this migration was
+/// computing its own rewrite. Pure and synchronous so the concurrency guard
+/// itself can be tested without touching the driver registry or the
+/// filesystem beyond what the caller already read.
+///
+/// Content comparison (not mtime) is used deliberately: some filesystems
+/// have coarse (1-second) mtime resolution, which wouldn't reliably detect
+/// two writes landing within the same second.
+pub(crate) fn connections_file_changed_concurrently(
+    content_before: &str,
+    content_now: &str,
+) -> bool {
+    content_before != content_now
+}
+
 /// Migrates already-persisted `ssl_mode` values on postgres-dialect
 /// connections (driver id other than the builtin `"postgres"`) from the
 /// stale MySQL-style spelling to the Postgres-style spelling the plugin
@@ -83,18 +100,35 @@ pub(crate) fn migrate_connection_ssl_mode_in_place(
 ///
 /// Path-based, no `AppHandle` — callable from both the GUI process (wrapped
 /// by `commands::migrate_postgres_ssl_mode_spelling`, which additionally
-/// invalidates the connection cache) and, in a follow-up commit, the
-/// standalone `--mcp` server process, which has no Tauri context and no
-/// cache to invalidate.
+/// invalidates the connection cache) and the standalone `--mcp` server
+/// process, which has no Tauri context and no cache to invalidate.
 ///
 /// Returns `Ok(true)` only once the rewrite has actually been committed to
-/// disk, `Ok(false)` when nothing needed migrating — a strict improvement
-/// over the previous `Result<()>`, which couldn't distinguish the two.
+/// disk — `Ok(false)` covers both "nothing needed migrating" and "a
+/// migration was computed but skipped because the file changed concurrently"
+/// (see the concurrency note below).
+///
+/// # Concurrency
+///
+/// This is the first write path the `--mcp` process exercises against
+/// `connections.json` — previously read-only there. The GUI app enforces
+/// single-instance, but MCP clients (Claude Desktop, Cursor, etc.) spawn
+/// `tabularis --mcp` as an independent subprocess that can run at the same
+/// time as the GUI, and this repo's connection persistence layer has no file
+/// locking anywhere. To avoid silently clobbering a concurrent GUI edit made
+/// while this function is mid read-modify-write, the file's raw content is
+/// compared immediately before writing (`connections_file_changed_concurrently`);
+/// if it changed since this function's own read, the migration is skipped
+/// for this run rather than overwritten. This is safe because the migration
+/// is idempotent and self-terminating — the next process to load
+/// connections (GUI reopen, or MCP's next startup) will see the still-stale
+/// value and retry.
 pub async fn migrate_postgres_ssl_mode_spelling_at_path(conn_path: &Path) -> Result<bool, String> {
     if !conn_path.exists() {
         return Ok(false); // Nothing to migrate
     }
 
+    let content_before = fs::read_to_string(conn_path).map_err(|e| e.to_string())?;
     let mut conn_file = persistence::load_connections_file(conn_path)?;
 
     // Resolve each distinct non-builtin driver id's dialect once, not once
@@ -123,6 +157,16 @@ pub async fn migrate_postgres_ssl_mode_spelling_at_path(conn_path: &Path) -> Res
 
     if migrated_count == 0 {
         return Ok(false); // No migration needed
+    }
+
+    // Bail if another process (e.g. the GUI) saved a concurrent edit while
+    // we were computing the migration above — don't blindly overwrite it.
+    let content_now = fs::read_to_string(conn_path).map_err(|e| e.to_string())?;
+    if connections_file_changed_concurrently(&content_before, &content_now) {
+        eprintln!(
+            "[Migration] connections.json changed concurrently — skipping this run, will retry next launch"
+        );
+        return Ok(false);
     }
 
     eprintln!(
