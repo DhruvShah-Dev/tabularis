@@ -53,7 +53,7 @@ jobs:
 
       - name: Lint
         run: pnpm run lint
-        
+
       - name: Build
         run: pnpm run build
 
