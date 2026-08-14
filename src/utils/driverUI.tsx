@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import type { PluginManifest } from "../types/plugins";
 import type { SavedConnection } from "../contexts/DatabaseContext";
 import { PostgreSQLIcon, MySQLIcon, SQLiteIcon } from "./driverIcons";
+import { RegistryDriverIcon } from "../components/RegistryDriverIcon";
 
 const FALLBACK_COLOR = "#64748b"; // slate-500
 
@@ -17,10 +18,15 @@ export function getDriverColor(manifest: PluginManifest | undefined | null): str
 
 /**
  * Returns a ReactNode icon for a driver.
- * Priority: brand SVG icon → lucide icon → generic fallback.
+ * Priority: manifest-supplied URL/data: URI icon → brand SVG icon → lucide
+ * icon → generic fallback.
  */
 export function getDriverIcon(manifest: PluginManifest | undefined | null, size = 14): ReactNode {
   const iconName = manifest?.icon || "";
+
+  if (/^https?:\/\//.test(iconName) || iconName.startsWith("data:")) {
+    return <RegistryDriverIcon src={iconName} size={size} fallback={<Plug size={size} />} />;
+  }
 
   // Brand icons for built-in drivers
   switch (iconName) {
