@@ -64,6 +64,7 @@ import { TriggerEditorModal } from "../modals/TriggerEditorModal";
 import { ConfirmModal } from "../modals/ConfirmModal";
 import { RunRoutineModal } from "../modals/RunRoutineModal";
 import { Accordion } from "./sidebar/Accordion";
+import { MetadataErrorIndicator } from "./sidebar/MetadataErrorIndicator";
 import { SidebarTableItem } from "./sidebar/SidebarTableItem";
 import { buildTableItemSelector } from "../../utils/sidebarTableItem";
 import { fuzzyFilter } from "../../utils/fuzzy";
@@ -121,6 +122,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     views,
     routines,
     triggers,
+    routineError,
     isLoadingTables,
     refreshTables,
     refreshViews,
@@ -1776,6 +1778,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       onToggle={() => setRoutinesOpen(!routinesOpen)}
                       actions={
                         <div className="flex items-center gap-1 mr-2.5">
+                          {routineError && (
+                            <MetadataErrorIndicator
+                              error={routineError}
+                              title={t("sidebar.routineMetadataErrorTitle")}
+                            />
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

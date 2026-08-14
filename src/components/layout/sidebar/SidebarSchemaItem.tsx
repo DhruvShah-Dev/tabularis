@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { Accordion } from "./Accordion";
+import { MetadataErrorIndicator } from "./MetadataErrorIndicator";
 import { SidebarTableItem } from "./SidebarTableItem";
 import { SidebarViewItem } from "./SidebarViewItem";
 import { SidebarRoutineItem } from "./SidebarRoutineItem";
@@ -121,6 +122,7 @@ export const SidebarSchemaItem = ({
   const views = schemaData?.views ?? [];
   const materializedViews = schemaData?.materializedViews ?? [];
   const routines = schemaData?.routines ?? [];
+  const routineError = schemaData?.routineError;
   const triggers = schemaData?.triggers ?? [];
   const filteredTriggers = fuzzyFilter(triggers, triggerFilter, (tr) => tr.name);
   const isLoading = schemaData?.isLoading ?? false;
@@ -410,6 +412,12 @@ export const SidebarSchemaItem = ({
                 title={`${t("sidebar.routines")} (${routines.length})`}
                 isOpen={routinesOpen}
                 onToggle={() => setRoutinesOpen(!routinesOpen)}
+                actions={routineError ? (
+                  <MetadataErrorIndicator
+                    error={routineError}
+                    title={t("sidebar.routineMetadataErrorTitle")}
+                  />
+                ) : undefined}
               >
                 {routines.length === 0 ? (
                   <div className="text-center p-2 text-xs text-muted italic">

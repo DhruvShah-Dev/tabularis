@@ -28,6 +28,7 @@ export const PanelDatabaseProvider = ({ connectionId, children }: Props) => {
         isLoadingTables: data?.isLoadingTables ?? false,
         isLoadingViews: data?.isLoadingViews ?? false,
         isLoadingRoutines: data?.isLoadingRoutines ?? false,
+        routineError: data?.routineError ?? null,
         schemas: data?.schemas ?? [],
         isLoadingSchemas: data?.isLoadingSchemas ?? false,
         schemaDataMap: data?.schemaDataMap ?? {},
