@@ -3572,7 +3572,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                 <FileCode size={12} className="text-accent-secondary shrink-0" />
               )}
               {editingTabId === tab.id ? (
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                   type="text"
                   draggable={false}
                   value={editingTabTitle}
@@ -4302,7 +4302,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                           title={t("editor.jumpToPage")}
                         >
                           {isEditingPage ? (
-                            <input
+                            <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                               autoFocus
                               type="text"
                               className="w-full bg-transparent text-center focus:outline-none text-white p-0 m-0 border-none h-full"

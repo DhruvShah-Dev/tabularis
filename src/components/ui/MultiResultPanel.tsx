@@ -152,7 +152,7 @@ function ResultTab({
       {/* Label */}
       <span className="truncate flex-1 flex items-center gap-1">
         {isEditing ? (
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             ref={inputRef}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}

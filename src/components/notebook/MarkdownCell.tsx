@@ -57,8 +57,9 @@ function MarkdownEditor({
     }
   }, [content]);
 
+  // Prose field: natural-language input, so spellcheck/autocorrect stay ON; only the WebKit autofill pill is disabled.
   return (
-    <textarea
+    <textarea autoComplete="off" spellCheck={true}
       ref={textareaRef}
       value={content}
       onChange={(e) => onContentChange(e.target.value)}

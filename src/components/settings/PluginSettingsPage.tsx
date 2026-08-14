@@ -235,7 +235,7 @@ function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
     if (def.type === "number") {
       return (
         <div className="flex items-start gap-2">
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             type="number"
             value={typeof value === "number" ? value : ""}
             onChange={(e) =>
@@ -255,7 +255,7 @@ function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
 
     return (
       <div className="flex items-start gap-2">
-        <input
+        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
           type="text"
           value={typeof value === "string" ? value : ""}
           onChange={(e) => handleDynamicChange(def.key, e.target.value)}
@@ -285,7 +285,7 @@ function PluginSettingsForm({ pluginId, manifest }: PluginSettingsFormProps) {
         >
           <div className="py-3">
             <div className="flex gap-2">
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                 type="text"
                 value={interpreter}
                 placeholder={t(

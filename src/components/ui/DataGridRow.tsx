@@ -571,7 +571,7 @@ export const MemoRow = React.memo(function MemoRow(rowCtx: MemoRowProps) {
                         <span className="invisible whitespace-nowrap">
                           {String(displayValue)}
                         </span>
-                        <textarea
+                        <textarea autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                           ref={(el) => {
                             (
                               editInputRef as React.MutableRefObject<HTMLElement | null>

@@ -185,7 +185,7 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
             </button>
           ) : (
             <div className="flex items-center gap-2 flex-wrap w-full mt-1 p-2 rounded-lg border border-strong bg-base">
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off"
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -235,7 +235,7 @@ export function TagSelector({ selectedIds, onChange }: TagSelectorProps) {
                 key={tag.id}
                 className="flex items-center gap-2 flex-wrap p-2 rounded-lg border border-strong bg-base"
               >
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off"
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}

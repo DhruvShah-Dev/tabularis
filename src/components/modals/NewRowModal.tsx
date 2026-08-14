@@ -347,7 +347,7 @@ export const NewRowModal = ({
                           `}
                     />
                   ) : (
-                    <input
+                    <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                       disabled={col.is_generated}
                       value={String(formData[col.name] ?? "")}
                       onChange={(e) =>

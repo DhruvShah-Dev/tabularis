@@ -56,7 +56,7 @@ export function MaskingOverridesEditor({
         description={t("settings.maskingIncludeDesc")}
         vertical
       >
-        <textarea
+        <textarea autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
           value={includeDraft ?? include.join("\n")}
           disabled={!maskingEnabled}
           onChange={(e) => setIncludeDraft(e.target.value)}
@@ -76,7 +76,7 @@ export function MaskingOverridesEditor({
         description={t("settings.maskingExcludeDesc")}
         vertical
       >
-        <textarea
+        <textarea autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
           value={excludeDraft ?? exclude.join("\n")}
           disabled={!maskingEnabled}
           onChange={(e) => setExcludeDraft(e.target.value)}
