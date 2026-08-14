@@ -227,17 +227,20 @@ impl ParityHarness {
 
 /// Attempt to construct a plugin driver from the `POSTGRES_PLUGIN_BIN` env var.
 /// Returns `None` if the env var is unset (Phase 0 / no plugin available).
-/// Panics if the env var is set but the plugin fails to start (broken binary).
+/// Panics if the env var is set but the path doesn't exist or the plugin
+/// fails to start — an explicit `POSTGRES_PLUGIN_BIN` is a request to run
+/// against a real plugin, so a bad path must fail loud rather than silently
+/// falling back to builtin-only parity (which would trivially "pass").
 async fn try_plugin_driver() -> Option<Arc<dyn DatabaseDriver>> {
     let bin_path = std::env::var("POSTGRES_PLUGIN_BIN").ok()?;
     let path = PathBuf::from(&bin_path);
 
     if !path.exists() {
-        eprintln!(
-            "  [parity] POSTGRES_PLUGIN_BIN set to '{}' but file does not exist — skipping plugin",
+        panic!(
+            "POSTGRES_PLUGIN_BIN is set to '{}' but the file does not exist — \
+             fix the path or unset the variable to run builtin-only parity",
             bin_path
         );
-        return None;
     }
 
     eprintln!("  [parity] Spawning plugin driver from: {}", bin_path);
