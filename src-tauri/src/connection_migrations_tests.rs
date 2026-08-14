@@ -187,14 +187,20 @@ mod tests {
 
     // --- migrate_postgres_ssl_mode_spelling_at_path: path-based core ---
     //
-    // These exercise the file-level behavior (missing file, no-op file,
-    // save-and-report-true) without touching the driver registry — the
-    // dialect-resolution decision itself is already fully covered above by
-    // migrate_connection_ssl_mode_in_place's tests, which take a `dialects`
-    // map directly. A connection with driver == "postgres" is used here
-    // specifically because the function skips the registry lookup for it
-    // (line: `if driver_id == "postgres" ... continue`), so these tests
-    // don't need a registered driver.
+    // These exercise only the two no-op paths (missing file; a file whose
+    // one connection is builtin "postgres", always skipped) without a
+    // registered driver — the dialect-resolution decision itself is already
+    // fully covered above by migrate_connection_ssl_mode_in_place's tests,
+    // which take a `dialects` map directly.
+    //
+    // NOT covered here: the actual rewrite-and-save success path (Ok(true))
+    // and the concurrent-change skip branch inside this function. Both
+    // require a driver registered under a non-"postgres" id resolving to
+    // Postgres dialect, which needs either a live plugin process or a full
+    // DatabaseDriver mock (62 required methods, only 5 with default bodies)
+    // — judged disproportionate for this test. The pure concurrency-guard
+    // logic itself (`connections_file_changed_concurrently`) is fully
+    // covered above in isolation.
 
     #[tokio::test]
     async fn migrate_postgres_ssl_mode_spelling_at_path_is_a_noop_for_a_missing_file() {
