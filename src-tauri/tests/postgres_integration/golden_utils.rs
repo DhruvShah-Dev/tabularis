@@ -38,17 +38,22 @@ pub fn write_golden<T: Serialize>(filename: &str, data: &T) {
 }
 
 /// Assert that the given data matches the golden file exactly.
-/// If the golden file doesn't exist yet, the assertion is skipped with a warning.
+/// Panics if the golden file doesn't exist — a missing fixture in a normal
+/// (non-regeneration) run means a golden file was deleted, renamed, or never
+/// committed, and must fail loud rather than being silently skipped.
 pub fn assert_golden<T: Serialize>(filename: &str, data: &T) {
     let path = golden_dir().join(filename);
     let actual = serde_json::to_string_pretty(data).expect("serialize for comparison");
 
     if !path.exists() {
-        eprintln!(
-            "  [golden] SKIP: {} does not exist. Run with REGENERATE_GOLDEN=1 to create it.",
-            path.display()
+        panic!(
+            "Golden file missing: {}\n\
+             If this is a new capture, run with REGENERATE_GOLDEN=1 to create it; \
+             if it was unexpectedly deleted or renamed, restore it.\n\
+             Actual output from this run:\n{}",
+            path.display(),
+            actual
         );
-        return;
     }
 
     let expected = std::fs::read_to_string(&path)
