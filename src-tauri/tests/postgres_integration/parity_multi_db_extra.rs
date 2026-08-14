@@ -1,11 +1,8 @@
 //! Extra parity tests for multi-database operations — get_databases_lists_both,
 //! get_tables_secondary, pool_isolation, fallback_to_maintenance_db.
 
-use std::sync::Arc;
-
 use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::{ConnectionParams, DatabaseSelection};
+use tabularis_lib::models::DatabaseSelection;
 
 use crate::parity::ParityHarness;
 
@@ -16,10 +13,9 @@ async fn parity_get_databases_lists_both() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity(
-            "get_databases:lists_both",
-            |driver, params| async move { driver.get_databases(&params).await },
-        )
+        .assert_parity("get_databases:lists_both", |driver, params| async move {
+            driver.get_databases(&params).await
+        })
         .await;
 
     let databases: Vec<String> = serde_json::from_value(result).unwrap();
@@ -42,12 +38,9 @@ async fn parity_get_tables_secondary_schema() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity_secondary(
-            "get_tables:secondary_extra",
-            |driver, params| async move {
-                driver.get_tables(&params, Some("secondary_schema")).await
-            },
-        )
+        .assert_parity_secondary("get_tables:secondary_extra", |driver, params| async move {
+            driver.get_tables(&params, Some("secondary_schema")).await
+        })
         .await;
 
     let tables = result.as_array().expect("tables should be an array");
@@ -72,9 +65,7 @@ async fn parity_pool_isolation_between_databases() {
     let primary_result = harness
         .assert_parity(
             "get_tables:primary_pool_isolation",
-            |driver, params| async move {
-                driver.get_tables(&params, Some("test_schema")).await
-            },
+            |driver, params| async move { driver.get_tables(&params, Some("test_schema")).await },
         )
         .await;
 
@@ -112,8 +103,7 @@ async fn parity_fallback_to_maintenance_db() {
             "get_databases:maintenance_db",
             |driver, params| async move {
                 let mut maint_params = params.clone();
-                maint_params.database =
-                    DatabaseSelection::Single("postgres".to_string());
+                maint_params.database = DatabaseSelection::Single("postgres".to_string());
                 driver.get_databases(&maint_params).await
             },
         )

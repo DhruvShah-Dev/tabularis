@@ -1,7 +1,5 @@
 //! Extra parity tests for views — alter_view and empty schema scenarios.
 
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-
 use crate::parity::ParityHarness;
 
 #[tokio::test]

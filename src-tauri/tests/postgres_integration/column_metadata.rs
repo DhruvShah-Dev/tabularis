@@ -1,7 +1,7 @@
 //! Column metadata tests: get_columns for various table types.
 
-use tabularis_lib::drivers::postgres;
 use crate::helpers::pg_params;
+use tabularis_lib::drivers::postgres;
 
 #[tokio::test]
 #[ignore]
@@ -27,9 +27,15 @@ async fn test_get_columns_pk_detection() {
         .await
         .expect("get_columns should succeed");
 
-    let id_col = columns.iter().find(|c| c.name == "id").expect("id column should exist");
+    let id_col = columns
+        .iter()
+        .find(|c| c.name == "id")
+        .expect("id column should exist");
     assert!(id_col.is_pk, "id should be primary key");
-    assert!(id_col.is_auto_increment, "SERIAL id should be auto_increment");
+    assert!(
+        id_col.is_auto_increment,
+        "SERIAL id should be auto_increment"
+    );
     assert_eq!(id_col.data_type, "integer", "SERIAL resolves to integer");
 
     // Non-PK columns should not be marked as PK
@@ -76,7 +82,10 @@ async fn test_get_columns_type_detection() {
     assert_eq!(find("col_uuid").data_type, "uuid");
     assert_eq!(find("col_jsonb").data_type, "jsonb");
     assert_eq!(find("col_bytea").data_type, "bytea");
-    assert_eq!(find("col_timestamptz").data_type, "timestamp with time zone");
+    assert_eq!(
+        find("col_timestamptz").data_type,
+        "timestamp with time zone"
+    );
 }
 
 #[tokio::test]
@@ -101,7 +110,10 @@ async fn test_get_columns_character_max_length() {
     );
 
     let text_col = columns.iter().find(|c| c.name == "col_text").unwrap();
-    assert_eq!(text_col.character_maximum_length, None, "TEXT has no max length");
+    assert_eq!(
+        text_col.character_maximum_length, None,
+        "TEXT has no max length"
+    );
 }
 
 #[tokio::test]

@@ -1,7 +1,6 @@
 //! Extra parity tests for routines — overloaded functions, procedures, drop_routine.
 
 use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
 
 use crate::parity::ParityHarness;
 
@@ -14,12 +13,9 @@ async fn parity_get_routines_overloaded_functions() {
     // add_numbers is overloaded: (int, int) and (int, int, int).
     // Both drivers must return the same number of overloaded entries.
     let result = harness
-        .assert_parity(
-            "get_routines:overloaded",
-            |driver, params| async move {
-                driver.get_routines(&params, Some("test_schema")).await
-            },
-        )
+        .assert_parity("get_routines:overloaded", |driver, params| async move {
+            driver.get_routines(&params, Some("test_schema")).await
+        })
         .await;
 
     let routines = result.as_array().expect("routines should be an array");
@@ -42,12 +38,9 @@ async fn parity_get_routines_lists_procedures() {
 
     // Verify that procedures (not just functions) appear in get_routines.
     let result = harness
-        .assert_parity(
-            "get_routines:procedures",
-            |driver, params| async move {
-                driver.get_routines(&params, Some("test_schema")).await
-            },
-        )
+        .assert_parity("get_routines:procedures", |driver, params| async move {
+            driver.get_routines(&params, Some("test_schema")).await
+        })
         .await;
 
     let routines = result.as_array().expect("routines should be an array");
@@ -89,19 +82,21 @@ async fn parity_drop_routine() {
             .unwrap_or_else(|e| panic!("setup create function failed on {}: {}", target, e));
 
         driver
-            .drop_routine(&harness.params, "parity_drop_fn", "FUNCTION", Some("test_schema"))
+            .drop_routine(
+                &harness.params,
+                "parity_drop_fn",
+                "FUNCTION",
+                Some("test_schema"),
+            )
             .await
             .unwrap_or_else(|e| panic!("drop_routine failed on {}: {}", target, e));
     }
 
     // Verify it's gone by checking that the routine no longer appears
     let result = harness
-        .assert_parity(
-            "get_routines:after_drop",
-            |driver, params| async move {
-                driver.get_routines(&params, Some("test_schema")).await
-            },
-        )
+        .assert_parity("get_routines:after_drop", |driver, params| async move {
+            driver.get_routines(&params, Some("test_schema")).await
+        })
         .await;
 
     let routines = result.as_array().expect("routines should be an array");

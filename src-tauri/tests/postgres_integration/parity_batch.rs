@@ -10,7 +10,6 @@
 //! the deterministic fields (`error`, `result`), ignoring `execution_time_ms`.
 
 use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
 
 use crate::parity::ParityHarness;
 
@@ -21,9 +20,7 @@ fn normalize_batch_result(v: &Value) -> Value {
     let arr = v.as_array().expect("batch result should be an array");
     Value::Array(
         arr.iter()
-            .map(|entry| {
-                json_without_key(entry, "execution_time_ms")
-            })
+            .map(|entry| json_without_key(entry, "execution_time_ms"))
             .collect(),
     )
 }
@@ -57,7 +54,14 @@ async fn parity_batch_session_state() {
     let mut normalized_results = Vec::new();
     for (target, driver) in harness.targets() {
         let result = driver
-            .execute_batch(&harness.params, &queries, Some(100), 1, Some("test_schema"), None)
+            .execute_batch(
+                &harness.params,
+                &queries,
+                Some(100),
+                1,
+                Some("test_schema"),
+                None,
+            )
             .await
             .unwrap_or_else(|e| panic!("execute_batch failed on {}: {}", target, e));
         let json = serde_json::to_value(&result).expect("serialize batch result");
@@ -76,7 +80,11 @@ async fn parity_batch_session_state() {
     assert_eq!(arr.len(), 2, "should have results for both statements");
     let second = &arr[1];
     let succeeded = second.get("error").map(Value::is_null).unwrap_or(false);
-    assert!(succeeded, "SELECT current_schema() should succeed, got: {:?}", second);
+    assert!(
+        succeeded,
+        "SELECT current_schema() should succeed, got: {:?}",
+        second
+    );
 }
 
 #[tokio::test]
@@ -93,7 +101,14 @@ async fn parity_batch_mixed_statements() {
     let mut normalized_results = Vec::new();
     for (target, driver) in harness.targets() {
         let result = driver
-            .execute_batch(&harness.params, &queries, Some(100), 1, Some("test_schema"), None)
+            .execute_batch(
+                &harness.params,
+                &queries,
+                Some(100),
+                1,
+                Some("test_schema"),
+                None,
+            )
             .await
             .unwrap_or_else(|e| panic!("execute_batch failed on {}: {}", target, e));
         let json = serde_json::to_value(&result).expect("serialize batch result");
@@ -130,7 +145,14 @@ async fn parity_batch_error_handling() {
     let mut normalized_results = Vec::new();
     for (target, driver) in harness.targets() {
         let result = driver
-            .execute_batch(&harness.params, &queries, Some(100), 1, Some("test_schema"), None)
+            .execute_batch(
+                &harness.params,
+                &queries,
+                Some(100),
+                1,
+                Some("test_schema"),
+                None,
+            )
             .await
             .unwrap_or_else(|e| panic!("execute_batch failed on {}: {}", target, e));
         let json = serde_json::to_value(&result).expect("serialize batch result");
@@ -143,9 +165,18 @@ async fn parity_batch_error_handling() {
     // Compare only the success/failure shape.
     for (target, json) in &normalized_results {
         let arr = json.as_array().unwrap();
-        assert_eq!(arr.len(), 2, "{}: should have results for both statements", target);
+        assert_eq!(
+            arr.len(),
+            2,
+            "{}: should have results for both statements",
+            target
+        );
         let first_ok = arr[0].get("error").map(Value::is_null).unwrap_or(false);
-        assert!(first_ok, "{}: valid SELECT should succeed, got: {:?}", target, arr[0]);
+        assert!(
+            first_ok,
+            "{}: valid SELECT should succeed, got: {:?}",
+            target, arr[0]
+        );
         let second_failed = arr[1].get("error").map(|e| !e.is_null()).unwrap_or(false);
         assert!(
             second_failed,

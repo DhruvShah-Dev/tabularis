@@ -1,7 +1,6 @@
 //! Extra parity tests for query execution — affected_rows_for_dml, batch_session_state.
 
 use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
 
 use crate::parity::ParityHarness;
 
@@ -77,7 +76,14 @@ async fn parity_execute_batch_session_state() {
 
     for (target, driver) in harness.targets() {
         let result = driver
-            .execute_batch(&harness.params, &statements, Some(100), 1, Some("test_schema"), None)
+            .execute_batch(
+                &harness.params,
+                &statements,
+                Some(100),
+                1,
+                Some("test_schema"),
+                None,
+            )
             .await
             .unwrap_or_else(|e| panic!("execute_batch failed on {}: {}", target, e));
         let arr = serde_json::to_value(&result).expect("serialize batch result");
@@ -92,7 +98,10 @@ async fn parity_execute_batch_session_state() {
 
         // The SELECT result (4th statement, index 3) should return the inserted value
         let select_result = &arr[3];
-        let succeeded = select_result.get("error").map(Value::is_null).unwrap_or(false);
+        let succeeded = select_result
+            .get("error")
+            .map(Value::is_null)
+            .unwrap_or(false);
         assert!(
             succeeded,
             "{}: SELECT from temp table should succeed, got: {:?}",

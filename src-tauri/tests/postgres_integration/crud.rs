@@ -1,9 +1,9 @@
 //! CRUD operation tests (insert, update, delete).
 
-use std::collections::HashMap;
-use serde_json::json;
-use tabularis_lib::drivers::postgres;
 use crate::helpers::pg_params;
+use serde_json::json;
+use std::collections::HashMap;
+use tabularis_lib::drivers::postgres;
 
 #[tokio::test]
 #[ignore]
@@ -15,9 +15,10 @@ async fn test_insert_basic_types() {
     data.insert("name".to_string(), json!("insert_test"));
     data.insert("value".to_string(), json!(42));
 
-    let affected = postgres::insert_record(&params, "crud_scratch", data, "test_schema", 10_000_000)
-        .await
-        .expect("insert_record should succeed");
+    let affected =
+        postgres::insert_record(&params, "crud_scratch", data, "test_schema", 10_000_000)
+            .await
+            .expect("insert_record should succeed");
 
     assert_eq!(affected, 1);
 
@@ -25,8 +26,11 @@ async fn test_insert_basic_types() {
     let _ = postgres::execute_query(
         &params,
         "DELETE FROM test_schema.crud_scratch WHERE name = 'insert_test'",
-        None, 1, None,
-    ).await;
+        None,
+        1,
+        None,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -39,9 +43,10 @@ async fn test_insert_null_values() {
     data.insert("name".to_string(), json!(null));
     data.insert("value".to_string(), json!(null));
 
-    let affected = postgres::insert_record(&params, "crud_scratch", data, "test_schema", 10_000_000)
-        .await
-        .expect("insert_record with nulls should succeed");
+    let affected =
+        postgres::insert_record(&params, "crud_scratch", data, "test_schema", 10_000_000)
+            .await
+            .expect("insert_record with nulls should succeed");
 
     assert_eq!(affected, 1);
 
@@ -49,8 +54,11 @@ async fn test_insert_null_values() {
     let _ = postgres::execute_query(
         &params,
         "DELETE FROM test_schema.crud_scratch WHERE name IS NULL",
-        None, 1, None,
-    ).await;
+        None,
+        1,
+        None,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -63,9 +71,15 @@ async fn test_update_with_single_pk() {
     let mut insert_data = HashMap::new();
     insert_data.insert("name".to_string(), json!("to_update"));
     insert_data.insert("value".to_string(), json!(1));
-    postgres::insert_record(&params, "crud_scratch", insert_data, "test_schema", 10_000_000)
-        .await
-        .expect("insert for update test");
+    postgres::insert_record(
+        &params,
+        "crud_scratch",
+        insert_data,
+        "test_schema",
+        10_000_000,
+    )
+    .await
+    .expect("insert for update test");
 
     // Find the row's ID
     let result = postgres::execute_query(
@@ -210,7 +224,10 @@ async fn test_insert_json_object() {
     let params = pg_params();
 
     let mut data = HashMap::new();
-    data.insert("col_jsonb".to_string(), json!({"nested": {"key": "value"}, "arr": [1, 2, 3]}));
+    data.insert(
+        "col_jsonb".to_string(),
+        json!({"nested": {"key": "value"}, "arr": [1, 2, 3]}),
+    );
     data.insert("col_text".to_string(), json!("json_test"));
 
     let affected = postgres::insert_record(&params, "all_types", data, "test_schema", 10_000_000)
@@ -258,7 +275,11 @@ async fn test_insert_array_value() {
     .unwrap();
 
     assert_eq!(result.rows.len(), 1);
-    assert!(result.rows[0][0].is_array(), "Expected array, got: {:?}", result.rows[0][0]);
+    assert!(
+        result.rows[0][0].is_array(),
+        "Expected array, got: {:?}",
+        result.rows[0][0]
+    );
 
     // Clean up
     let _ = postgres::execute_query(

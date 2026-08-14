@@ -1,7 +1,7 @@
 //! Routine (function/procedure) management tests.
 
-use tabularis_lib::drivers::postgres;
 use crate::helpers::pg_params;
+use tabularis_lib::drivers::postgres;
 
 #[tokio::test]
 #[ignore]
@@ -119,8 +119,12 @@ async fn test_drop_routine() {
     .expect("create function");
 
     // Drop it
-    let drop_result = postgres::drop_routine(&params, "temp_drop_test", "FUNCTION", "test_schema")
-        .await;
+    let drop_result =
+        postgres::drop_routine(&params, "temp_drop_test", "FUNCTION", "test_schema").await;
 
-    assert!(drop_result.is_ok(), "drop_routine should succeed: {:?}", drop_result.err());
+    assert!(
+        drop_result.is_ok(),
+        "drop_routine should succeed: {:?}",
+        drop_result.err()
+    );
 }

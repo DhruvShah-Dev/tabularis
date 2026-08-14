@@ -1,9 +1,9 @@
 //! BLOB (bytea) handling tests.
 
-use std::collections::HashMap;
-use serde_json::json;
-use tabularis_lib::drivers::postgres;
 use crate::helpers::pg_params;
+use serde_json::json;
+use std::collections::HashMap;
+use tabularis_lib::drivers::postgres;
 
 #[tokio::test]
 #[ignore]
@@ -73,7 +73,11 @@ async fn test_save_blob_to_file() {
     )
     .await;
 
-    assert!(result.is_ok(), "save_blob_to_file should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "save_blob_to_file should succeed: {:?}",
+        result.err()
+    );
 
     // Verify file was written and has content
     let metadata = std::fs::metadata(&tmp_path);
@@ -103,7 +107,11 @@ async fn test_fetch_blob_as_data_url() {
     )
     .await;
 
-    assert!(result.is_ok(), "fetch_blob_as_data_url should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "fetch_blob_as_data_url should succeed: {:?}",
+        result.err()
+    );
 
     let data_url = result.unwrap();
     // Should be in BLOB wire format: "BLOB:<size>:<mime>:<base64>"

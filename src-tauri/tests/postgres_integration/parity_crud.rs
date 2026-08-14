@@ -5,7 +5,6 @@
 use std::collections::HashMap;
 
 use serde_json::json;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
 
 use crate::parity::ParityHarness;
 
@@ -101,7 +100,12 @@ async fn parity_delete_record() {
         let mut pk_map = HashMap::new();
         pk_map.insert("id".to_string(), json!(9001));
         let affected = driver
-            .delete_record(&harness.params, "crud_scratch", &pk_map, Some("test_schema"))
+            .delete_record(
+                &harness.params,
+                "crud_scratch",
+                &pk_map,
+                Some("test_schema"),
+            )
             .await
             .unwrap_or_else(|e| panic!("delete_record failed on {}: {}", target, e));
         affected_by_target.push((target.to_string(), affected));
@@ -144,17 +148,14 @@ async fn parity_delete_nonexistent() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity(
-            "delete_record:nonexistent",
-            |driver, params| async move {
-                let mut pk_map = HashMap::new();
-                // Use an ID that definitely doesn't exist
-                pk_map.insert("id".to_string(), json!(999999));
-                driver
-                    .delete_record(&params, "crud_scratch", &pk_map, Some("test_schema"))
-                    .await
-            },
-        )
+        .assert_parity("delete_record:nonexistent", |driver, params| async move {
+            let mut pk_map = HashMap::new();
+            // Use an ID that definitely doesn't exist
+            pk_map.insert("id".to_string(), json!(999999));
+            driver
+                .delete_record(&params, "crud_scratch", &pk_map, Some("test_schema"))
+                .await
+        })
         .await;
 
     let affected = result.as_u64().expect("delete should return affected rows");

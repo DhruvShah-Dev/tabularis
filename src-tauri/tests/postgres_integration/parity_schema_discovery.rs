@@ -9,12 +9,6 @@
 //! New in this file:
 //!   - parity_get_tables_other_schema (covers test_get_tables_other_schema)
 
-use std::sync::Arc;
-
-use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
-
 use crate::parity::ParityHarness;
 
 #[tokio::test]
@@ -24,19 +18,13 @@ async fn parity_get_tables_other_schema() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity(
-            "get_tables:other_schema",
-            |driver, params| async move {
-                driver.get_tables(&params, Some("other_schema")).await
-            },
-        )
+        .assert_parity("get_tables:other_schema", |driver, params| async move {
+            driver.get_tables(&params, Some("other_schema")).await
+        })
         .await;
 
     let arr = result.as_array().expect("tables should be an array");
-    let names: Vec<&str> = arr
-        .iter()
-        .filter_map(|t| t.get("name")?.as_str())
-        .collect();
+    let names: Vec<&str> = arr.iter().filter_map(|t| t.get("name")?.as_str()).collect();
     assert!(
         names.contains(&"lookup"),
         "Expected lookup table in other_schema, got: {:?}",

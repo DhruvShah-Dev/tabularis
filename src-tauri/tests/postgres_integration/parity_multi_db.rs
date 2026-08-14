@@ -1,11 +1,7 @@
 //! Parity tests for multi-database operations — using the secondary database
 //! (tabularis_test_secondary) with its `secondary_schema.remote_data` table.
 
-use std::sync::Arc;
-
 use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -16,10 +12,9 @@ async fn parity_get_schemas_secondary() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity_secondary(
-            "get_schemas:secondary",
-            |driver, params| async move { driver.get_schemas(&params).await },
-        )
+        .assert_parity_secondary("get_schemas:secondary", |driver, params| async move {
+            driver.get_schemas(&params).await
+        })
         .await;
 
     let schemas: Vec<String> = serde_json::from_value(result).unwrap();
@@ -37,21 +32,15 @@ async fn parity_get_columns_secondary() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity_secondary(
-            "get_columns:remote_data",
-            |driver, params| async move {
-                driver
-                    .get_columns(&params, "remote_data", Some("secondary_schema"))
-                    .await
-            },
-        )
+        .assert_parity_secondary("get_columns:remote_data", |driver, params| async move {
+            driver
+                .get_columns(&params, "remote_data", Some("secondary_schema"))
+                .await
+        })
         .await;
 
     let columns = result.as_array().expect("columns should be an array");
-    assert!(
-        !columns.is_empty(),
-        "remote_data table should have columns"
-    );
+    assert!(!columns.is_empty(), "remote_data table should have columns");
 
     let col_names: Vec<&str> = columns
         .iter()
@@ -76,20 +65,17 @@ async fn parity_execute_query_secondary() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity_secondary(
-            "execute_query:secondary",
-            |driver, params| async move {
-                driver
-                    .execute_query(
-                        &params,
-                        "SELECT id, value FROM secondary_schema.remote_data ORDER BY id LIMIT 5",
-                        Some(100),
-                        1,
-                        Some("secondary_schema"),
-                    )
-                    .await
-            },
-        )
+        .assert_parity_secondary("execute_query:secondary", |driver, params| async move {
+            driver
+                .execute_query(
+                    &params,
+                    "SELECT id, value FROM secondary_schema.remote_data ORDER BY id LIMIT 5",
+                    Some(100),
+                    1,
+                    Some("secondary_schema"),
+                )
+                .await
+        })
         .await;
 
     let rows = result.get("rows").and_then(Value::as_array).unwrap();

@@ -7,11 +7,7 @@
 //! New in this file — each test calls `get_indexes` through the trait via the
 //! harness and uses `assert_parity()` for byte-perfect JSON comparison.
 
-use std::sync::Arc;
-
 use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -24,12 +20,11 @@ async fn parity_get_indexes_btree() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity(
-            "get_indexes:all_types:btree",
-            |driver, params| async move {
-                driver.get_indexes(&params, "all_types", Some("test_schema")).await
-            },
-        )
+        .assert_parity("get_indexes:all_types:btree", |driver, params| async move {
+            driver
+                .get_indexes(&params, "all_types", Some("test_schema"))
+                .await
+        })
         .await;
 
     let arr = result.as_array().expect("indexes should be an array");
@@ -67,7 +62,9 @@ async fn parity_get_indexes_unique() {
         .assert_parity(
             "get_indexes:all_types:unique",
             |driver, params| async move {
-                driver.get_indexes(&params, "all_types", Some("test_schema")).await
+                driver
+                    .get_indexes(&params, "all_types", Some("test_schema"))
+                    .await
             },
         )
         .await;
@@ -102,7 +99,9 @@ async fn parity_get_indexes_composite() {
         .assert_parity(
             "get_indexes:order_items:composite",
             |driver, params| async move {
-                driver.get_indexes(&params, "order_items", Some("test_schema")).await
+                driver
+                    .get_indexes(&params, "order_items", Some("test_schema"))
+                    .await
             },
         )
         .await;
@@ -153,7 +152,9 @@ async fn parity_get_indexes_primary_key() {
         .assert_parity(
             "get_indexes:all_types:primary_key",
             |driver, params| async move {
-                driver.get_indexes(&params, "all_types", Some("test_schema")).await
+                driver
+                    .get_indexes(&params, "all_types", Some("test_schema"))
+                    .await
             },
         )
         .await;

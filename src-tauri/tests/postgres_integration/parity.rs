@@ -27,7 +27,9 @@ use std::sync::Arc;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 
-use tabularis_lib::drivers::driver_trait::{DatabaseDriver, DriverCapabilities, PluginManifest, SqlDialect};
+use tabularis_lib::drivers::driver_trait::{
+    DatabaseDriver, DriverCapabilities, PluginManifest, SqlDialect,
+};
 use tabularis_lib::drivers::postgres::PostgresDriver;
 use tabularis_lib::models::{ConnectionParams, DataTypeInfo};
 use tabularis_lib::plugins::driver::RpcDriver;
@@ -84,7 +86,8 @@ impl ParityHarness {
 
     /// Add a plugin driver target.
     pub fn with_plugin(mut self, id: &str, driver: Arc<dyn DatabaseDriver>) -> Self {
-        self.targets.push((DriverTarget::Plugin(id.to_string()), driver));
+        self.targets
+            .push((DriverTarget::Plugin(id.to_string()), driver));
         self
     }
 
@@ -106,7 +109,8 @@ impl ParityHarness {
         F: Fn(Arc<dyn DatabaseDriver>, ConnectionParams) -> Fut,
         Fut: std::future::Future<Output = Result<T, String>>,
     {
-        self.run_parity_inner(method_name, &self.params, test_fn).await
+        self.run_parity_inner(method_name, &self.params, test_fn)
+            .await
     }
 
     /// Same as `assert_parity` but uses `params_secondary` for multi-database tests.
@@ -120,7 +124,8 @@ impl ParityHarness {
         F: Fn(Arc<dyn DatabaseDriver>, ConnectionParams) -> Fut,
         Fut: std::future::Future<Output = Result<T, String>>,
     {
-        self.run_parity_inner(method_name, &self.params_secondary, test_fn).await
+        self.run_parity_inner(method_name, &self.params_secondary, test_fn)
+            .await
     }
 
     async fn run_parity_inner<T, F, Fut>(
@@ -137,16 +142,14 @@ impl ParityHarness {
         let mut results: Vec<(String, JsonValue)> = Vec::new();
 
         for (target, driver) in &self.targets {
-            let result = retry_transient(3, || {
-                test_fn(Arc::clone(driver), params.clone())
-            })
-            .await
-            .unwrap_or_else(|e| {
-                panic!(
-                    "Parity test '{}' failed on target {}: {}",
-                    method_name, target, e
-                )
-            });
+            let result = retry_transient(3, || test_fn(Arc::clone(driver), params.clone()))
+                .await
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "Parity test '{}' failed on target {}: {}",
+                        method_name, target, e
+                    )
+                });
             let json = serde_json::to_value(&result).unwrap_or_else(|e| {
                 panic!(
                     "Parity test '{}': failed to serialize result from {}: {}",
@@ -161,7 +164,8 @@ impl ParityHarness {
             let (ref name_a, ref val_a) = window[0];
             let (ref name_b, ref val_b) = window[1];
             assert_eq!(
-                val_a, val_b,
+                val_a,
+                val_b,
                 "Parity failure in '{}': {} and {} returned different results.\n\
                  Left:  {}\n\
                  Right: {}",
@@ -193,9 +197,8 @@ impl ParityHarness {
         for (target, driver) in &self.targets {
             let result = test_fn(Arc::clone(driver), self.params.clone()).await;
             let mapped = result.map(|v| {
-                serde_json::to_value(&v).unwrap_or_else(|e| {
-                    panic!("Failed to serialize result from {}: {}", target, e)
-                })
+                serde_json::to_value(&v)
+                    .unwrap_or_else(|e| panic!("Failed to serialize result from {}: {}", target, e))
             });
             results.push((target.to_string(), mapped));
         }

@@ -1,7 +1,5 @@
 //! Parity tests for view and materialized view lifecycle operations.
 
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-
 use crate::parity::ParityHarness;
 
 #[tokio::test]
@@ -22,10 +20,7 @@ async fn parity_get_view_columns() {
         .await;
 
     let columns = result.as_array().expect("view columns should be an array");
-    assert!(
-        !columns.is_empty(),
-        "active_users view should have columns"
-    );
+    assert!(!columns.is_empty(), "active_users view should have columns");
 }
 
 #[tokio::test]
@@ -46,7 +41,9 @@ async fn parity_create_drop_view() {
     // target instead, so each target creates and drops its own view.
     for (target, driver) in harness.targets() {
         // Cleanup from any prior failed run.
-        let _ = driver.drop_view(&harness.params, view_name, Some("test_schema")).await;
+        let _ = driver
+            .drop_view(&harness.params, view_name, Some("test_schema"))
+            .await;
 
         driver
             .create_view(&harness.params, view_name, definition, Some("test_schema"))
@@ -57,7 +54,11 @@ async fn parity_create_drop_view() {
             .get_view_columns(&harness.params, view_name, Some("test_schema"))
             .await
             .unwrap_or_else(|e| panic!("get_view_columns failed on {}: {}", target, e));
-        assert!(!columns.is_empty(), "{}: temp view should have columns", target);
+        assert!(
+            !columns.is_empty(),
+            "{}: temp view should have columns",
+            target
+        );
 
         driver
             .drop_view(&harness.params, view_name, Some("test_schema"))

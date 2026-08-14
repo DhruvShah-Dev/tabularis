@@ -5,10 +5,6 @@
 //! correctly with the built-in driver. In Phase 1 they become the gate: the
 //! plugin must produce identical outputs.
 
-use std::sync::Arc;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
-
 use crate::parity::ParityHarness;
 
 #[tokio::test]
@@ -57,10 +53,7 @@ async fn parity_get_tables() {
         .await;
 
     let arr = result.as_array().expect("tables should be an array");
-    let names: Vec<&str> = arr
-        .iter()
-        .filter_map(|t| t.get("name")?.as_str())
-        .collect();
+    let names: Vec<&str> = arr.iter().filter_map(|t| t.get("name")?.as_str()).collect();
     assert!(names.contains(&"all_types"));
     assert!(names.contains(&"orders"));
 }
@@ -73,15 +66,22 @@ async fn parity_get_columns() {
 
     let result = harness
         .assert_parity("get_columns:all_types", |driver, params| async move {
-            driver.get_columns(&params, "all_types", Some("test_schema")).await
+            driver
+                .get_columns(&params, "all_types", Some("test_schema"))
+                .await
         })
         .await;
 
     let arr = result.as_array().expect("columns should be an array");
     assert!(!arr.is_empty());
-    let id_col = arr.iter().find(|c| c.get("name").and_then(|n| n.as_str()) == Some("id"));
+    let id_col = arr
+        .iter()
+        .find(|c| c.get("name").and_then(|n| n.as_str()) == Some("id"));
     assert!(id_col.is_some(), "should have an 'id' column");
-    assert_eq!(id_col.unwrap().get("is_pk").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(
+        id_col.unwrap().get("is_pk").and_then(|v| v.as_bool()),
+        Some(true)
+    );
 }
 
 #[tokio::test]
@@ -92,14 +92,19 @@ async fn parity_get_foreign_keys() {
 
     let result = harness
         .assert_parity("get_foreign_keys:orders", |driver, params| async move {
-            driver.get_foreign_keys(&params, "orders", Some("test_schema")).await
+            driver
+                .get_foreign_keys(&params, "orders", Some("test_schema"))
+                .await
         })
         .await;
 
     let arr = result.as_array().expect("foreign keys should be an array");
     assert!(!arr.is_empty());
     let fk = &arr[0];
-    assert_eq!(fk.get("column_name").and_then(|v| v.as_str()), Some("user_id"));
+    assert_eq!(
+        fk.get("column_name").and_then(|v| v.as_str()),
+        Some("user_id")
+    );
 }
 
 #[tokio::test]
@@ -110,7 +115,9 @@ async fn parity_get_indexes() {
 
     let result = harness
         .assert_parity("get_indexes:all_types", |driver, params| async move {
-            driver.get_indexes(&params, "all_types", Some("test_schema")).await
+            driver
+                .get_indexes(&params, "all_types", Some("test_schema"))
+                .await
         })
         .await;
 
@@ -142,9 +149,14 @@ async fn parity_get_view_definition() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity("get_view_definition:active_users", |driver, params| async move {
-            driver.get_view_definition(&params, "active_users", Some("test_schema")).await
-        })
+        .assert_parity(
+            "get_view_definition:active_users",
+            |driver, params| async move {
+                driver
+                    .get_view_definition(&params, "active_users", Some("test_schema"))
+                    .await
+            },
+        )
         .await;
 
     let def = result.as_str().expect("view definition should be a string");
@@ -159,11 +171,15 @@ async fn parity_get_materialized_views() {
 
     let result = harness
         .assert_parity("get_materialized_views", |driver, params| async move {
-            driver.get_materialized_views(&params, Some("test_schema")).await
+            driver
+                .get_materialized_views(&params, Some("test_schema"))
+                .await
         })
         .await;
 
-    let arr = result.as_array().expect("materialized views should be an array");
+    let arr = result
+        .as_array()
+        .expect("materialized views should be an array");
     let names: Vec<&str> = arr.iter().filter_map(|v| v.get("name")?.as_str()).collect();
     assert!(names.contains(&"user_stats"));
 }
@@ -209,12 +225,9 @@ async fn parity_get_tables_secondary() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity_secondary(
-            "get_tables:secondary",
-            |driver, params| async move {
-                driver.get_tables(&params, Some("secondary_schema")).await
-            },
-        )
+        .assert_parity_secondary("get_tables:secondary", |driver, params| async move {
+            driver.get_tables(&params, Some("secondary_schema")).await
+        })
         .await;
 
     let arr = result.as_array().expect("tables should be an array");

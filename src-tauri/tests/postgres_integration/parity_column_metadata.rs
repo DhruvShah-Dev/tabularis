@@ -8,11 +8,7 @@
 //! harness and uses `assert_parity()` for byte-perfect JSON comparison, then
 //! adds structural assertions on the shared result.
 
-use std::sync::Arc;
-
 use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -25,12 +21,11 @@ async fn parity_get_columns_all_types_count() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity(
-            "get_columns:all_types:count",
-            |driver, params| async move {
-                driver.get_columns(&params, "all_types", Some("test_schema")).await
-            },
-        )
+        .assert_parity("get_columns:all_types:count", |driver, params| async move {
+            driver
+                .get_columns(&params, "all_types", Some("test_schema"))
+                .await
+        })
         .await;
 
     let arr = result.as_array().expect("columns should be an array");
@@ -49,7 +44,9 @@ async fn parity_get_columns_pk_detection() {
         .assert_parity(
             "get_columns:all_types:pk_detection",
             |driver, params| async move {
-                driver.get_columns(&params, "all_types", Some("test_schema")).await
+                driver
+                    .get_columns(&params, "all_types", Some("test_schema"))
+                    .await
             },
         )
         .await;
@@ -105,7 +102,9 @@ async fn parity_get_columns_nullable_detection() {
         .assert_parity(
             "get_columns:all_types:nullable",
             |driver, params| async move {
-                driver.get_columns(&params, "all_types", Some("test_schema")).await
+                driver
+                    .get_columns(&params, "all_types", Some("test_schema"))
+                    .await
             },
         )
         .await;
@@ -147,7 +146,9 @@ async fn parity_get_columns_type_detection() {
         .assert_parity(
             "get_columns:all_types:type_detection",
             |driver, params| async move {
-                driver.get_columns(&params, "all_types", Some("test_schema")).await
+                driver
+                    .get_columns(&params, "all_types", Some("test_schema"))
+                    .await
             },
         )
         .await;
@@ -159,15 +160,38 @@ async fn parity_get_columns_type_detection() {
             .unwrap_or_else(|| panic!("column '{}' should exist", name))
     };
 
-    assert_eq!(find("col_text").get("data_type").and_then(|v| v.as_str()), Some("text"));
-    assert_eq!(find("col_int").get("data_type").and_then(|v| v.as_str()), Some("integer"));
-    assert_eq!(find("col_bigint").get("data_type").and_then(|v| v.as_str()), Some("bigint"));
-    assert_eq!(find("col_bool").get("data_type").and_then(|v| v.as_str()), Some("boolean"));
-    assert_eq!(find("col_uuid").get("data_type").and_then(|v| v.as_str()), Some("uuid"));
-    assert_eq!(find("col_jsonb").get("data_type").and_then(|v| v.as_str()), Some("jsonb"));
-    assert_eq!(find("col_bytea").get("data_type").and_then(|v| v.as_str()), Some("bytea"));
     assert_eq!(
-        find("col_timestamptz").get("data_type").and_then(|v| v.as_str()),
+        find("col_text").get("data_type").and_then(|v| v.as_str()),
+        Some("text")
+    );
+    assert_eq!(
+        find("col_int").get("data_type").and_then(|v| v.as_str()),
+        Some("integer")
+    );
+    assert_eq!(
+        find("col_bigint").get("data_type").and_then(|v| v.as_str()),
+        Some("bigint")
+    );
+    assert_eq!(
+        find("col_bool").get("data_type").and_then(|v| v.as_str()),
+        Some("boolean")
+    );
+    assert_eq!(
+        find("col_uuid").get("data_type").and_then(|v| v.as_str()),
+        Some("uuid")
+    );
+    assert_eq!(
+        find("col_jsonb").get("data_type").and_then(|v| v.as_str()),
+        Some("jsonb")
+    );
+    assert_eq!(
+        find("col_bytea").get("data_type").and_then(|v| v.as_str()),
+        Some("bytea")
+    );
+    assert_eq!(
+        find("col_timestamptz")
+            .get("data_type")
+            .and_then(|v| v.as_str()),
         Some("timestamp with time zone")
     );
 }
@@ -184,7 +208,9 @@ async fn parity_get_columns_character_max_length() {
         .assert_parity(
             "get_columns:all_types:char_max_length",
             |driver, params| async move {
-                driver.get_columns(&params, "all_types", Some("test_schema")).await
+                driver
+                    .get_columns(&params, "all_types", Some("test_schema"))
+                    .await
             },
         )
         .await;
@@ -223,12 +249,11 @@ async fn parity_get_columns_enum_type() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity(
-            "get_columns:with_enum",
-            |driver, params| async move {
-                driver.get_columns(&params, "with_enum", Some("test_schema")).await
-            },
-        )
+        .assert_parity("get_columns:with_enum", |driver, params| async move {
+            driver
+                .get_columns(&params, "with_enum", Some("test_schema"))
+                .await
+        })
         .await;
 
     let arr = result.as_array().expect("columns should be an array");

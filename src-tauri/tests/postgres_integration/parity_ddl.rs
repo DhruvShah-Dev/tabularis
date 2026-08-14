@@ -4,11 +4,7 @@
 //! DDL methods generate SQL without connecting to the database. The parity
 //! comparison ensures the plugin generates IDENTICAL DDL strings to the builtin.
 
-use std::sync::Arc;
-
-use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::{ColumnDefinition, ConnectionParams};
+use tabularis_lib::models::ColumnDefinition;
 
 use crate::parity::ParityHarness;
 
@@ -54,7 +50,9 @@ async fn parity_ddl_create_table() {
         })
         .await;
 
-    let arr = result.as_array().expect("DDL should return array of statements");
+    let arr = result
+        .as_array()
+        .expect("DDL should return array of statements");
     assert!(!arr.is_empty(), "Should return at least one SQL statement");
 
     let sql: String = arr
@@ -64,7 +62,10 @@ async fn parity_ddl_create_table() {
         .join("; ");
     let lower = sql.to_lowercase();
 
-    assert!(lower.contains("create table"), "Should contain CREATE TABLE");
+    assert!(
+        lower.contains("create table"),
+        "Should contain CREATE TABLE"
+    );
     assert!(
         lower.contains("parity_ddl_scratch_table"),
         "Should contain table name"
@@ -104,7 +105,9 @@ async fn parity_ddl_add_column() {
         })
         .await;
 
-    let arr = result.as_array().expect("DDL should return array of statements");
+    let arr = result
+        .as_array()
+        .expect("DDL should return array of statements");
     assert!(!arr.is_empty());
 
     let sql: String = arr
@@ -155,7 +158,9 @@ async fn parity_ddl_alter_column_rename() {
         )
         .await;
 
-    let arr = result.as_array().expect("DDL should return array of statements");
+    let arr = result
+        .as_array()
+        .expect("DDL should return array of statements");
     assert!(!arr.is_empty());
 
     let sql: String = arr
@@ -208,7 +213,9 @@ async fn parity_ddl_alter_column_type_change() {
         )
         .await;
 
-    let arr = result.as_array().expect("DDL should return array of statements");
+    let arr = result
+        .as_array()
+        .expect("DDL should return array of statements");
     assert!(!arr.is_empty());
 
     let sql: String = arr
@@ -250,7 +257,9 @@ async fn parity_ddl_create_index() {
         )
         .await;
 
-    let arr = result.as_array().expect("DDL should return array of statements");
+    let arr = result
+        .as_array()
+        .expect("DDL should return array of statements");
     assert!(!arr.is_empty());
 
     let sql: String = arr
@@ -260,7 +269,10 @@ async fn parity_ddl_create_index() {
         .join("; ");
     let lower = sql.to_lowercase();
 
-    assert!(lower.contains("create index"), "Should contain CREATE INDEX");
+    assert!(
+        lower.contains("create index"),
+        "Should contain CREATE INDEX"
+    );
     assert!(
         lower.contains("idx_parity_ddl_test"),
         "Should contain index name"
@@ -294,7 +306,9 @@ async fn parity_ddl_create_index_unique() {
         )
         .await;
 
-    let arr = result.as_array().expect("DDL should return array of statements");
+    let arr = result
+        .as_array()
+        .expect("DDL should return array of statements");
     let sql: String = arr
         .iter()
         .filter_map(|v| v.as_str())
@@ -337,7 +351,9 @@ async fn parity_ddl_create_foreign_key() {
         )
         .await;
 
-    let arr = result.as_array().expect("DDL should return array of statements");
+    let arr = result
+        .as_array()
+        .expect("DDL should return array of statements");
     assert!(!arr.is_empty());
 
     let sql: String = arr

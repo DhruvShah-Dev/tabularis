@@ -7,12 +7,6 @@
 //! New in this file — each test calls `get_foreign_keys` through the trait via
 //! the harness and uses `assert_parity()` for byte-perfect JSON comparison.
 
-use std::sync::Arc;
-
-use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
-
 use crate::parity::ParityHarness;
 
 /// Parity equivalent of `test_get_foreign_keys_composite_table`.

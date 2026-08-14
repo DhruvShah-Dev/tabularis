@@ -7,11 +7,11 @@
 //! REGENERATE_GOLDEN=1 cargo test --test postgres_integration golden -- --include-ignored --test-threads=1
 //! ```
 
-use tabularis_lib::drivers::postgres;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::drivers::postgres::PostgresDriver;
+use crate::golden_utils::{assert_golden, write_golden};
 use crate::helpers::{pg_params, pg_params_secondary};
-use crate::golden_utils::{write_golden, assert_golden};
+use tabularis_lib::drivers::driver_trait::DatabaseDriver;
+use tabularis_lib::drivers::postgres;
+use tabularis_lib::drivers::postgres::PostgresDriver;
 
 #[tokio::test]
 #[ignore]
@@ -28,7 +28,9 @@ async fn golden_get_schemas() {
 async fn golden_get_databases() {
     require_pg!();
     let params = pg_params();
-    let result = postgres::get_databases(&params).await.expect("get_databases");
+    let result = postgres::get_databases(&params)
+        .await
+        .expect("get_databases");
     write_golden("get_databases.json", &result);
     assert_golden("get_databases.json", &result);
 }
@@ -38,7 +40,9 @@ async fn golden_get_databases() {
 async fn golden_get_tables() {
     require_pg!();
     let params = pg_params();
-    let result = postgres::get_tables(&params, "test_schema").await.expect("get_tables");
+    let result = postgres::get_tables(&params, "test_schema")
+        .await
+        .expect("get_tables");
     write_golden("get_tables.json", &result);
     assert_golden("get_tables.json", &result);
 }
@@ -108,7 +112,9 @@ async fn golden_get_foreign_keys_cross_schema() {
 async fn golden_get_views() {
     require_pg!();
     let params = pg_params();
-    let result = postgres::get_views(&params, "test_schema").await.expect("get_views");
+    let result = postgres::get_views(&params, "test_schema")
+        .await
+        .expect("get_views");
     write_golden("get_views.json", &result);
     assert_golden("get_views.json", &result);
 }
@@ -142,7 +148,9 @@ async fn golden_get_materialized_views() {
 async fn golden_get_routines() {
     require_pg!();
     let params = pg_params();
-    let result = postgres::get_routines(&params, "test_schema").await.expect("get_routines");
+    let result = postgres::get_routines(&params, "test_schema")
+        .await
+        .expect("get_routines");
     write_golden("get_routines.json", &result);
     assert_golden("get_routines.json", &result);
 }
@@ -152,7 +160,9 @@ async fn golden_get_routines() {
 async fn golden_get_triggers() {
     require_pg!();
     let params = pg_params();
-    let result = postgres::get_triggers(&params, "test_schema").await.expect("get_triggers");
+    let result = postgres::get_triggers(&params, "test_schema")
+        .await
+        .expect("get_triggers");
     write_golden("get_triggers.json", &result);
     assert_golden("get_triggers.json", &result);
 }
@@ -214,7 +224,9 @@ async fn golden_multi_db_get_tables_secondary() {
 async fn golden_multi_db_get_schemas_secondary() {
     require_pg!();
     let params = pg_params_secondary();
-    let result = postgres::get_schemas(&params).await.expect("get_schemas secondary");
+    let result = postgres::get_schemas(&params)
+        .await
+        .expect("get_schemas secondary");
     write_golden("multi_db/get_schemas_secondary.json", &result);
     assert_golden("multi_db/get_schemas_secondary.json", &result);
 }
@@ -238,8 +250,8 @@ async fn golden_get_view_columns_active_users() {
 async fn golden_get_materialized_view_definition() {
     require_pg!();
     let params = pg_params();
-    let result = postgres::get_materialized_view_definition(&params, "user_stats", "test_schema")
-        .await;
+    let result =
+        postgres::get_materialized_view_definition(&params, "user_stats", "test_schema").await;
     // KNOWN BUG: Built-in driver errors with "error serializing parameter 0" on PG 16
     // due to regclass cast issue. Capture the error as the golden expectation — the
     // plugin must replicate this behavior until the driver is fixed.
@@ -285,9 +297,10 @@ async fn golden_get_routine_parameters() {
 async fn golden_get_routine_definition() {
     require_pg!();
     let params = pg_params();
-    let result = postgres::get_routine_definition(&params, "add_numbers", "FUNCTION", "test_schema")
-        .await
-        .expect("get_routine_definition");
+    let result =
+        postgres::get_routine_definition(&params, "add_numbers", "FUNCTION", "test_schema")
+            .await
+            .expect("get_routine_definition");
     write_golden("get_routine_definition_add_numbers.json", &result);
     assert_golden("get_routine_definition_add_numbers.json", &result);
 }

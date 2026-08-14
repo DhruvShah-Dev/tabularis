@@ -1,7 +1,7 @@
 //! View management tests.
 
-use tabularis_lib::drivers::postgres;
 use crate::helpers::pg_params;
+use tabularis_lib::drivers::postgres;
 
 #[tokio::test]
 #[ignore]
@@ -55,7 +55,10 @@ async fn test_get_view_columns() {
     let col_names: Vec<&str> = columns.iter().map(|c| c.name.as_str()).collect();
     assert!(col_names.contains(&"id"), "Expected id column in view");
     assert!(col_names.contains(&"name"), "Expected name column in view");
-    assert!(col_names.contains(&"is_active"), "Expected is_active column in view");
+    assert!(
+        col_names.contains(&"is_active"),
+        "Expected is_active column in view"
+    );
 }
 
 #[tokio::test]
@@ -133,7 +136,9 @@ async fn test_alter_view() {
     assert_eq!(columns.len(), 2, "Altered view should have 2 columns");
 
     // Cleanup
-    postgres::drop_view(&params, view_name, schema).await.unwrap();
+    postgres::drop_view(&params, view_name, schema)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

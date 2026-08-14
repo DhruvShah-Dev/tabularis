@@ -1,7 +1,7 @@
 //! Schema discovery tests: get_schemas, get_databases, get_tables.
 
-use tabularis_lib::drivers::postgres;
 use crate::helpers::pg_params;
+use tabularis_lib::drivers::postgres;
 
 #[tokio::test]
 #[ignore]
@@ -57,10 +57,19 @@ async fn test_get_tables_returns_seeded_tables() {
 
     let table_names: Vec<&str> = tables.iter().map(|t| t.name.as_str()).collect();
 
-    assert!(table_names.contains(&"all_types"), "Expected all_types table");
-    assert!(table_names.contains(&"with_enum"), "Expected with_enum table");
+    assert!(
+        table_names.contains(&"all_types"),
+        "Expected all_types table"
+    );
+    assert!(
+        table_names.contains(&"with_enum"),
+        "Expected with_enum table"
+    );
     assert!(table_names.contains(&"orders"), "Expected orders table");
-    assert!(table_names.contains(&"order_items"), "Expected order_items table");
+    assert!(
+        table_names.contains(&"order_items"),
+        "Expected order_items table"
+    );
     assert!(
         table_names.contains(&"with_cross_schema_fk"),
         "Expected with_cross_schema_fk table"
@@ -82,5 +91,8 @@ async fn test_get_tables_other_schema() {
         .expect("get_tables for other_schema should succeed");
 
     let table_names: Vec<&str> = tables.iter().map(|t| t.name.as_str()).collect();
-    assert!(table_names.contains(&"lookup"), "Expected lookup table in other_schema");
+    assert!(
+        table_names.contains(&"lookup"),
+        "Expected lookup table in other_schema"
+    );
 }

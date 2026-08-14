@@ -1,11 +1,7 @@
 //! Parity tests for `execute_query` — ensures plugin produces identical query
 //! results to the built-in driver.
 
-use std::sync::Arc;
-
 use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -161,20 +157,17 @@ async fn parity_execute_query_null_handling() {
     let harness = ParityHarness::new().await;
 
     let result = harness
-        .assert_parity(
-            "execute_query:null_handling",
-            |driver, params| async move {
-                driver
-                    .execute_query(
-                        &params,
-                        "SELECT NULL AS null_col, id FROM test_schema.all_types WHERE id = 1",
-                        Some(100),
-                        1,
-                        Some("test_schema"),
-                    )
-                    .await
-            },
-        )
+        .assert_parity("execute_query:null_handling", |driver, params| async move {
+            driver
+                .execute_query(
+                    &params,
+                    "SELECT NULL AS null_col, id FROM test_schema.all_types WHERE id = 1",
+                    Some(100),
+                    1,
+                    Some("test_schema"),
+                )
+                .await
+        })
         .await;
 
     let rows = result.get("rows").and_then(Value::as_array).unwrap();

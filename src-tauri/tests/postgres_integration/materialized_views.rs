@@ -1,7 +1,7 @@
 //! Materialized view tests.
 
-use tabularis_lib::drivers::postgres;
 use crate::helpers::pg_params;
+use tabularis_lib::drivers::postgres;
 
 #[tokio::test]
 #[ignore]
@@ -42,8 +42,8 @@ async fn test_get_materialized_view_definition() {
     require_pg!();
     let params = pg_params();
 
-    let result = postgres::get_materialized_view_definition(&params, "user_stats", "test_schema")
-        .await;
+    let result =
+        postgres::get_materialized_view_definition(&params, "user_stats", "test_schema").await;
 
     // KNOWN BEHAVIOR: The built-in driver errors with "error serializing parameter 0"
     // on PG 16 for this call. This is a pre-existing driver bug.

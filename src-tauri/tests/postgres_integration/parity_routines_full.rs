@@ -1,10 +1,6 @@
 //! Parity tests for routine (function/procedure) and trigger introspection.
 
-use std::sync::Arc;
-
 use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -28,10 +24,7 @@ async fn parity_get_routine_parameters() {
     let params_arr = result
         .as_array()
         .expect("routine parameters should be an array");
-    assert!(
-        !params_arr.is_empty(),
-        "add_numbers should have parameters"
-    );
+    assert!(!params_arr.is_empty(), "add_numbers should have parameters");
 
     // Verify parameter names are present
     let names: Vec<&str> = params_arr
@@ -56,18 +49,15 @@ async fn parity_get_routine_definition() {
             "get_routine_definition:add_numbers",
             |driver, params| async move {
                 driver
-                    .get_routine_definition(
-                        &params,
-                        "add_numbers",
-                        "function",
-                        Some("test_schema"),
-                    )
+                    .get_routine_definition(&params, "add_numbers", "function", Some("test_schema"))
                     .await
             },
         )
         .await;
 
-    let definition = result.as_str().expect("routine definition should be a string");
+    let definition = result
+        .as_str()
+        .expect("routine definition should be a string");
     assert!(
         !definition.is_empty(),
         "add_numbers definition should not be empty"
@@ -96,7 +86,9 @@ async fn parity_get_trigger_definition() {
         )
         .await;
 
-    let definition = result.as_str().expect("trigger definition should be a string");
+    let definition = result
+        .as_str()
+        .expect("trigger definition should be a string");
     assert!(
         !definition.is_empty(),
         "trg_audit definition should not be empty"

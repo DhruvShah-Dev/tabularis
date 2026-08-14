@@ -1,15 +1,15 @@
 //! DDL generation tests.
 
+use crate::helpers::pg_params;
 use tabularis_lib::drivers::driver_trait::DatabaseDriver;
 use tabularis_lib::drivers::postgres::PostgresDriver;
 use tabularis_lib::models::ColumnDefinition;
-use crate::helpers::pg_params;
 
 #[tokio::test]
 #[ignore]
 async fn test_get_create_table_sql() {
     require_pg!();
-    let params = pg_params();
+    let _params = pg_params();
 
     let columns = vec![
         ColumnDefinition {
@@ -43,15 +43,33 @@ async fn test_get_create_table_sql() {
         .await
         .expect("get_create_table_sql should succeed");
 
-    assert!(!sql_statements.is_empty(), "Should return at least one SQL statement");
+    assert!(
+        !sql_statements.is_empty(),
+        "Should return at least one SQL statement"
+    );
     let sql = sql_statements.join("; ");
     let lower = sql.to_lowercase();
 
-    assert!(lower.contains("create table"), "Should contain CREATE TABLE");
-    assert!(lower.contains("ddl_test_table"), "Should contain table name");
-    assert!(lower.contains("serial") || lower.contains("generated"), "Should handle auto-increment");
-    assert!(lower.contains("not null"), "Should contain NOT NULL for non-nullable columns");
-    assert!(lower.contains("varchar(255)") || lower.contains("character varying(255)"), "Should preserve varchar type");
+    assert!(
+        lower.contains("create table"),
+        "Should contain CREATE TABLE"
+    );
+    assert!(
+        lower.contains("ddl_test_table"),
+        "Should contain table name"
+    );
+    assert!(
+        lower.contains("serial") || lower.contains("generated"),
+        "Should handle auto-increment"
+    );
+    assert!(
+        lower.contains("not null"),
+        "Should contain NOT NULL for non-nullable columns"
+    );
+    assert!(
+        lower.contains("varchar(255)") || lower.contains("character varying(255)"),
+        "Should preserve varchar type"
+    );
 }
 
 #[tokio::test]
@@ -115,7 +133,10 @@ async fn test_get_alter_column_rename() {
     let sql = sql_statements.join("; ");
     let lower = sql.to_lowercase();
 
-    assert!(lower.contains("rename column") || lower.contains("alter column"), "Should rename");
+    assert!(
+        lower.contains("rename column") || lower.contains("alter column"),
+        "Should rename"
+    );
     assert!(lower.contains("old_name"), "Should reference old name");
     assert!(lower.contains("new_name"), "Should reference new name");
 }
@@ -179,7 +200,10 @@ async fn test_get_create_index_sql() {
     let sql = sql_statements.join("; ");
     let lower = sql.to_lowercase();
 
-    assert!(lower.contains("create index"), "Should contain CREATE INDEX");
+    assert!(
+        lower.contains("create index"),
+        "Should contain CREATE INDEX"
+    );
     assert!(lower.contains("idx_ddl_test"), "Should contain index name");
     assert!(lower.contains("col_text"), "Should contain first column");
     assert!(lower.contains("col_int"), "Should contain second column");
@@ -204,7 +228,10 @@ async fn test_get_create_index_sql_unique() {
     let sql = sql_statements.join("; ");
     let lower = sql.to_lowercase();
 
-    assert!(lower.contains("create unique index"), "Should contain CREATE UNIQUE INDEX");
+    assert!(
+        lower.contains("create unique index"),
+        "Should contain CREATE UNIQUE INDEX"
+    );
 }
 
 #[tokio::test]
@@ -233,7 +260,10 @@ async fn test_get_create_foreign_key_sql() {
     let lower = sql.to_lowercase();
 
     assert!(lower.contains("alter table"), "Should contain ALTER TABLE");
-    assert!(lower.contains("add constraint"), "Should contain ADD CONSTRAINT");
+    assert!(
+        lower.contains("add constraint"),
+        "Should contain ADD CONSTRAINT"
+    );
     assert!(lower.contains("foreign key"), "Should contain FOREIGN KEY");
     assert!(lower.contains("references"), "Should contain REFERENCES");
 }

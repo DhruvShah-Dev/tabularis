@@ -1,9 +1,9 @@
 //! EXPLAIN query plan tests.
 
+use crate::helpers::pg_params;
 use tabularis_lib::drivers::driver_trait::DatabaseDriver;
 use tabularis_lib::drivers::postgres::PostgresDriver;
 use tabularis_lib::models::ExplainQueryOutput;
-use crate::helpers::pg_params;
 
 #[tokio::test]
 #[ignore]
@@ -52,7 +52,10 @@ async fn test_explain_analyze() {
             assert!(!plan.is_null(), "ANALYZE plan should not be null");
         }
         ExplainQueryOutput::Raw { raw } => {
-            assert!(!raw.payload.is_empty(), "ANALYZE raw output should have lines");
+            assert!(
+                !raw.payload.is_empty(),
+                "ANALYZE raw output should have lines"
+            );
         }
     }
 }

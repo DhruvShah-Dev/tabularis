@@ -2,11 +2,8 @@
 //! enum column binding.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use serde_json::{json, Value};
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
 
 use crate::parity::ParityHarness;
 
@@ -34,25 +31,22 @@ async fn parity_update_composite_pk() {
 
     // Update using composite PK
     let result = harness
-        .assert_parity(
-            "update_record:composite_pk",
-            |driver, params| async move {
-                let mut pk_map = HashMap::new();
-                pk_map.insert("order_id".to_string(), json!(1));
-                pk_map.insert("item_no".to_string(), json!(99));
-                driver
-                    .update_record(
-                        &params,
-                        "order_items",
-                        &pk_map,
-                        "product",
-                        json!("Parity Updated Widget"),
-                        Some("test_schema"),
-                        0,
-                    )
-                    .await
-            },
-        )
+        .assert_parity("update_record:composite_pk", |driver, params| async move {
+            let mut pk_map = HashMap::new();
+            pk_map.insert("order_id".to_string(), json!(1));
+            pk_map.insert("item_no".to_string(), json!(99));
+            driver
+                .update_record(
+                    &params,
+                    "order_items",
+                    &pk_map,
+                    "product",
+                    json!("Parity Updated Widget"),
+                    Some("test_schema"),
+                    0,
+                )
+                .await
+        })
         .await;
 
     let affected = result.as_u64().expect("update should return affected rows");
@@ -103,24 +97,21 @@ async fn parity_update_to_null() {
 
     // Update the value column to NULL
     let result = harness
-        .assert_parity(
-            "update_record:set_null",
-            |driver, params| async move {
-                let mut pk_map = HashMap::new();
-                pk_map.insert("id".to_string(), json!(9010));
-                driver
-                    .update_record(
-                        &params,
-                        "crud_scratch",
-                        &pk_map,
-                        "value",
-                        json!(null),
-                        Some("test_schema"),
-                        0,
-                    )
-                    .await
-            },
-        )
+        .assert_parity("update_record:set_null", |driver, params| async move {
+            let mut pk_map = HashMap::new();
+            pk_map.insert("id".to_string(), json!(9010));
+            driver
+                .update_record(
+                    &params,
+                    "crud_scratch",
+                    &pk_map,
+                    "value",
+                    json!(null),
+                    Some("test_schema"),
+                    0,
+                )
+                .await
+        })
         .await;
 
     let affected = result.as_u64().expect("update should return affected rows");
@@ -166,22 +157,13 @@ async fn parity_insert_with_default() {
     // Insert only the name column — let `id` use its DEFAULT (serial/auto-increment)
     // and `value` default to NULL.
     let result = harness
-        .assert_parity(
-            "insert_record:with_default",
-            |driver, params| async move {
-                let mut data = HashMap::new();
-                data.insert("name".to_string(), json!("parity_default_test"));
-                driver
-                    .insert_record(
-                        &params,
-                        "crud_scratch",
-                        data,
-                        Some("test_schema"),
-                        0,
-                    )
-                    .await
-            },
-        )
+        .assert_parity("insert_record:with_default", |driver, params| async move {
+            let mut data = HashMap::new();
+            data.insert("name".to_string(), json!("parity_default_test"));
+            driver
+                .insert_record(&params, "crud_scratch", data, Some("test_schema"), 0)
+                .await
+        })
         .await;
 
     let affected = result.as_u64().expect("insert should return affected rows");
@@ -232,8 +214,14 @@ async fn parity_insert_enum_value() {
         let affected = driver
             .insert_record(&harness.params, "with_enum", data, Some("test_schema"), 0)
             .await
-            .unwrap_or_else(|e| panic!("insert_record with enum value failed on {}: {}", target, e));
-        assert_eq!(affected, 1, "{}: inserting one enum row should affect 1 row", target);
+            .unwrap_or_else(|e| {
+                panic!("insert_record with enum value failed on {}: {}", target, e)
+            });
+        assert_eq!(
+            affected, 1,
+            "{}: inserting one enum row should affect 1 row",
+            target
+        );
 
         driver
             .execute_query(
@@ -272,8 +260,14 @@ async fn parity_update_enum_value() {
                 0,
             )
             .await
-            .unwrap_or_else(|e| panic!("update_record with enum value failed on {}: {}", target, e));
-        assert_eq!(affected, 1, "{}: updating the enum column should affect 1 row", target);
+            .unwrap_or_else(|e| {
+                panic!("update_record with enum value failed on {}: {}", target, e)
+            });
+        assert_eq!(
+            affected, 1,
+            "{}: updating the enum column should affect 1 row",
+            target
+        );
 
         // Restore the seeded value so later tests see the original state.
         driver

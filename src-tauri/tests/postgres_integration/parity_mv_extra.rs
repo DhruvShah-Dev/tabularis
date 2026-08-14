@@ -5,12 +5,6 @@
 //! on PG 16. The plugin MUST replicate this exact failure semantics (both must
 //! either succeed identically or both fail).
 
-use std::sync::Arc;
-
-use serde_json::Value;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-use tabularis_lib::models::ConnectionParams;
-
 use crate::parity::ParityHarness;
 
 #[tokio::test]
@@ -26,11 +20,7 @@ async fn parity_get_materialized_view_definition_error() {
             "get_materialized_view_definition:user_stats",
             |driver, params| async move {
                 driver
-                    .get_materialized_view_definition(
-                        &params,
-                        "user_stats",
-                        Some("test_schema"),
-                    )
+                    .get_materialized_view_definition(&params, "user_stats", Some("test_schema"))
                     .await
             },
         )

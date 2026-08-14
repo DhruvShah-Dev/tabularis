@@ -1,7 +1,7 @@
 //! Query execution tests.
 
-use tabularis_lib::drivers::postgres;
 use crate::helpers::pg_params;
+use tabularis_lib::drivers::postgres;
 
 #[tokio::test]
 #[ignore]
@@ -121,7 +121,12 @@ async fn test_execute_query_null_handling() {
     let row = &result.rows[0];
     // These columns have no default and weren't set — should be null
     for (i, val) in row.iter().enumerate() {
-        assert!(val.is_null(), "Column {} expected null, got: {:?}", result.columns[i], val);
+        assert!(
+            val.is_null(),
+            "Column {} expected null, got: {:?}",
+            result.columns[i],
+            val
+        );
     }
 }
 
@@ -168,7 +173,10 @@ async fn test_execute_batch_session_state() {
 
     // The SELECT result (4th statement, index 3) should return the inserted value
     assert!(results.len() >= 4, "Expected at least 4 results");
-    let select_result = results[3].result.as_ref().expect("SELECT should produce a result");
+    let select_result = results[3]
+        .result
+        .as_ref()
+        .expect("SELECT should produce a result");
     assert_eq!(select_result.rows.len(), 1);
     assert_eq!(select_result.rows[0][0], serde_json::json!(42));
 }

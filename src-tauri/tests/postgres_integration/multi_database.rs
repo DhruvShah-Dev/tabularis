@@ -1,7 +1,7 @@
 //! Multi-database tests (exercises per-database pool routing).
 
-use tabularis_lib::drivers::postgres;
 use crate::helpers::{pg_params, pg_params_secondary};
+use tabularis_lib::drivers::postgres;
 
 #[tokio::test]
 #[ignore]

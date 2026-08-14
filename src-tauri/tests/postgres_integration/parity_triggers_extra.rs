@@ -1,7 +1,5 @@
 //! Extra parity tests for triggers — create/drop trigger and empty schema.
 
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-
 use crate::parity::ParityHarness;
 
 #[tokio::test]
@@ -47,10 +45,19 @@ async fn parity_create_and_drop_trigger() {
             .await
             .unwrap_or_else(|e| panic!("get_triggers failed on {}: {}", target, e));
         let found = triggers.iter().any(|t| t.name == trigger_name);
-        assert!(found, "{}: created trigger {} should appear in list", target, trigger_name);
+        assert!(
+            found,
+            "{}: created trigger {} should appear in list",
+            target, trigger_name
+        );
 
         driver
-            .drop_trigger(&harness.params, trigger_name, table_name, Some("test_schema"))
+            .drop_trigger(
+                &harness.params,
+                trigger_name,
+                table_name,
+                Some("test_schema"),
+            )
             .await
             .unwrap_or_else(|e| panic!("drop_trigger failed on {}: {}", target, e));
 
@@ -59,7 +66,11 @@ async fn parity_create_and_drop_trigger() {
             .await
             .unwrap_or_else(|e| panic!("get_triggers (after drop) failed on {}: {}", target, e));
         let still_found = triggers.iter().any(|t| t.name == trigger_name);
-        assert!(!still_found, "{}: dropped trigger {} should not appear in list", target, trigger_name);
+        assert!(
+            !still_found,
+            "{}: dropped trigger {} should not appear in list",
+            target, trigger_name
+        );
     }
 }
 
@@ -71,12 +82,9 @@ async fn parity_get_triggers_empty_schema() {
 
     // other_schema has no triggers — both drivers should return an empty list
     let result = harness
-        .assert_parity(
-            "get_triggers:empty_schema",
-            |driver, params| async move {
-                driver.get_triggers(&params, Some("other_schema")).await
-            },
-        )
+        .assert_parity("get_triggers:empty_schema", |driver, params| async move {
+            driver.get_triggers(&params, Some("other_schema")).await
+        })
         .await;
 
     let triggers = result.as_array().expect("triggers should be an array");

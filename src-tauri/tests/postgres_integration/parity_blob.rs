@@ -8,7 +8,6 @@
 use std::collections::HashMap;
 
 use serde_json::json;
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
 
 use crate::parity::ParityHarness;
 
@@ -36,7 +35,13 @@ async fn parity_blob_insert_and_query() {
         data.insert("col_bytea".to_string(), json!(blob_wire));
         data.insert("col_text".to_string(), json!("parity_blob_test"));
         driver
-            .insert_record(&harness.params, "all_types", data, Some("test_schema"), 10_000_000)
+            .insert_record(
+                &harness.params,
+                "all_types",
+                data,
+                Some("test_schema"),
+                10_000_000,
+            )
             .await
             .unwrap_or_else(|e| panic!("insert_record failed on {}: {}", target, e));
 
@@ -51,7 +56,12 @@ async fn parity_blob_insert_and_query() {
             .await
             .unwrap_or_else(|e| panic!("execute_query failed on {}: {}", target, e));
 
-        assert_eq!(query_result.rows.len(), 1, "{}: should find exactly the inserted blob row", target);
+        assert_eq!(
+            query_result.rows.len(),
+            1,
+            "{}: should find exactly the inserted blob row",
+            target
+        );
         assert!(
             !query_result.rows[0][0].is_null(),
             "{}: bytea column should not be null",
@@ -84,26 +94,23 @@ async fn parity_blob_save_to_file() {
     let path_str = tmp_path.to_str().unwrap().to_string();
 
     let result = harness
-        .assert_parity(
-            "save_blob_to_file:basic",
-            |driver, params| {
-                let path = path_str.clone();
-                async move {
-                    let mut pk_map = HashMap::new();
-                    pk_map.insert("id".to_string(), json!(1));
-                    driver
-                        .save_blob_to_file(
-                            &params,
-                            "all_types",
-                            "col_bytea",
-                            &pk_map,
-                            Some("test_schema"),
-                            &path,
-                        )
-                        .await
-                }
-            },
-        )
+        .assert_parity("save_blob_to_file:basic", |driver, params| {
+            let path = path_str.clone();
+            async move {
+                let mut pk_map = HashMap::new();
+                pk_map.insert("id".to_string(), json!(1));
+                driver
+                    .save_blob_to_file(
+                        &params,
+                        "all_types",
+                        "col_bytea",
+                        &pk_map,
+                        Some("test_schema"),
+                        &path,
+                    )
+                    .await
+            }
+        })
         .await;
 
     // Both drivers should succeed (result is null/() serialized)
@@ -114,11 +121,11 @@ async fn parity_blob_save_to_file() {
 
     // Verify file was written and has content
     let metadata = std::fs::metadata(&tmp_path);
-    assert!(metadata.is_ok(), "File should exist after save_blob_to_file");
     assert!(
-        metadata.unwrap().len() > 0,
-        "File should have content"
+        metadata.is_ok(),
+        "File should exist after save_blob_to_file"
     );
+    assert!(metadata.unwrap().len() > 0, "File should have content");
 
     // Clean up
     let _ = std::fs::remove_file(&tmp_path);
@@ -152,7 +159,9 @@ async fn parity_blob_fetch_as_data_url() {
         )
         .await;
 
-    let data_url = result.as_str().expect("fetch_blob_as_data_url should return a string");
+    let data_url = result
+        .as_str()
+        .expect("fetch_blob_as_data_url should return a string");
     // Should be in BLOB wire format: "BLOB:<size>:<mime>:<base64>" or data URL
     assert!(
         data_url.starts_with("BLOB:") || data_url.starts_with("data:"),

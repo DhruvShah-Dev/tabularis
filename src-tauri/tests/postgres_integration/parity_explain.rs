@@ -5,8 +5,6 @@
 //! (no error) rather than comparing exact output, since EXPLAIN output contains
 //! volatile runtime values (cost estimates, actual times, buffers).
 
-use tabularis_lib::drivers::driver_trait::DatabaseDriver;
-
 use crate::parity::ParityHarness;
 
 #[tokio::test]
