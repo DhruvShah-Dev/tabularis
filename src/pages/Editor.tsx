@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
+import { shouldShowStatementSuccess } from "../utils/resultPresentation";
 import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import {
@@ -332,7 +333,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const tabForQuery = { ...tab, schema: effectiveSchema };
       const query =
         tab.type === "table" && tab.activeTable
-          ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
+          ? reconstructTableQuery(tabForQuery, activeCapabilities ?? activeDriver ?? undefined)
           : tab.query;
 
       addTab({
@@ -342,7 +343,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         connectionId: tab.connectionId,
       });
     },
-    [addTab, activeDriver, activeCapabilities?.schemas],
+    [addTab, activeDriver, activeCapabilities],
   );
 
   const [saveQueryModal, setSaveQueryModal] = useState<{
@@ -914,7 +915,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         const tabForQuery = { ...targetTab, schema: effectiveSchema };
         textToRun = reconstructTableQuery(
           tabForQuery,
-          activeDriver ?? undefined,
+          activeCapabilities ?? activeDriver ?? undefined,
           {
             filterOverride:
               filterOverride !== undefined ? filterOverride : undefined,
@@ -1150,7 +1151,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       t,
       activeDriver,
       activeSchema,
-      activeCapabilities?.schemas,
+      activeCapabilities,
       views,
       materializedViews,
       isMultiDb,
@@ -1511,7 +1512,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                 schema:
                   activeCapabilities?.schemas === true ? tab.schema : undefined,
               },
-              activeDriver ?? undefined,
+              activeCapabilities ?? activeDriver ?? undefined,
               { sortOverride: null, limitOverride: null },
             )
           : tab.query;
@@ -1542,7 +1543,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       activeConnectionId,
       activeSchema,
       activeDriver,
-      activeCapabilities?.schemas,
+      activeCapabilities,
       updateTab,
     ],
   );
@@ -2137,7 +2138,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const filterClause = buildForeignKeyFilterClause(
         fk,
         value,
-        activeDriver ?? null,
+        activeCapabilities ?? activeDriver ?? null,
         sourceType,
       );
 
@@ -2175,7 +2176,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     [
       activeConnectionId,
       activeDriver,
-      activeCapabilities?.schemas,
+      activeCapabilities,
       addTab,
       updateTab,
       runQuery,
@@ -2199,14 +2200,14 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
         if (!currentDir || currentDir === "ASC") {
           // ASC -> DESC
-          newSort = `${formatSqlIdentifier(colName, activeDriver)} DESC`;
+          newSort = `${formatSqlIdentifier(colName, activeCapabilities ?? activeDriver)} DESC`;
         } else {
           // DESC -> None (Clear)
           newSort = "";
         }
       } else {
         // New column -> ASC
-        newSort = `${formatSqlIdentifier(colName, activeDriver)} ASC`;
+        newSort = `${formatSqlIdentifier(colName, activeCapabilities ?? activeDriver)} ASC`;
       }
 
       handleToolbarUpdate(
@@ -2215,7 +2216,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         activeTab.limitClause,
       );
     },
-    [activeTab, activeDriver, handleToolbarUpdate],
+    [activeTab, activeDriver, activeCapabilities, handleToolbarUpdate],
   );
 
   const handlePendingChange = useCallback(
@@ -3277,7 +3278,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     const tabForQuery = { ...activeTab, schema: effectiveSchema };
     const query =
       activeTab.type === "table" && activeTab.activeTable
-        ? reconstructTableQuery(tabForQuery, activeDriver ?? undefined)
+        ? reconstructTableQuery(tabForQuery, activeCapabilities ?? activeDriver ?? undefined)
         : activeTab.query;
 
     if (!query || !query.trim()) return;
@@ -3360,7 +3361,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         ? // limitOverride: copy-all goes beyond the tab's "Total Limit" — the
           // user explicitly asked for every row. Sort is kept so the copy
           // matches the on-screen order.
-          reconstructTableQuery(tabForQuery, activeDriver ?? undefined, {
+          reconstructTableQuery(tabForQuery, activeCapabilities ?? activeDriver ?? undefined, {
             limitOverride: null,
           })
         : activeTab.query;
@@ -3570,7 +3571,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                 <FileCode size={12} className="text-accent-secondary shrink-0" />
               )}
               {editingTabId === tab.id ? (
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                   type="text"
                   draggable={false}
                   value={editingTabTitle}
@@ -4205,14 +4206,11 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
               </div>
             ) : activeTab.error ? (
               <ErrorDisplay error={activeTab.error} t={t} />
-            ) : activeTab.result &&
-              activeTab.result.columns.length === 0 &&
-              !(
-                activeTab.pendingInsertions &&
-                Object.keys(activeTab.pendingInsertions).length > 0
-              ) ? (
+            ) : shouldShowStatementSuccess(activeTab) ? (
               // Non-SELECT statement (INSERT/UPDATE/DELETE/DDL): no result set,
               // so surface an explicit success message instead of an empty grid.
+              // Table tabs stay in data mode even when an empty result omits
+              // columns, keeping the Add Row action available.
               <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-2 text-center px-4">
                 <CheckCircle2 size={32} className="text-green-500" />
                 <p className="text-sm font-medium text-primary">
@@ -4300,7 +4298,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                           title={t("editor.jumpToPage")}
                         >
                           {isEditingPage ? (
-                            <input
+                            <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                               autoFocus
                               type="text"
                               className="w-full bg-transparent text-center focus:outline-none text-white p-0 m-0 border-none h-full"
@@ -4610,6 +4608,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                       activeFkQuery={activeFkQuery}
                       connectionId={activeConnectionId}
                       driver={activeDriver}
+                      capabilities={activeCapabilities}
                       schema={activeSchema}
                       onClose={() => setActiveFkQuery(null)}
                       onNavigateToTab={handleForeignKeyNavigate}

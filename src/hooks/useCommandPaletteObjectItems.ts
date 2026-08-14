@@ -190,7 +190,7 @@ export function useCommandPaletteObjectItems(
     return createObjectPaletteItems({
       navigatorItems,
       connectionId,
-      driver: connectionData?.driver ?? null,
+      driver: connectionData?.capabilities ?? connectionData?.driver ?? null,
       hasGroups: hasSchemas || isMultiDatabase,
       isMultiDatabase,
       runtime,
@@ -213,6 +213,7 @@ export function useCommandPaletteObjectItems(
     });
   }, [
     connectionData?.driver,
+    connectionData?.capabilities,
     connectionId,
     hasSchemas,
     isMultiDatabase,

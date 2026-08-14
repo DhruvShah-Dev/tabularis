@@ -134,7 +134,7 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                   {aggregation?.function && (
                     <>
                       <div className="text-[10px] text-secondary font-semibold mb-1 mt-2">AGGREGATION ALIAS</div>
-                      <input
+                      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                         type="text"
                         placeholder="e.g., total_count"
                         value={aggregation?.alias || ''}
@@ -147,7 +147,7 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                         className="w-full bg-surface-secondary border border-strong rounded px-2 py-1 text-[10px] text-secondary placeholder-slate-500"
                       />
                       <div className="text-[10px] text-secondary font-semibold mb-1 mt-2">POSITION</div>
-                      <input
+                      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                         type="number"
                         min="1"
                         placeholder="e.g., 1"
@@ -167,7 +167,7 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                   {!aggregation?.function && (
                     <>
                       <div className="text-[10px] text-secondary font-semibold mb-1 mt-2">COLUMN ALIAS</div>
-                      <input
+                      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                         type="text"
                         placeholder="e.g., user_name"
                         value={columnAlias?.alias || ''}
@@ -177,7 +177,7 @@ export const TableNodeComponent = memo(({ data }: NodeProps<TableNode>) => {
                         className="w-full bg-surface-secondary border border-strong rounded px-2 py-1 text-[10px] text-secondary placeholder-slate-500"
                       />
                       <div className="text-[10px] text-secondary font-semibold mb-1 mt-2">POSITION</div>
-                      <input
+                      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                         type="number"
                         min="1"
                         placeholder="e.g., 1"

@@ -58,7 +58,7 @@ function SshInput({
     <div className="flex flex-col">
       <label className={LabelClass}>{label}</label>
       <div className="relative group">
-        <input
+        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
           type={isPassword ? (showPassword ? "text" : "password") : type}
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}

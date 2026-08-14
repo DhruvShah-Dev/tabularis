@@ -64,6 +64,7 @@ import { TriggerEditorModal } from "../modals/TriggerEditorModal";
 import { ConfirmModal } from "../modals/ConfirmModal";
 import { RunRoutineModal } from "../modals/RunRoutineModal";
 import { Accordion } from "./sidebar/Accordion";
+import { MetadataErrorIndicator } from "./sidebar/MetadataErrorIndicator";
 import { SidebarTableItem } from "./sidebar/SidebarTableItem";
 import { buildTableItemSelector } from "../../utils/sidebarTableItem";
 import { fuzzyFilter } from "../../utils/fuzzy";
@@ -121,6 +122,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
     views,
     routines,
     triggers,
+    routineError,
     isLoadingTables,
     refreshTables,
     refreshViews,
@@ -193,7 +195,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
   const navigate = useNavigate();
   const objectNavigation = useDatabaseObjectNavigation(
     activeConnectionId,
-    activeDriver,
+    activeCapabilities ?? activeDriver,
   );
   const [schemaVersion, setSchemaVersion] = useState(0);
   const sidebarBodyRef = useRef<HTMLDivElement>(null);
@@ -780,7 +782,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       size={12}
                       className="absolute left-2 top-1/2 -translate-y-1/2 text-muted"
                     />
-                    <input
+                    <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                       type="text"
                       value={favoritesFilter}
                       onChange={(e) => setFavoritesFilter(e.target.value)}
@@ -1364,7 +1366,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                   <div className="px-3 pb-1.5">
                     <div className="relative flex items-center">
                       <Search size={11} className="absolute left-2 text-muted pointer-events-none" />
-                      <input
+                      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                         type="text"
                         value={dbFilter}
                         onChange={(e) => setDbFilter(e.target.value)}
@@ -1541,7 +1543,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       <div className="px-2 py-1">
                         <div className="relative flex items-center">
                           <Search size={11} className="absolute left-2 text-muted pointer-events-none" />
-                          <input
+                          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                             type="text"
                             data-table-filter
                             value={tableFilter}
@@ -1578,6 +1580,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                               onContextMenu={handleContextMenu}
                               connectionId={activeConnectionId!}
                               driver={activeDriver!}
+                              capabilities={activeCapabilities}
                               canManage={supportsManageTables(activeCapabilities)}
                               onAddColumn={(t_name) =>
                                 setModifyColumnModal({ isOpen: true, tableName: t_name, column: null })
@@ -1684,6 +1687,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                             onContextMenu={handleContextMenu}
                             connectionId={activeConnectionId!}
                             driver={activeDriver!}
+                            capabilities={activeCapabilities}
                           />
                         ))}
                       </div>
@@ -1726,7 +1730,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                         <div className="px-2 py-1">
                           <div className="relative flex items-center">
                             <Search size={11} className="absolute left-2 text-muted pointer-events-none" />
-                            <input
+                            <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                               type="text"
                               value={triggerFilterFlat}
                               onChange={(e) => setTriggerFilterFlat(e.target.value)}
@@ -1776,6 +1780,12 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       onToggle={() => setRoutinesOpen(!routinesOpen)}
                       actions={
                         <div className="flex items-center gap-1 mr-2.5">
+                          {routineError && (
+                            <MetadataErrorIndicator
+                              error={routineError}
+                              title={t("sidebar.routineMetadataErrorTitle")}
+                            />
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1957,7 +1967,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
                       icon: Trash2,
                       danger: true,
                       action: async () => {
-                        const quotedTable = quoteTableRef(contextMenu.id, activeDriver, ctxSchema);
+                        const quotedTable = quoteTableRef(contextMenu.id, activeCapabilities ?? activeDriver, ctxSchema);
                         if (
                           await ask(
                             t("sidebar.deleteTableConfirm", { table: contextMenu.id }),
@@ -2648,6 +2658,7 @@ export const ExplorerSidebar = ({ sidebarWidth, startResize, onCollapse, sidebar
           tableName={triggerEditorModal.tableName}
           schema={triggerEditorModal.schema}
           driver={activeDriver ?? undefined}
+          capabilities={activeCapabilities}
           isNewTrigger={triggerEditorModal.isNewTrigger}
           onSuccess={() => {
             if (refreshTriggers) refreshTriggers();

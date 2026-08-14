@@ -3,7 +3,7 @@
  * Extracted from Connections.tsx for testability
  */
 
-import type { DriverCapabilities } from "../types/plugins";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 import type { SavedConnection } from "../contexts/DatabaseContext";
 import { isLocalDriver } from "./driverCapabilities";
 import { isMultiDatabaseCapable } from "./database";
@@ -105,11 +105,19 @@ export function formatConnectionString(
 }
 
 /**
- * Get the default port for a database driver
- * @param driver - Database driver type
+ * Get the default port for a database driver.
+ * Accepts a driver id string, or a PluginManifest — when a manifest is
+ * given, its own declared `default_port` is used verbatim (issue #614:
+ * this lets a plugin driver like the standalone PostgreSQL plugin, id
+ * "postgresql", report the correct port instead of falling through to the
+ * literal-id switch below, which only recognizes the builtin ids).
+ * @param driver - Database driver type, or a resolved PluginManifest
  * @returns Default port number
  */
-export function getDefaultPort(driver: DatabaseDriver): number {
+export function getDefaultPort(driver: DatabaseDriver | PluginManifest): number {
+  if (typeof driver === "object") {
+    return driver.default_port ?? 0;
+  }
   switch (driver) {
     case "postgres":
       return 5432;
@@ -208,11 +216,19 @@ export function validateConnectionParams(
 }
 
 /**
- * Get a human-readable label for a database driver
- * @param driver - Database driver type
+ * Get a human-readable label for a database driver.
+ * Accepts a driver id string, or a PluginManifest — when a manifest is
+ * given, its own declared `name` is used verbatim (issue #614: a plugin
+ * driver like the standalone PostgreSQL plugin, id "postgresql", gets its
+ * real display name instead of falling through to an all-caps rendering
+ * of its id).
+ * @param driver - Database driver type, or a resolved PluginManifest
  * @returns Display label for the driver
  */
-export function getDriverLabel(driver: DatabaseDriver): string {
+export function getDriverLabel(driver: DatabaseDriver | PluginManifest): string {
+  if (typeof driver === "object") {
+    return driver.name;
+  }
   switch (driver) {
     case "postgres":
       return "PostgreSQL";

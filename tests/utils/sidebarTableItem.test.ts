@@ -4,12 +4,14 @@ import {
   buildTableItemSelector,
   type TableItemComparableProps,
 } from '@/utils/sidebarTableItem';
+import type { DriverCapabilities } from '@/types/plugins';
 
 const base: TableItemComparableProps = {
   table: { name: 'users' },
   activeTable: null,
   connectionId: 'conn-1',
   driver: 'postgres',
+  capabilities: null,
   canManage: true,
   schemaVersion: 0,
   schema: 'public',
@@ -52,6 +54,17 @@ describe('areTableItemPropsEqual', () => {
     ['canManage', { canManage: false }],
     ['schemaVersion', { schemaVersion: 1 }],
     ['schema', { schema: 'analytics' }],
+    [
+      'capabilities',
+      {
+        capabilities: {
+          schemas: true, views: true, routines: true,
+          file_based: false, folder_based: false,
+          identifier_quote: '`', alter_primary_key: true,
+          sql_dialect: 'mysql',
+        } satisfies DriverCapabilities,
+      },
+    ],
   ])('re-renders when %s changes', (_label, change) => {
     expect(areTableItemPropsEqual(base, { ...base, ...change })).toBe(false);
   });

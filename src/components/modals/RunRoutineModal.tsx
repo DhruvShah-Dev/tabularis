@@ -166,7 +166,7 @@ export const RunRoutineModal = ({
                     </div>
                   ) : (
                     <div className="flex items-center gap-3">
-                      <input
+                      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                         type="text"
                         value={input.isNull ? "" : input.value}
                         disabled={input.isNull}
