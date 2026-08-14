@@ -342,7 +342,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         connectionId: tab.connectionId,
       });
     },
-    [addTab, activeDriver, activeCapabilities?.schemas],
+    [addTab, activeDriver, activeCapabilities],
   );
 
   const [saveQueryModal, setSaveQueryModal] = useState<{
@@ -1150,7 +1150,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       t,
       activeDriver,
       activeSchema,
-      activeCapabilities?.schemas,
+      activeCapabilities,
       views,
       materializedViews,
       isMultiDb,
@@ -1542,7 +1542,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       activeConnectionId,
       activeSchema,
       activeDriver,
-      activeCapabilities?.schemas,
+      activeCapabilities,
       updateTab,
     ],
   );
@@ -2175,7 +2175,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     [
       activeConnectionId,
       activeDriver,
-      activeCapabilities?.schemas,
+      activeCapabilities,
       addTab,
       updateTab,
       runQuery,
