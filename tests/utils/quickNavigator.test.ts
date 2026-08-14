@@ -15,7 +15,7 @@ describe("quickNavigator utility", () => {
         isMultiDb: false,
         schemas: [],
         schemaDataMap: {},
-        configuredDatabases: [],
+        selectedDatabases: [],
         databaseDataMap: {},
         tables: [{ name: "users" }],
         views: [],
@@ -33,7 +33,7 @@ describe("quickNavigator utility", () => {
         isMultiDb: false,
         schemas: [],
         schemaDataMap: {},
-        configuredDatabases: [],
+        selectedDatabases: [],
         databaseDataMap: {},
         tables: [{ name: "users" }],
         views: [{ name: "active_users" }],
@@ -68,7 +68,7 @@ describe("quickNavigator utility", () => {
         schemaDataMap: {
           public: mockSchemaData,
         },
-        configuredDatabases: [],
+        selectedDatabases: [],
         databaseDataMap: {},
         tables: [],
         views: [],
@@ -99,7 +99,7 @@ describe("quickNavigator utility", () => {
         isMultiDb: true,
         schemas: [],
         schemaDataMap: {},
-        configuredDatabases: ["sales_db", "inventory_db"],
+        selectedDatabases: ["sales_db", "inventory_db"],
         databaseDataMap: {
           sales_db: mockDbData,
         },
@@ -113,6 +113,49 @@ describe("quickNavigator utility", () => {
       const result = getNavigatorItems(params);
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({ name: "products", type: "table", schema: "sales_db", item: mockDbData.tables[0] });
+    });
+
+    it("should use the live selected database list in multi-db mode", () => {
+      const currentDbData: SchemaData = {
+        tables: [{ name: "current_table" }],
+        views: [],
+        routines: [],
+        triggers: [],
+        isLoading: false,
+        isLoaded: true,
+      };
+      const staleDbData: SchemaData = {
+        tables: [{ name: "stale_table" }],
+        views: [],
+        routines: [],
+        triggers: [],
+        isLoading: false,
+        isLoaded: true,
+      };
+
+      const params: NavigatorItemParams = {
+        activeConnectionId: "conn-1",
+        hasSchemas: false,
+        isMultiDb: true,
+        schemas: [],
+        schemaDataMap: {},
+        selectedDatabases: ["current_db"],
+        databaseDataMap: {
+          current_db: currentDbData,
+          stale_db: staleDbData,
+        },
+        tables: [],
+        views: [],
+        routines: [],
+        triggers: [],
+        activeSchema: null,
+      };
+
+      const result = getNavigatorItems(params);
+
+      expect(result).toEqual([
+        { name: "current_table", type: "table", schema: "current_db", item: currentDbData.tables[0] },
+      ]);
     });
 
     it("should normalize every layout through the same object shape", () => {
@@ -135,7 +178,7 @@ describe("quickNavigator utility", () => {
         isMultiDb: false,
         schemas: [],
         schemaDataMap: {},
-        configuredDatabases: [],
+        selectedDatabases: [],
         databaseDataMap: {},
         ...data,
         activeSchema: "public",
@@ -149,7 +192,7 @@ describe("quickNavigator utility", () => {
       const databaseItems = getNavigatorItems({
         ...base,
         isMultiDb: true,
-        configuredDatabases: ["public"],
+        selectedDatabases: ["public"],
         databaseDataMap: { public: data },
       });
 
@@ -164,7 +207,7 @@ describe("quickNavigator utility", () => {
         isMultiDb: true,
         schemas: [],
         schemaDataMap: {},
-        configuredDatabases: ["main"],
+        selectedDatabases: ["main"],
         databaseDataMap: {
           main: {
             tables: [{ name: "users" }],
