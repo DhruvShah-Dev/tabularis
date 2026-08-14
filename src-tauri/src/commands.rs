@@ -1648,7 +1648,10 @@ async fn migrate_postgres_ssl_mode_spelling<R: Runtime>(app: &AppHandle<R>) -> R
             continue; // builtin driver's own dropdown was always correct
         }
         if let Some(driver) = crate::drivers::registry::get_driver(driver_id).await {
-            dialects.insert(driver_id.clone(), driver.manifest().capabilities.sql_dialect);
+            dialects.insert(
+                driver_id.clone(),
+                driver.manifest().capabilities.sql_dialect,
+            );
         }
     }
 
