@@ -1,5 +1,6 @@
 import type { TableTarget } from "../types/databaseObjects";
 import type { PaletteAction, PaletteItem } from "../types/palette";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 import {
   createQueryableObjectRequests,
   createTableConsoleRequest,
@@ -33,7 +34,7 @@ interface ObjectPaletteLabels {
 interface CreateObjectPaletteItemsOptions {
   navigatorItems: NavigatorItem[];
   connectionId: string;
-  driver: string | null;
+  driver: string | PluginManifest | DriverCapabilities | null;
   hasGroups: boolean;
   isMultiDatabase: boolean;
   labels: ObjectPaletteLabels;

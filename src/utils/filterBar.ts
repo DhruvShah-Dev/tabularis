@@ -1,4 +1,5 @@
 import type { TableColumn } from "../types/editor";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 import { formatSqlIdentifier } from "./identifiers";
 
 
@@ -151,7 +152,7 @@ export function getOperatorsForType(dataType: string): FilterOperator[] {
  */
 export function buildSingleFilterClause(
   filter: StructuredFilter,
-  driver?: string | null
+  driver?: string | PluginManifest | DriverCapabilities | null
 ): string {
   const col = formatSqlIdentifier(filter.column, driver);
     const op = filter.operator;
@@ -204,7 +205,7 @@ function quoteIfNeeded(value: string): string {
  */
 export function buildStructuredFilterClause(
   filters: StructuredFilter[],
-  driver?: string | null
+  driver?: string | PluginManifest | DriverCapabilities | null
 ): string {
   const clauses = filters
     .filter((f) => f.column && f.enabled !== false)
