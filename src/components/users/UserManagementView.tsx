@@ -437,7 +437,7 @@ export function UserManagementView({ connectionId, isActive }: Props) {
               size={12}
               className="absolute left-2 top-1/2 -translate-y-1/2 text-muted"
             />
-            <input
+            <input autoCorrect="off" autoCapitalize="off" autoComplete="off"
               type="text"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -529,7 +529,7 @@ export function UserManagementView({ connectionId, isActive }: Props) {
               </button>
             </div>
             <div className="flex items-center gap-2 max-w-md">
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off"
                 type="text"
                 value={newUser}
                 onChange={(e) => setNewUser(e.target.value)}
@@ -539,7 +539,7 @@ export function UserManagementView({ connectionId, isActive }: Props) {
                 className="flex-1 px-2 py-1.5 bg-base border border-strong rounded-md text-xs text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none"
               />
               <span className="text-muted text-xs">@</span>
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off"
                 type="text"
                 value={newHost}
                 onChange={(e) => setNewHost(e.target.value)}
@@ -548,7 +548,7 @@ export function UserManagementView({ connectionId, isActive }: Props) {
                 className="w-28 px-2 py-1.5 bg-base border border-strong rounded-md text-xs text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none"
               />
             </div>
-            <input
+            <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
@@ -565,7 +565,7 @@ export function UserManagementView({ connectionId, isActive }: Props) {
                 <label className="text-xs text-muted shrink-0">
                   {t("userManagement.scope")}
                 </label>
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off"
                   type="text"
                   value={newScopeDb}
                   onChange={(e) => {
@@ -672,7 +672,7 @@ export function UserManagementView({ connectionId, isActive }: Props) {
 
             {changingPassword && (
               <div className="max-w-md flex items-center gap-2">
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -710,7 +710,7 @@ export function UserManagementView({ connectionId, isActive }: Props) {
 
               {addingScope && (
                 <div className="flex items-center gap-2 flex-wrap max-w-xl p-2 rounded-lg border border-strong bg-elevated">
-                  <input
+                  <input autoCorrect="off" autoCapitalize="off" autoComplete="off"
                     type="text"
                     value={addDb}
                     onChange={(e) => setAddDb(e.target.value)}
@@ -721,7 +721,7 @@ export function UserManagementView({ connectionId, isActive }: Props) {
                     className="w-44 px-2 py-1.5 bg-base border border-strong rounded-md text-xs text-primary placeholder:text-muted focus:border-blue-500 focus:outline-none"
                   />
                   <span className="text-muted text-xs">.</span>
-                  <input
+                  <input autoCorrect="off" autoCapitalize="off" autoComplete="off"
                     type="text"
                     value={addTable}
                     onChange={(e) => setAddTable(e.target.value)}

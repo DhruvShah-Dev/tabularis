@@ -172,7 +172,7 @@ export function BackupTab() {
               label={t("settings.backup.webdavUrl")}
               description={t("settings.backup.webdavUrlDesc")}
             >
-              <input
+              <input autoComplete="off"
                 type="url"
                 value={webdavUrl}
                 onChange={(e) => setWebdavUrl(e.target.value)}
@@ -191,7 +191,7 @@ export function BackupTab() {
               label={t("settings.backup.webdavUsername")}
               description={t("settings.backup.webdavUsernameDesc")}
             >
-              <input
+              <input autoComplete="off"
                 type="text"
                 value={webdavUsername}
                 onChange={(e) => setWebdavUsername(e.target.value)}

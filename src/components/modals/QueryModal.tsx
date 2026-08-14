@@ -75,7 +75,7 @@ export const QueryModal = ({ isOpen, onClose, onSave, initialName = '', initialS
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-secondary mb-1">Name</label>
-            <input
+            <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
