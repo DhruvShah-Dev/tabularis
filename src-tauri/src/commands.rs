@@ -808,7 +808,15 @@ pub async fn get_routines<R: Runtime>(
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
-    drv.get_routines(&params, schema.as_deref()).await
+    let result = drv.get_routines(&params, schema.as_deref()).await;
+    let database = schema.as_deref().unwrap_or_else(|| params.database.primary());
+
+    match &result {
+        Ok(routines) => log::info!("Retrieved {} routines from {}", routines.len(), database),
+        Err(error) => log::error!("Failed to get routines from {}: {}", database, error),
+    }
+
+    result
 }
 
 #[tauri::command]
