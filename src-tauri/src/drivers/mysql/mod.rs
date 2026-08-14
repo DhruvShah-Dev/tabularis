@@ -1798,7 +1798,7 @@ impl MysqlDriver {
                     triggers: true,
                     user_management: true,
                     supports_ssl: true,
-                    sql_dialect: SqlDialect::Mysql,
+                    sql_dialect: Some(SqlDialect::Mysql),
                 },
                 is_builtin: true,
                 engine: Some("mysql".to_string()),

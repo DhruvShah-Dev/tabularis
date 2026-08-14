@@ -1424,8 +1424,9 @@ pub async fn duplicate_connection<R: Runtime>(
 pub async fn get_connections<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<Vec<SavedConnection>, String> {
-    // Run migration if needed
+    // Run migrations if needed
     migrate_ssh_connections(&app).await.ok();
+    migrate_postgres_ssl_mode_spelling(&app).await.ok();
 
     let path = get_config_path(&app)?;
     // Use persistence function that handles both old and new formats
@@ -1556,6 +1557,120 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
         "[Migration] Successfully migrated {} SSH connections",
         ssh_connections.len()
     );
+    Ok(())
+}
+
+// ==================== PostgreSQL Plugin SSL Mode Migration ====================
+
+/// The SSL mode dropdown used to branch on `driver === "postgres"` literally
+/// (issue #614), so a postgres-dialect driver with a different id (e.g. the
+/// standalone PostgreSQL plugin, id `"postgresql"`) offered MySQL-style
+/// underscored `ssl_mode` values instead of Postgres-style hyphenated ones.
+/// The plugin's own TLS check only recognizes the hyphenated spelling, so a
+/// connection saved with the wrong-family value connects in cleartext with no
+/// error. Fixing the dropdown only stops *new* saves from getting the wrong
+/// value — this rewrites values already persisted before the fix shipped.
+///
+/// Maps a stale MySQL-style `ssl_mode` value to its Postgres-style
+/// equivalent. Returns `None` for a value that isn't one of the stale
+/// MySQL-style spellings (including values already correct, or driver-
+/// specific values like ClickHouse's `"disable"`/`"require"`, which happen to
+/// already be spelled correctly in both families and need no rewrite).
+fn stale_postgres_ssl_mode_replacement(value: &str) -> Option<&'static str> {
+    match value {
+        "disabled" => Some("disable"),
+        "preferred" => Some("prefer"),
+        "required" => Some("require"),
+        "verify_ca" => Some("verify-ca"),
+        "verify_identity" => Some("verify-full"),
+        _ => None,
+    }
+}
+
+/// Rewrites `conn.params.ssl_mode` in place if `conn`'s driver resolves (via
+/// `dialects`) to the postgres SQL dialect and its stored value is a stale
+/// MySQL-style spelling. Builtin `"postgres"` connections are excluded —
+/// their own dropdown was always correct, so nothing there needs migrating.
+/// A driver whose manifest doesn't declare `sql_dialect` (`None`, or absent
+/// from the map because it never resolved) is treated as NOT postgres —
+/// deliberately not defaulted, unlike the splitter's own historical
+/// postgres-default, because this migration must distinguish "explicitly
+/// postgres" from "unspecified" to avoid rewriting a driver's SSL value
+/// based on a guess.
+/// Pure and synchronous so it can be exercised directly in tests without a
+/// live driver registry. Returns whether a rewrite happened.
+fn migrate_connection_ssl_mode_in_place(
+    conn: &mut SavedConnection,
+    dialects: &HashMap<String, Option<crate::drivers::driver_trait::SqlDialect>>,
+) -> bool {
+    if conn.params.driver == "postgres" {
+        return false;
+    }
+    let is_postgres_dialect = dialects
+        .get(&conn.params.driver)
+        .copied()
+        .flatten()
+        .is_some_and(|d| d == crate::drivers::driver_trait::SqlDialect::Postgres);
+    if !is_postgres_dialect {
+        return false;
+    }
+    let Some(stale) = conn.params.ssl_mode.as_deref() else {
+        return false;
+    };
+    let Some(replacement) = stale_postgres_ssl_mode_replacement(stale) else {
+        return false;
+    };
+    conn.params.ssl_mode = Some(replacement.to_string());
+    true
+}
+
+/// Migrates already-persisted `ssl_mode` values on postgres-dialect
+/// connections (driver id other than the builtin `"postgres"`) from the
+/// stale MySQL-style spelling to the Postgres-style spelling the plugin
+/// actually understands. Idempotent — a no-op once every affected
+/// connection has been rewritten.
+async fn migrate_postgres_ssl_mode_spelling<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let conn_path = get_config_path(app)?;
+    if !conn_path.exists() {
+        return Ok(()); // Nothing to migrate
+    }
+
+    let mut conn_file = persistence::load_connections_file(&conn_path)?;
+
+    // Resolve each distinct non-builtin driver id's dialect once, not once
+    // per connection — the registry lookup is async and connections commonly
+    // share a driver.
+    let mut dialects: HashMap<String, Option<crate::drivers::driver_trait::SqlDialect>> =
+        HashMap::new();
+    for conn in &conn_file.connections {
+        let driver_id = &conn.params.driver;
+        if driver_id == "postgres" || dialects.contains_key(driver_id) {
+            continue; // builtin driver's own dropdown was always correct
+        }
+        if let Some(driver) = crate::drivers::registry::get_driver(driver_id).await {
+            dialects.insert(
+                driver_id.clone(),
+                driver.manifest().capabilities.sql_dialect,
+            );
+        }
+    }
+
+    let mut migrated_count = 0usize;
+    for conn in conn_file.connections.iter_mut() {
+        if migrate_connection_ssl_mode_in_place(conn, &dialects) {
+            migrated_count += 1;
+        }
+    }
+
+    if migrated_count == 0 {
+        return Ok(()); // No migration needed
+    }
+
+    eprintln!(
+        "[Migration] Rewriting stale ssl_mode spelling on {} postgres-dialect connection(s)",
+        migrated_count
+    );
+    save_connections_and_invalidate(app, &conn_path, &conn_file)?;
     Ok(())
 }
 
@@ -2456,6 +2571,156 @@ mod tests {
             database: DatabaseSelection::Single("testdb".to_string()),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn stale_postgres_ssl_mode_replacement_maps_every_mysql_style_value() {
+        assert_eq!(stale_postgres_ssl_mode_replacement("disabled"), Some("disable"));
+        assert_eq!(stale_postgres_ssl_mode_replacement("preferred"), Some("prefer"));
+        assert_eq!(stale_postgres_ssl_mode_replacement("required"), Some("require"));
+        assert_eq!(stale_postgres_ssl_mode_replacement("verify_ca"), Some("verify-ca"));
+        assert_eq!(
+            stale_postgres_ssl_mode_replacement("verify_identity"),
+            Some("verify-full"),
+        );
+    }
+
+    #[test]
+    fn stale_postgres_ssl_mode_replacement_leaves_already_correct_values_alone() {
+        for already_correct in
+            ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
+        {
+            assert_eq!(
+                stale_postgres_ssl_mode_replacement(already_correct),
+                None,
+                "{already_correct} should not be rewritten",
+            );
+        }
+    }
+
+    #[test]
+    fn stale_postgres_ssl_mode_replacement_ignores_unrecognized_values() {
+        assert_eq!(stale_postgres_ssl_mode_replacement(""), None);
+        assert_eq!(stale_postgres_ssl_mode_replacement("not-a-real-mode"), None);
+    }
+
+    fn saved_connection(driver: &str, ssl_mode: Option<&str>) -> SavedConnection {
+        SavedConnection {
+            id: "conn-1".to_string(),
+            name: "test".to_string(),
+            params: ConnectionParams {
+                driver: driver.to_string(),
+                ssl_mode: ssl_mode.map(str::to_string),
+                ..base_params()
+            },
+            group_id: None,
+            sort_order: None,
+            detect_json_in_text_columns: None,
+            appearance: None,
+            tag_ids: None,
+            environment: None,
+        }
+    }
+
+    #[test]
+    fn migrate_connection_ssl_mode_rewrites_a_plugin_postgres_connection() {
+        let mut dialects = HashMap::new();
+        dialects.insert(
+            "postgresql".to_string(),
+            Some(crate::drivers::driver_trait::SqlDialect::Postgres),
+        );
+        let mut conn = saved_connection("postgresql", Some("required"));
+
+        let rewrote = migrate_connection_ssl_mode_in_place(&mut conn, &dialects);
+
+        assert!(rewrote);
+        assert_eq!(conn.params.ssl_mode.as_deref(), Some("require"));
+    }
+
+    #[test]
+    fn migrate_connection_ssl_mode_leaves_a_mysql_connection_alone() {
+        // "required" is the CORRECT spelling for mysql — this is the case
+        // that makes the migration driver-aware rather than a blanket
+        // string-remap. A dialect map that (incorrectly) resolved mysql to
+        // Postgres would also demonstrate the bug this guards against, so
+        // this test exercises the real decision, not just the dialect map.
+        let mut dialects = HashMap::new();
+        dialects.insert(
+            "mysql".to_string(),
+            Some(crate::drivers::driver_trait::SqlDialect::Mysql),
+        );
+        let mut conn = saved_connection("mysql", Some("required"));
+
+        let rewrote = migrate_connection_ssl_mode_in_place(&mut conn, &dialects);
+
+        assert!(!rewrote);
+        assert_eq!(conn.params.ssl_mode.as_deref(), Some("required"));
+    }
+
+    #[test]
+    fn migrate_connection_ssl_mode_leaves_the_builtin_postgres_driver_alone() {
+        // The builtin driver's own dropdown was always correct — even if it
+        // somehow ended up with a stale value, this migration is scoped to
+        // plugin-driven connections only (driver id != "postgres").
+        let mut dialects = HashMap::new();
+        dialects.insert(
+            "postgres".to_string(),
+            Some(crate::drivers::driver_trait::SqlDialect::Postgres),
+        );
+        let mut conn = saved_connection("postgres", Some("required"));
+
+        let rewrote = migrate_connection_ssl_mode_in_place(&mut conn, &dialects);
+
+        assert!(!rewrote);
+        assert_eq!(conn.params.ssl_mode.as_deref(), Some("required"));
+    }
+
+    #[test]
+    fn migrate_connection_ssl_mode_leaves_an_unresolved_driver_alone() {
+        // No entry in `dialects` (e.g. the driver failed to resolve from the
+        // registry) must not be treated as postgres-dialect by default.
+        let dialects = HashMap::new();
+        let mut conn = saved_connection("postgresql", Some("required"));
+
+        let rewrote = migrate_connection_ssl_mode_in_place(&mut conn, &dialects);
+
+        assert!(!rewrote);
+        assert_eq!(conn.params.ssl_mode.as_deref(), Some("required"));
+    }
+
+    #[test]
+    fn migrate_connection_ssl_mode_leaves_a_resolved_driver_with_no_declared_dialect_alone() {
+        // A driver that resolves from the registry but whose manifest omits
+        // `sql_dialect` entirely (e.g. the Oracle plugin, which sets
+        // supports_ssl but declares no dialect) must be treated as NOT
+        // postgres-dialect — `None`, not defaulted to `Some(Postgres)`.
+        // Getting this wrong would rewrite that driver's legitimately-spelled
+        // SSL value based on a guess, exactly the bug this test guards
+        // against.
+        let mut dialects = HashMap::new();
+        dialects.insert("oracle".to_string(), None);
+        let mut conn = saved_connection("oracle", Some("required"));
+
+        let rewrote = migrate_connection_ssl_mode_in_place(&mut conn, &dialects);
+
+        assert!(!rewrote);
+        assert_eq!(conn.params.ssl_mode.as_deref(), Some("required"));
+    }
+
+    #[test]
+    fn migrate_connection_ssl_mode_is_idempotent() {
+        let mut dialects = HashMap::new();
+        dialects.insert(
+            "postgresql".to_string(),
+            Some(crate::drivers::driver_trait::SqlDialect::Postgres),
+        );
+        let mut conn = saved_connection("postgresql", Some("required"));
+
+        assert!(migrate_connection_ssl_mode_in_place(&mut conn, &dialects));
+        assert_eq!(conn.params.ssl_mode.as_deref(), Some("require"));
+        // Second pass: the value is already correct, nothing to rewrite.
+        assert!(!migrate_connection_ssl_mode_in_place(&mut conn, &dialects));
+        assert_eq!(conn.params.ssl_mode.as_deref(), Some("require"));
     }
 
     #[test]
@@ -5466,8 +5731,9 @@ pub async fn get_connection_groups<R: Runtime>(
 pub async fn get_connections_with_groups<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<ConnectionsFile, String> {
-    // Run migration if needed
+    // Run migrations if needed
     migrate_ssh_connections(&app).await.ok();
+    migrate_postgres_ssl_mode_spelling(&app).await.ok();
 
     let path = get_config_path(&app)?;
     persistence::load_connections_file(&path)
