@@ -103,4 +103,3 @@ fn resolve_default_schema_passes_through_unchanged_on_non_postgres_drivers() {
     let sqlite: Arc<dyn DatabaseDriver> = Arc::new(sqlite::SqliteDriver::new());
     assert_eq!(resolve_default_schema(&sqlite, None), None);
 }
-
