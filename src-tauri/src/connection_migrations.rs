@@ -129,7 +129,7 @@ pub async fn migrate_postgres_ssl_mode_spelling_at_path(conn_path: &Path) -> Res
     }
 
     let content_before = fs::read_to_string(conn_path).map_err(|e| e.to_string())?;
-    let mut conn_file = persistence::load_connections_file(conn_path)?;
+    let mut conn_file = persistence::parse_connections_file(&content_before)?;
 
     // Resolve each distinct non-builtin driver id's dialect once, not once
     // per connection — the registry lookup is async and connections commonly
