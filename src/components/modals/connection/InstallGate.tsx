@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import type { CatalogueDriver } from "../../../utils/connectionCatalogue";
 import { PluginReadmeModal } from "../PluginReadmeModal";
-import { RegistryDriverIcon } from "./RegistryDriverIcon";
+import { RegistryDriverIcon } from "../../RegistryDriverIcon";
 
 export type InstallStatus = "idle" | "installing" | "error";
 

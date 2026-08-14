@@ -7,7 +7,7 @@ import type { PluginManifest } from "../../../types/plugins";
 import type { CatalogueDriver, EngineGroup } from "../../../utils/connectionCatalogue";
 import { labelForParadigm } from "../../../utils/connectionCatalogue";
 import { getDriverIcon } from "../../../utils/driverUI";
-import { RegistryDriverIcon } from "./RegistryDriverIcon";
+import { RegistryDriverIcon } from "../../RegistryDriverIcon";
 
 interface EngineCardProps {
   group: EngineGroup;
