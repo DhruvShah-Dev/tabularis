@@ -6,9 +6,11 @@ import {
   type ReactNode,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ThemeContext } from "./ThemeContext";
 import { themeRegistry } from "../themes/themeRegistry";
 import { applyThemeToCSS } from "../themes/themeUtils";
+import { getSystemThemeId, resolveActiveThemeId } from "../utils/themeManagement";
 import type { Theme, ThemeSettings } from "../types/theme";
 
 const DEFAULT_THEME_SETTINGS: ThemeSettings = {
@@ -21,6 +23,9 @@ const DEFAULT_THEME_SETTINGS: ThemeSettings = {
 
 interface AppConfig {
   theme?: string;
+  followSystemTheme?: boolean;
+  lightThemeId?: string;
+  darkThemeId?: string;
   language?: string;
   resultPageSize?: number;
   fontFamily?: string;
@@ -97,6 +102,28 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         ).catch(() => [] as Theme[]);
         setCustomThemes(loadedCustomThemes.filter((t) => !t.isPreset));
 
+        // Hydrate follow-system settings (absent ⇒ static mode)
+        const followSystemTheme = config.followSystemTheme ?? false;
+        const lightThemeId = config.lightThemeId ?? "tabularis-light";
+        const darkThemeId = config.darkThemeId ?? "tabularis-dark";
+
+        // Resolve active theme: follow-system overrides config.theme
+        if (followSystemTheme) {
+          const systemIsDark = window.matchMedia(
+            "(prefers-color-scheme: dark)",
+          ).matches;
+          activeThemeId = resolveActiveThemeId(
+            {
+              ...DEFAULT_THEME_SETTINGS,
+              activeThemeId: activeThemeId ?? "tabularis-dark",
+              followSystemTheme,
+              lightThemeId,
+              darkThemeId,
+            },
+            systemIsDark,
+          );
+        }
+
         // Set initial theme
         const allAvailableThemes = [
           ...themeRegistry.getAllPresets(),
@@ -110,6 +137,9 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         setSettings({
           ...DEFAULT_THEME_SETTINGS,
           activeThemeId: initialTheme.id,
+          followSystemTheme,
+          lightThemeId,
+          darkThemeId,
         });
       } catch (error) {
         console.error("Failed to load themes:", error);
@@ -125,6 +155,14 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (currentTheme) {
       applyThemeToCSS(currentTheme);
+      const windowTheme = themeRegistry.isDarkTheme(currentTheme)
+        ? "dark"
+        : "light";
+      getCurrentWindow()
+        .setTheme(windowTheme)
+        .catch((error) =>
+          console.error("Failed to set window theme:", error),
+        );
     }
   }, [currentTheme]);
 
@@ -145,17 +183,21 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (e: MediaQueryListEvent) => {
-      const newThemeId = e.matches ? "tabularis-dark" : "tabularis-light";
-      const newTheme = allThemes.find((t) => t.id === newThemeId);
+      const newThemeId = getSystemThemeId(e.matches, settings);
+      const newTheme =
+        allThemes.find((t) => t.id === newThemeId) ||
+        themeRegistry.getPreset(
+          e.matches ? "tabularis-dark" : "tabularis-light",
+        );
       if (newTheme) {
         setCurrentTheme(newTheme);
-        setSettings((prev) => ({ ...prev, activeThemeId: newThemeId }));
+        setSettings((prev) => ({ ...prev, activeThemeId: newTheme.id }));
       }
     };
 
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
-  }, [settings.followSystemTheme, allThemes]);
+  }, [settings, allThemes]);
 
   const setTheme = useCallback(
     async (themeId: string) => {
@@ -240,6 +282,26 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         customThemes: prev.customThemes.filter((id) => id !== themeId),
       }));
 
+      // Reset per-mode picks that referenced the deleted theme
+      setSettings((prev) => {
+        const lightThemeId =
+          prev.lightThemeId === themeId ? "tabularis-light" : prev.lightThemeId;
+        const darkThemeId =
+          prev.darkThemeId === themeId ? "tabularis-dark" : prev.darkThemeId;
+        if (
+          lightThemeId !== prev.lightThemeId ||
+          darkThemeId !== prev.darkThemeId
+        ) {
+          invoke("save_config", {
+            config: { lightThemeId, darkThemeId },
+          }).catch((error) =>
+            console.error("Failed to reset per-mode theme picks:", error),
+          );
+          return { ...prev, lightThemeId, darkThemeId };
+        }
+        return prev;
+      });
+
       // If the deleted theme was active, switch to default
       if (currentTheme.id === themeId) {
         const defaultTheme = themeRegistry.getDefault();
@@ -323,12 +385,37 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   const updateSettings = useCallback(
     async (newSettings: Partial<ThemeSettings>) => {
-      setSettings((prev) => ({ ...prev, ...newSettings }));
+      const merged = { ...settings, ...newSettings };
+      setSettings(merged);
 
-      // If followSystemTheme is enabled, we would need to set up a media query listener
-      // This is handled separately in a dedicated effect
+      await invoke("save_config", {
+        config: {
+          followSystemTheme: merged.followSystemTheme,
+          lightThemeId: merged.lightThemeId,
+          darkThemeId: merged.darkThemeId,
+        },
+      }).catch((error) => {
+        console.error("Failed to save theme settings:", error);
+      });
+
+      // Follow-system on: immediately apply the theme for the current OS mode
+      if (merged.followSystemTheme) {
+        const systemIsDark = window.matchMedia(
+          "(prefers-color-scheme: dark)",
+        ).matches;
+        const targetId = getSystemThemeId(systemIsDark, merged);
+        const target =
+          allThemes.find((t) => t.id === targetId) ||
+          themeRegistry.getPreset(
+            systemIsDark ? "tabularis-dark" : "tabularis-light",
+          );
+        if (target && target.id !== currentTheme.id) {
+          setCurrentTheme(target);
+          setSettings((prev) => ({ ...prev, activeThemeId: target.id }));
+        }
+      }
     },
-    [],
+    [settings, allThemes, currentTheme.id],
   );
 
   const value = useMemo(
