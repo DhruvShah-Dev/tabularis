@@ -2,7 +2,7 @@
 /// All blobs are serialised as "BLOB:<size>:<mime_type>:<base64_data>".
 /// For blobs larger than this threshold only the first N bytes are included;
 /// smaller blobs are encoded in full.
-pub const MAX_BLOB_PREVIEW_SIZE: usize = 4096;
+pub const MAX_BLOB_PREVIEW_SIZE: usize = 10_240;
 
 /// Default maximum size in bytes for a BLOB file that can be uploaded/loaded into memory.
 /// Files larger than this limit will be rejected to prevent memory exhaustion.

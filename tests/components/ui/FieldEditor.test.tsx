@@ -21,6 +21,10 @@ vi.mock("../../../src/components/ui/GeometryInput", () => ({
   ),
 }));
 
+vi.mock("../../../src/components/ui/BlobInput", () => ({
+  BlobInput: () => <div data-testid="blob-download-input" />,
+}));
+
 // Mock geometry utilities
 vi.mock("../../../src/utils/geometry", () => ({
   isGeometricType: (type: string) => type === "geometry" || type === "point",
@@ -97,6 +101,66 @@ describe("FieldEditor", () => {
 
     const textarea = screen.getByRole("textbox");
     expect(textarea).toHaveValue("");
+  });
+
+  it("should edit a small generic BINARY value as hex", () => {
+    const onChange = vi.fn();
+    const wire = `BLOB:4:application/octet-stream:${btoa("test")}`;
+    render(
+      <FieldEditor
+        name="payload"
+        type="BINARY"
+        characterMaximumLength={16}
+        value={wire}
+        onChange={onChange}
+      />
+    );
+
+    const input = screen.getByPlaceholderText("00 FF");
+    expect(input).toHaveValue("74 65 73 74");
+
+    fireEvent.change(input, { target: { value: "0A FF" } });
+    fireEvent.blur(input);
+
+    expect(onChange).toHaveBeenCalledWith(
+      "BLOB:2:application/octet-stream:Cv8=",
+    );
+  });
+
+  it("should keep a generic BLOB over 10 KiB in the download editor", () => {
+    const onChange = vi.fn();
+    const wire = `BLOB:10241:application/octet-stream:${btoa("preview")}`;
+    render(
+      <FieldEditor
+        name="payload"
+        type="BLOB"
+        value={wire}
+        onChange={onChange}
+      />
+    );
+
+    expect(screen.queryByPlaceholderText("00 FF")).not.toBeInTheDocument();
+    expect(screen.getByTestId("blob-download-input")).toBeInTheDocument();
+  });
+
+  it("should edit a recognized file type as hex and preserve its MIME type", () => {
+    const onChange = vi.fn();
+    const wire = `BLOB:4:application/pdf:${btoa("test")}`;
+    render(
+      <FieldEditor
+        name="payload"
+        type="BLOB"
+        value={wire}
+        onChange={onChange}
+      />
+    );
+
+    const input = screen.getByPlaceholderText("00 FF");
+    expect(input).toHaveValue("74 65 73 74");
+    fireEvent.change(input, { target: { value: "00" } });
+    fireEvent.blur(input);
+
+    expect(onChange).toHaveBeenCalledWith("BLOB:1:application/pdf:AA==");
   });
 
   it("should display custom placeholder", () => {
