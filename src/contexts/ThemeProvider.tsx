@@ -330,7 +330,8 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
             allThemes.find((t) => t.id === targetId) ||
             themeRegistry.getPreset(
               systemIsDark ? "tabularis-dark" : "tabularis-light",
-            );
+            ) ||
+            themeRegistry.getDefault();
         } else {
           replacement = themeRegistry.getDefault();
         }
