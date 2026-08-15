@@ -155,8 +155,15 @@ export function extractBlobMetadata(value: unknown): BlobMetadata | null {
     if (secondColon !== -1 && thirdColon !== -1) {
       const size = parseInt(stringValue.substring(firstColon, secondColon), 10);
       const mimeType = stringValue.substring(secondColon + 1, thirdColon);
-      const base64Length = stringValue.length - thirdColon - 1;
-      const isTruncated = size > (base64Length * 3) / 4;
+      const base64Start = thirdColon + 1;
+      const base64Length = stringValue.length - base64Start;
+      const padding = stringValue.endsWith("==")
+        ? 2
+        : stringValue.endsWith("=")
+          ? 1
+          : 0;
+      const decodedByteLength = Math.floor((base64Length * 3) / 4) - padding;
+      const isTruncated = size > decodedByteLength;
 
       return {
         mimeType,
@@ -325,9 +332,90 @@ export function blobPayloadToBytes(payload: string, isBase64: boolean): Uint8Arr
   return new TextEncoder().encode(payload);
 }
 
+const BLOB_INLINE_HEX_LIMIT_BYTES = 10 * 1024;
+const BLOB_HEX_PREVIEW_BYTES = 64;
+
+function bytesToHex(bytes: Uint8Array, separator = ""): string {
+  return Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join(separator);
+}
+
+export function blobValueToEditableHex(value: unknown): string | null {
+  const metadata = extractBlobMetadata(value);
+  if (
+    !metadata ||
+    !metadata.isBase64 ||
+    metadata.isTruncated ||
+    metadata.size > BLOB_INLINE_HEX_LIMIT_BYTES
+  ) {
+    return null;
+  }
+
+  try {
+    const payload = extractBase64Payload(value);
+    const bytes = blobPayloadToBytes(payload, true);
+    return bytesToHex(bytes, " ").toUpperCase();
+  } catch {
+    return null;
+  }
+}
+
+export function blobHexToWireFormat(
+  hexValue: string,
+  mimeType = "application/octet-stream",
+): string | null {
+  let normalized = hexValue.trim();
+  if (normalized.startsWith("0x") || normalized.startsWith("0X")) {
+    normalized = normalized.slice(2);
+  }
+  normalized = normalized.replace(/\s/g, "");
+
+  if (normalized.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(normalized)) {
+    return null;
+  }
+
+  const bytes = new Uint8Array(normalized.length / 2);
+  for (let index = 0; index < normalized.length; index += 2) {
+    bytes[index / 2] = Number.parseInt(normalized.slice(index, index + 2), 16);
+  }
+
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return `BLOB:${bytes.length}:${mimeType}:${btoa(binary)}`;
+}
+
+function formatBlobHexPreview(
+  value: unknown,
+  metadata: BlobMetadata,
+): string | null {
+  if (
+    metadata.mimeType !== "application/octet-stream" ||
+    !metadata.isBase64 ||
+    metadata.isTruncated ||
+    metadata.size > BLOB_INLINE_HEX_LIMIT_BYTES
+  ) {
+    return null;
+  }
+
+  try {
+    const payload = extractBase64Payload(value);
+    const bytes = blobPayloadToBytes(payload, true);
+    const preview = bytes.slice(0, BLOB_HEX_PREVIEW_BYTES);
+    const hex = bytesToHex(preview);
+    const suffix = bytes.length > BLOB_HEX_PREVIEW_BYTES ? "…" : "";
+    return `0x${hex}${suffix}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Formats a BLOB value for display in the DataGrid.
- * Shows MIME type and size instead of raw data.
+ * Small generic binary values use a compact hex preview. Recognized file types
+ * and blobs that require fetching retain their MIME type and size metadata.
  */
 export function formatBlobValue(value: unknown, dataType: string): string {
   if (!isBlobType(dataType)) {
@@ -340,5 +428,8 @@ export function formatBlobValue(value: unknown, dataType: string): string {
     return "NULL";
   }
 
-  return `${metadata.mimeType} (${metadata.formattedSize})`;
+  return (
+    formatBlobHexPreview(value, metadata) ??
+    `${metadata.mimeType} (${metadata.formattedSize})`
+  );
 }

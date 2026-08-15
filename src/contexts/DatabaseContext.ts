@@ -83,6 +83,7 @@ export interface SchemaData {
   materializedViews?: ViewInfo[];
   routines: RoutineInfo[];
   triggers: TriggerInfo[];
+  routineError?: string;
   isLoading: boolean;
   isLoaded: boolean;
 }
@@ -100,6 +101,7 @@ export interface ConnectionData {
   isLoadingViews: boolean;
   isLoadingRoutines: boolean;
   isLoadingTriggers: boolean;
+  routineError?: string;
   schemas: string[];
   isLoadingSchemas: boolean;
   schemaDataMap: Record<string, SchemaData>;
@@ -135,6 +137,7 @@ export interface DatabaseContextType {
   isLoadingViews: boolean;
   isLoadingRoutines: boolean;
   isLoadingTriggers: boolean;
+  routineError?: string | null;
   schemas: string[];
   isLoadingSchemas: boolean;
   schemaDataMap: Record<string, SchemaData>;

@@ -4,6 +4,7 @@ import type {
   TableSchema,
   EditorPreferences,
 } from "../types/editor";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 import { quoteTableRef } from "./identifiers";
 import { invoke } from "@tauri-apps/api/core";
 import { cleanTabForStorage, restoreTabFromStorage } from "./tabCleaner";
@@ -335,7 +336,7 @@ function normalizeSmartQuotes(s: string): string {
  */
 export function reconstructTableQuery(
   tab: Tab,
-  driver?: string,
+  driver?: string | PluginManifest | DriverCapabilities,
   options?: ReconstructQueryOptions,
 ): string {
   if (!tab.activeTable) {

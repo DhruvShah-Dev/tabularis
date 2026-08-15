@@ -77,7 +77,7 @@ const QueryParamsForm = ({ parameters, initialValues, onSubmit, onClose, mode }:
                 <label className="text-xs font-medium text-secondary font-mono">
                   :{param}
                 </label>
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                   type="text"
                   value={values[param] || ""}
                   onChange={(e) => handleChange(param, e.target.value)}

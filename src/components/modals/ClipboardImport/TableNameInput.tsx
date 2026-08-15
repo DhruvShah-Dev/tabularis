@@ -27,7 +27,7 @@ export function TableNameInput({
       </label>
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={t('clipboardImport.tableNamePlaceholder')}

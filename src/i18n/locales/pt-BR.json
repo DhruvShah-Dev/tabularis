@@ -41,6 +41,7 @@
     "continue": "Continuar",
     "back": "Voltar",
     "copy": "Copiar",
+    "copied": "Copiado!",
     "showDetails": "Mostrar detalhes",
     "hideDetails": "Ocultar detalhes",
     "beta": "Beta"
@@ -118,6 +119,9 @@
     "functions": "Funções",
     "procedures": "Procedimentos",
     "noRoutines": "Nenhuma rotina encontrada",
+    "routineMetadataLoadError": "Não foi possível carregar as rotinas. Tabelas e visualizações continuam disponíveis.",
+    "routineMetadataLoadErrorFor": "Não foi possível carregar as rotinas de \"{{schema}}\". Tabelas e visualizações continuam disponíveis.",
+    "routineMetadataErrorTitle": "Erro nos metadados das rotinas",
     "refreshRoutines": "Atualizar Rotinas",
     "triggers": "Triggers",
     "noTriggers": "Nenhum trigger encontrado",

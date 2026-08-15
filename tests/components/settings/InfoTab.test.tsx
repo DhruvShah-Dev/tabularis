@@ -11,6 +11,9 @@ const translations: Record<string, string> = {
   "settings.channelNightly": "Nightly",
   "update.nightlyWarning":
     "Nightly builds are unstable pre-releases. Only assets built for the nightly channel are installed.",
+  "update.managedByPackageManager": "Updates managed by {{source}}",
+  "update.managedByPackageManagerDesc":
+    "Use your package manager to update Tabularis.",
 };
 
 vi.mock("lucide-react", () => ({
@@ -31,7 +34,11 @@ vi.mock("lucide-react", () => ({
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => translations[key] ?? key,
+    t: (key: string, values?: Record<string, unknown>) =>
+      (translations[key] ?? key).replace(
+        "{{source}}",
+        String(values?.source ?? ""),
+      ),
   }),
 }));
 
@@ -112,6 +119,12 @@ describe("InfoTab", () => {
 
   it("hides the selector for managed installs", () => {
     renderInfoTab({ installationSource: "aur" });
+    expect(screen.queryByText("Release channel")).not.toBeInTheDocument();
+  });
+
+  it("shows the custom package manager name", () => {
+    renderInfoTab({ installationSource: "Solus" });
+    expect(screen.getByText("Updates managed by Solus")).toBeInTheDocument();
     expect(screen.queryByText("Release channel")).not.toBeInTheDocument();
   });
 

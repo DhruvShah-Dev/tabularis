@@ -775,7 +775,7 @@ export const Connections = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <FolderPlus size={12} className="text-amber-400 shrink-0" />
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                 type="text"
                 value={subgroupInputValue}
                 onChange={(e) => setSubgroupInputValue(e.target.value)}
@@ -1094,7 +1094,7 @@ export const Connections = () => {
                   size={14}
                   className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
                 />
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -1114,7 +1114,7 @@ export const Connections = () => {
               {/* New Group button or input */}
               {isCreatingGroup ? (
                 <div className="flex items-center gap-2 shrink-0">
-                  <input
+                  <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                     type="text"
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}

@@ -9,6 +9,7 @@ import {
   generateOrderByPlaceholder,
   formatSortClause,
 } from '../../src/utils/tableToolbar';
+import type { DriverCapabilities } from '../../src/types/plugins';
 
 describe('tableToolbar utils', () => {
   describe('haveToolbarValuesChanged', () => {
@@ -226,6 +227,16 @@ describe('tableToolbar utils', () => {
     it('should leave clause unchanged for non-postgres drivers', () => {
       expect(formatSortClause('Status DESC', 'mysql')).toBe('Status DESC');
       expect(formatSortClause('Status DESC', null)).toBe('Status DESC');
+    });
+
+    it('should quote column names for a postgres-dialect plugin driver (issue #614) — previously had its own separate driver !== "postgres" check, bypassing shouldQuoteIdentifiers entirely', () => {
+      const pluginCapabilities: DriverCapabilities = {
+        schemas: true, views: true, routines: true,
+        file_based: false, folder_based: false,
+        identifier_quote: '"', alter_primary_key: true,
+        sql_dialect: 'postgres',
+      };
+      expect(formatSortClause('Status DESC', pluginCapabilities)).toBe('"Status" DESC');
     });
 
     it('should return empty clause unchanged', () => {

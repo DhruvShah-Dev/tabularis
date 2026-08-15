@@ -69,7 +69,7 @@ export const GroupHeader = ({
       <FolderOpen size={16} className="text-amber-400" />
     )}
     {editingGroupId === group.id ? (
-      <input
+      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
         type="text"
         value={editGroupName}
         onChange={(e) => setEditGroupName(e.target.value)}

@@ -64,6 +64,7 @@
     "continue": "続行",
     "back": "戻る",
     "copy": "コピー",
+    "copied": "コピーしました！",
     "showDetails": "詳細を表示",
     "hideDetails": "詳細を非表示",
     "beta": "ベータ"
@@ -141,6 +142,9 @@
     "functions": "関数",
     "procedures": "プロシージャ",
     "noRoutines": "ルーチンが見つかりません",
+    "routineMetadataLoadError": "ルーチンを読み込めませんでした。テーブルとビューは引き続き利用できます。",
+    "routineMetadataLoadErrorFor": "「{{schema}}」のルーチンを読み込めませんでした。テーブルとビューは引き続き利用できます。",
+    "routineMetadataErrorTitle": "ルーチンメタデータエラー",
     "refreshRoutines": "ルーチンを更新",
     "triggers": "トリガー",
     "noTriggers": "トリガーが見つかりません",
