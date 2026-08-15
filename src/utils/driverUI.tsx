@@ -17,6 +17,15 @@ export function getDriverColor(manifest: PluginManifest | undefined | null): str
 }
 
 /**
+ * True when a manifest `icon` value is a hosted URL or `data:` URI to render
+ * as an `<img>`, rather than a built-in icon lookup key. URI schemes are
+ * case-insensitive (RFC 3986), so `HTTPS://` must match too.
+ */
+export function isUrlIcon(icon: string): boolean {
+  return /^(https?:\/\/|data:)/i.test(icon);
+}
+
+/**
  * Returns a ReactNode icon for a driver.
  * Priority: manifest-supplied URL/data: URI icon → brand SVG icon → lucide
  * icon → generic fallback.
@@ -24,7 +33,7 @@ export function getDriverColor(manifest: PluginManifest | undefined | null): str
 export function getDriverIcon(manifest: PluginManifest | undefined | null, size = 14): ReactNode {
   const iconName = manifest?.icon || "";
 
-  if (/^https?:\/\//.test(iconName) || iconName.startsWith("data:")) {
+  if (isUrlIcon(iconName)) {
     return <RegistryDriverIcon src={iconName} size={size} fallback={<Plug size={size} />} />;
   }
 

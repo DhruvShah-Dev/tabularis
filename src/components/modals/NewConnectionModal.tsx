@@ -69,7 +69,7 @@ import {
   type ConnectionTestProgressPayload,
 } from "../../utils/connectionTest";
 import { fetchConnectionWithCredentials } from "../../utils/credentials";
-import { getDriverIcon, getDriverColorStyle } from "../../utils/driverUI";
+import { getDriverIcon, getDriverColorStyle, isUrlIcon } from "../../utils/driverUI";
 import {
   parseConnectionString,
   toConnectionParams,
@@ -326,7 +326,7 @@ export const NewConnectionModal = ({
     "#64748b";
   const renderDriverGlyph = (size: number) => {
     const icon = activeCatalogueDriver?.icon ?? activeDriver?.icon ?? "";
-    if (/^https?:\/\//.test(icon) || icon.startsWith("data:")) {
+    if (isUrlIcon(icon)) {
       return (
         <img
           src={icon}
