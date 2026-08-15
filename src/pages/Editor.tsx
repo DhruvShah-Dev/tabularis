@@ -2224,40 +2224,41 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       if (!activeTabIdRef.current) return;
       const tabId = activeTabIdRef.current;
 
-      const currentTab = tabsRef.current.find((t) => t.id === tabId);
-      if (!currentTab) return;
-
-      const pkKey = serializePkKey(pkVal as Record<string, unknown>);
-      const currentPending = currentTab.pendingChanges || {};
-      const rowEntry = currentPending[pkKey] || {
-        pkOriginalValue: pkVal,
-        changes: {},
-      };
-
-      // Create new changes object
-      const newChanges = { ...rowEntry.changes };
-
-      if (value === undefined) {
-        // Remove change
-        delete newChanges[colName];
-      } else {
-        // Update change
-        newChanges[colName] = value;
-      }
-
-      const newPending = { ...currentPending };
-
-      // If no changes left for this row, remove the row entry
-      if (Object.keys(newChanges).length === 0) {
-        delete newPending[pkKey];
-      } else {
-        newPending[pkKey] = {
-          ...rowEntry,
-          changes: newChanges,
+      // Functional update: rapid successive calls (e.g. a multi-cell paste)
+      // must each see the previous call's result, not a stale snapshot.
+      updateTab(tabId, (currentTab) => {
+        const pkKey = serializePkKey(pkVal as Record<string, unknown>);
+        const currentPending = currentTab.pendingChanges || {};
+        const rowEntry = currentPending[pkKey] || {
+          pkOriginalValue: pkVal,
+          changes: {},
         };
-      }
 
-      updateTab(tabId, { pendingChanges: newPending });
+        // Create new changes object
+        const newChanges = { ...rowEntry.changes };
+
+        if (value === undefined) {
+          // Remove change
+          delete newChanges[colName];
+        } else {
+          // Update change
+          newChanges[colName] = value;
+        }
+
+        const newPending = { ...currentPending };
+
+        // If no changes left for this row, remove the row entry
+        if (Object.keys(newChanges).length === 0) {
+          delete newPending[pkKey];
+        } else {
+          newPending[pkKey] = {
+            ...rowEntry,
+            changes: newChanges,
+          };
+        }
+
+        return { pendingChanges: newPending };
+      });
     },
     [updateTab],
   );
@@ -2328,29 +2329,30 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       if (!activeTabIdRef.current) return;
       const tabId = activeTabIdRef.current;
 
-      const currentTab = tabsRef.current.find((t) => t.id === tabId);
-      if (!currentTab) return;
+      // Functional update: rapid successive calls (e.g. a multi-cell paste)
+      // must each see the previous call's result, not a stale snapshot.
+      updateTab(tabId, (currentTab) => {
+        const currentPendingInsertions = currentTab.pendingInsertions || {};
+        const insertion = currentPendingInsertions[tempId];
+        if (!insertion) return {};
 
-      const currentPendingInsertions = currentTab.pendingInsertions || {};
-      const insertion = currentPendingInsertions[tempId];
-      if (!insertion) return;
+        const newData = { ...insertion.data };
+        if (value === undefined) {
+          delete newData[colName];
+        } else {
+          newData[colName] = value;
+        }
 
-      const newData = { ...insertion.data };
-      if (value === undefined) {
-        delete newData[colName];
-      } else {
-        newData[colName] = value;
-      }
-
-      const newPendingInsertions = {
-        ...currentPendingInsertions,
-        [tempId]: {
-          ...insertion,
-          data: newData,
-        },
-      };
-
-      updateTab(tabId, { pendingInsertions: newPendingInsertions });
+        return {
+          pendingInsertions: {
+            ...currentPendingInsertions,
+            [tempId]: {
+              ...insertion,
+              data: newData,
+            },
+          },
+        };
+      });
     },
     [updateTab],
   );
