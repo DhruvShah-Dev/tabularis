@@ -451,6 +451,12 @@
     "appearance": "外観",
     "localization": "ローカライズ",
     "themeSelection": "テーマ選択",
+    "themeMode": "テーマモード",
+    "themeModeDesc": "固定テーマを選ぶか、システムのライト/ダーク表示に従うかを選択します。",
+    "themeModeStatic": "固定",
+    "themeModeSystem": "システムに従う",
+    "lightTheme": "ライトテーマ",
+    "darkTheme": "ダークテーマ",
     "fontFamily": "フォントファミリー",
     "fonts": {
       "system": "システム既定",

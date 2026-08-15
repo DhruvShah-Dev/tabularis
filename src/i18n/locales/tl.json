@@ -458,6 +458,12 @@
     "appearance": "Hitsura",
     "localization": "Lokalization",
     "themeSelection": "Pagpili ng Theme",
+    "themeMode": "Mode ng Theme",
+    "themeModeDesc": "Pumili ng nakapirming theme, o sundin ang light/dark na hitsura ng system.",
+    "themeModeStatic": "Static",
+    "themeModeSystem": "Sundin ang System",
+    "lightTheme": "Light na Theme",
+    "darkTheme": "Dark na Theme",
     "fontFamily": "Font Family",
     "fonts": {
       "system": "System Default",

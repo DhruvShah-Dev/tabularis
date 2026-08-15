@@ -403,6 +403,12 @@
     "appearance": "모양",
     "localization": "지역화",
     "themeSelection": "테마 선택",
+    "themeMode": "테마 모드",
+    "themeModeDesc": "고정 테마를 사용하거나 시스템의 라이트/다크 모드를 따릅니다.",
+    "themeModeStatic": "고정",
+    "themeModeSystem": "시스템 따르기",
+    "lightTheme": "라이트 테마",
+    "darkTheme": "다크 테마",
     "fontFamily": "글꼴",
     "fonts": {
       "system": "시스템 기본값",

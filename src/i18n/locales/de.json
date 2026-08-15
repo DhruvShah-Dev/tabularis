@@ -440,6 +440,12 @@
     "appearance": "Darstellung",
     "localization": "Lokalisierung",
     "themeSelection": "Themaauswahl",
+    "themeMode": "Themenmodus",
+    "themeModeDesc": "Wähle ein festes Thema oder folge dem Hell-/Dunkelmodus des Systems.",
+    "themeModeStatic": "Statisch",
+    "themeModeSystem": "System folgen",
+    "lightTheme": "Helles Thema",
+    "darkTheme": "Dunkles Thema",
     "fontFamily": "Schriftfamilie",
     "fonts": {
       "system": "Systemstandard",

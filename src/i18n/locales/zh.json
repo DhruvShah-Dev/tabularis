@@ -439,6 +439,12 @@
     "appearance": "外观",
     "localization": "本地化",
     "themeSelection": "主题选择",
+    "themeMode": "主题模式",
+    "themeModeDesc": "选择固定主题，或跟随系统的浅色/深色外观。",
+    "themeModeStatic": "固定",
+    "themeModeSystem": "跟随系统",
+    "lightTheme": "浅色主题",
+    "darkTheme": "深色主题",
     "fontFamily": "字体",
     "fonts": {
       "system": "系统默认",

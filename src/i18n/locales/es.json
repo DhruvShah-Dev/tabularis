@@ -465,6 +465,12 @@
     "appearance": "Apariencia",
     "localization": "Localización",
     "themeSelection": "Selección de Tema",
+    "themeMode": "Modo de tema",
+    "themeModeDesc": "Elige un tema fijo o sigue la apariencia clara/oscura del sistema.",
+    "themeModeStatic": "Estático",
+    "themeModeSystem": "Seguir sistema",
+    "lightTheme": "Tema claro",
+    "darkTheme": "Tema oscuro",
     "fontFamily": "Familia de Fuente",
     "fonts": {
       "system": "Sistema",
