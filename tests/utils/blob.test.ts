@@ -8,6 +8,8 @@ import {
   parseBlobFileRef,
   extractBase64Payload,
   blobPayloadToBytes,
+  blobHexToWireFormat,
+  blobValueToEditableHex,
 } from "../../src/utils/blob";
 
 describe("blob utilities", () => {
@@ -106,6 +108,22 @@ describe("blob utilities", () => {
       expect(metadata?.isTruncated).toBe(false);
     });
 
+    it("should account for base64 padding at the preview boundary", () => {
+      const bytes = Array.from({ length: 10_240 }, (_, index) => index % 256);
+      const preview = btoa(String.fromCharCode(...bytes));
+
+      expect(
+        extractBlobMetadata(
+          makeBlobWire(10_240, "application/octet-stream", preview),
+        )?.isTruncated,
+      ).toBe(false);
+      expect(
+        extractBlobMetadata(
+          makeBlobWire(10_241, "application/octet-stream", preview),
+        )?.isTruncated,
+      ).toBe(true);
+    });
+
     it("should handle null values", () => {
       expect(extractBlobMetadata(null)).toBeNull();
       expect(extractBlobMetadata(undefined)).toBeNull();
@@ -142,22 +160,115 @@ describe("blob utilities", () => {
       expect(formatBlobValue(123, "INTEGER")).toBe("123");
     });
 
-    it("should work with different BLOB type names", () => {
+    it("should format small generic binary values as compact hex", () => {
       const b64 = btoa("test");
       const wire = `BLOB:4:application/octet-stream:${b64}`;
 
-      expect(formatBlobValue(wire, "BLOB")).toContain(
-        "application/octet-stream",
+      expect(formatBlobValue(wire, "BLOB")).toBe("0x74657374");
+      expect(formatBlobValue(wire, "TINYBLOB")).toBe("0x74657374");
+      expect(formatBlobValue(wire, "MEDIUMBLOB")).toBe("0x74657374");
+      expect(formatBlobValue(wire, "LONGBLOB")).toBe("0x74657374");
+    });
+
+    it("should show all 16 bytes of a binary identifier", () => {
+      const bytes = Array.from({ length: 16 }, (_, index) => index);
+      const b64 = btoa(String.fromCharCode(...bytes));
+      const wire = `BLOB:16:application/octet-stream:${b64}`;
+
+      expect(formatBlobValue(wire, "BINARY(16)")).toBe(
+        "0x000102030405060708090a0b0c0d0e0f",
       );
-      expect(formatBlobValue(wire, "TINYBLOB")).toContain(
-        "application/octet-stream",
+    });
+
+    it("should show all 64 preview bytes without an ellipsis", () => {
+      const bytes = Array.from({ length: 64 }, (_, index) => index);
+      const b64 = btoa(String.fromCharCode(...bytes));
+      const wire = `BLOB:64:application/octet-stream:${b64}`;
+
+      const formatted = formatBlobValue(wire, "BLOB");
+      expect(formatted).toHaveLength(130);
+      expect(formatted.endsWith("…")).toBe(false);
+    });
+
+    it("should truncate the grid preview after 64 bytes", () => {
+      const bytes = Array.from({ length: 65 }, (_, index) => index);
+      const b64 = btoa(String.fromCharCode(...bytes));
+      const wire = `BLOB:65:application/octet-stream:${b64}`;
+
+      const formatted = formatBlobValue(wire, "BLOB");
+      const expectedHex = bytes
+        .slice(0, 64)
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+      expect(formatted).toBe(`0x${expectedHex}…`);
+    });
+
+    it("should keep a 10 KiB generic binary value in hex preview mode", () => {
+      const bytes = Array.from({ length: 10_240 }, (_, index) => index % 256);
+      const b64 = btoa(String.fromCharCode(...bytes));
+      const wire = `BLOB:10240:application/octet-stream:${b64}`;
+
+      expect(formatBlobValue(wire, "BLOB")).toMatch(/^0x[0-9a-f]{128}…$/);
+    });
+
+    it("should keep download metadata above the 10 KiB inline limit", () => {
+      const preview = String.fromCharCode(
+        ...Array.from({ length: 64 }, (_, index) => index),
       );
-      expect(formatBlobValue(wire, "MEDIUMBLOB")).toContain(
-        "application/octet-stream",
+      const wire = `BLOB:10241:application/octet-stream:${btoa(preview)}`;
+
+      expect(formatBlobValue(wire, "BLOB")).toBe(
+        "application/octet-stream (10.00 KB)",
       );
-      expect(formatBlobValue(wire, "LONGBLOB")).toContain(
-        "application/octet-stream",
+    });
+
+    it("should retain MIME metadata for recognized file types", () => {
+      const b64 = btoa("%PDF-1.7");
+      const wire = `BLOB:8:application/pdf:${b64}`;
+
+      expect(formatBlobValue(wire, "BLOB")).toBe("application/pdf (8 B)");
+    });
+  });
+
+  describe("inline hex editing", () => {
+    it("should convert a complete generic BLOB to editable uppercase hex", () => {
+      const wire = `BLOB:4:application/octet-stream:${btoa("test")}`;
+
+      expect(blobValueToEditableHex(wire)).toBe("74 65 73 74");
+    });
+
+    it("should edit recognized BLOBs while preserving their bytes", () => {
+      expect(
+        blobValueToEditableHex(`BLOB:4:application/pdf:${btoa("test")}`),
+      ).toBe("74 65 73 74");
+    });
+
+    it("should reject truncated BLOBs for inline editing", () => {
+      expect(
+        blobValueToEditableHex(
+          `BLOB:10241:application/octet-stream:${btoa("preview")}`,
+        ),
+      ).toBeNull();
+    });
+
+    it("should encode edited hex in the existing BLOB wire format", () => {
+      const wire = blobHexToWireFormat("0x00 A5 ff");
+
+      expect(wire).toBe("BLOB:3:application/octet-stream:AKX/");
+      expect(blobHexToWireFormat("00 A5 ff", "application/pdf")).toBe(
+        "BLOB:3:application/pdf:AKX/",
       );
+    });
+
+    it("should support an empty binary value", () => {
+      expect(blobHexToWireFormat("")).toBe(
+        "BLOB:0:application/octet-stream:",
+      );
+    });
+
+    it("should reject odd-length and non-hex input", () => {
+      expect(blobHexToWireFormat("ABC")).toBeNull();
+      expect(blobHexToWireFormat("GG")).toBeNull();
     });
   });
 

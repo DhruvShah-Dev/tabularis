@@ -113,6 +113,24 @@ describe('dataGrid utils', () => {
         expect(formatCellValue(true, 'NULL', 'BOOLEAN')).toBe('true');
       });
 
+      it('should display a BINARY(16) wire value as complete hex', () => {
+        const bytes = Array.from({ length: 16 }, (_, index) => index);
+        const wire = `BLOB:16:application/octet-stream:${btoa(String.fromCharCode(...bytes))}`;
+
+        expect(formatCellValue(wire, 'NULL', 'BINARY', 16)).toBe(
+          '0x000102030405060708090a0b0c0d0e0f',
+        );
+      });
+
+      it('should retain download metadata for generic binary values over 10 KiB', () => {
+        const preview = btoa('binary preview');
+        const wire = `BLOB:10241:application/octet-stream:${preview}`;
+
+        expect(formatCellValue(wire, 'NULL', 'BLOB')).toBe(
+          'application/octet-stream (10.00 KB)',
+        );
+      });
+
       it('should handle case-insensitive geometric types', () => {
         const wkt = 'LINESTRING(0 0, 1 1)';
         expect(formatCellValue(wkt, 'NULL', 'linestring')).toBe(wkt);
