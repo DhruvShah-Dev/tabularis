@@ -21,6 +21,7 @@ import {
   canEditTheme,
   isActiveTheme,
   getSystemThemeId,
+  resolveActiveThemeId,
   type ThemeMigrationResult,
 } from '../../src/utils/themeManagement';
 import type { Theme, ThemeSettings } from '../../src/types/theme';
@@ -476,6 +477,31 @@ describe('themeManagement', () => {
       const result = getSystemThemeId(false, settings);
       
       expect(result).toBe('light-custom');
+    });
+  });
+
+  describe('resolveActiveThemeId', () => {
+    const base: ThemeSettings = {
+      activeThemeId: 'monokai',
+      followSystemTheme: false,
+      lightThemeId: 'solarized-light',
+      darkThemeId: 'dracula',
+      customThemes: [],
+    };
+
+    it('returns activeThemeId when followSystemTheme is false', () => {
+      expect(resolveActiveThemeId(base, true)).toBe('monokai');
+      expect(resolveActiveThemeId(base, false)).toBe('monokai');
+    });
+
+    it('returns darkThemeId when following a dark system', () => {
+      const s = { ...base, followSystemTheme: true };
+      expect(resolveActiveThemeId(s, true)).toBe('dracula');
+    });
+
+    it('returns lightThemeId when following a light system', () => {
+      const s = { ...base, followSystemTheme: true };
+      expect(resolveActiveThemeId(s, false)).toBe('solarized-light');
     });
   });
 });
