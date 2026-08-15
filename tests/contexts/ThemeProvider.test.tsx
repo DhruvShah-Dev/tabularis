@@ -761,6 +761,19 @@ describe("ThemeProvider", () => {
       expect(result.current.currentTheme.id).toBe("tabularis-dark");
     });
 
+    it("falls back to the light preset when a light-mode pick is unresolvable", async () => {
+      systemIsDark = false; // OS is light
+      stubConfig({
+        theme: "tabularis-dark",
+        followSystemTheme: true,
+        lightThemeId: "deleted-custom-theme",
+        darkThemeId: "tabularis-dark",
+      });
+      const { result } = renderHook(() => useTheme(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.currentTheme.id).toBe("tabularis-light");
+    });
+
     it("ignores OS appearance changes in static mode", async () => {
       systemIsDark = true;
       stubConfig({ theme: "tabularis-dark" });

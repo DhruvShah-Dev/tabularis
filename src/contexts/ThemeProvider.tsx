@@ -108,8 +108,9 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         const darkThemeId = config.darkThemeId ?? "tabularis-dark";
 
         // Resolve active theme: follow-system overrides config.theme
+        let systemIsDark: boolean | undefined;
         if (followSystemTheme) {
-          const systemIsDark = window.matchMedia(
+          systemIsDark = window.matchMedia(
             "(prefers-color-scheme: dark)",
           ).matches;
           activeThemeId = resolveActiveThemeId(
@@ -124,13 +125,19 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
           );
         }
 
-        // Set initial theme
+        // Set initial theme; follow-system falls back to the preset matching
+        // the OS mode, static mode keeps the registry default
         const allAvailableThemes = [
           ...themeRegistry.getAllPresets(),
           ...loadedCustomThemes,
         ];
         const initialTheme =
           allAvailableThemes.find((t) => t.id === activeThemeId) ||
+          (followSystemTheme
+            ? themeRegistry.getPreset(
+                systemIsDark ? "tabularis-dark" : "tabularis-light",
+              )
+            : undefined) ||
           themeRegistry.getDefault();
 
         setCurrentTheme(initialTheme);
@@ -282,25 +289,28 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         customThemes: prev.customThemes.filter((id) => id !== themeId),
       }));
 
-      // Reset per-mode picks that referenced the deleted theme
-      setSettings((prev) => {
-        const lightThemeId =
-          prev.lightThemeId === themeId ? "tabularis-light" : prev.lightThemeId;
-        const darkThemeId =
-          prev.darkThemeId === themeId ? "tabularis-dark" : prev.darkThemeId;
-        if (
-          lightThemeId !== prev.lightThemeId ||
-          darkThemeId !== prev.darkThemeId
-        ) {
-          invoke("save_config", {
-            config: { lightThemeId, darkThemeId },
-          }).catch((error) =>
-            console.error("Failed to reset per-mode theme picks:", error),
-          );
-          return { ...prev, lightThemeId, darkThemeId };
-        }
-        return prev;
-      });
+      // Reset per-mode picks that referenced the deleted theme.
+      // Compute from current state and persist outside the updater so
+      // StrictMode double-invocation cannot fire save_config twice.
+      const lightThemeId =
+        settings.lightThemeId === themeId
+          ? "tabularis-light"
+          : settings.lightThemeId;
+      const darkThemeId =
+        settings.darkThemeId === themeId
+          ? "tabularis-dark"
+          : settings.darkThemeId;
+      if (
+        lightThemeId !== settings.lightThemeId ||
+        darkThemeId !== settings.darkThemeId
+      ) {
+        invoke("save_config", {
+          config: { lightThemeId, darkThemeId },
+        }).catch((error) =>
+          console.error("Failed to reset per-mode theme picks:", error),
+        );
+        setSettings((prev) => ({ ...prev, lightThemeId, darkThemeId }));
+      }
 
       // If the deleted theme was active, switch to default
       if (currentTheme.id === themeId) {
@@ -309,7 +319,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         setSettings((prev) => ({ ...prev, activeThemeId: defaultTheme.id }));
       }
     },
-    [allThemes, currentTheme.id],
+    [allThemes, currentTheme.id, settings.lightThemeId, settings.darkThemeId],
   );
 
   const duplicateTheme = useCallback(
