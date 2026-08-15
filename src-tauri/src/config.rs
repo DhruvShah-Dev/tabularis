@@ -21,6 +21,13 @@ pub struct PluginConfig {
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
     pub theme: Option<String>,
+    /// When true, the app follows the OS light/dark appearance using
+    /// `light_theme_id` / `dark_theme_id`. None/false ⇒ static `theme`.
+    pub follow_system_theme: Option<bool>,
+    /// Theme applied while the OS is in light mode and follow-system is on.
+    pub light_theme_id: Option<String>,
+    /// Theme applied while the OS is in dark mode and follow-system is on.
+    pub dark_theme_id: Option<String>,
     pub language: Option<String>,
     pub result_page_size: Option<u32>,
     pub font_family: Option<String>,
@@ -262,6 +269,15 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         // Merge: only update fields that are Some in the new config
         if config.theme.is_some() {
             existing_config.theme = config.theme;
+        }
+        if config.follow_system_theme.is_some() {
+            existing_config.follow_system_theme = config.follow_system_theme;
+        }
+        if config.light_theme_id.is_some() {
+            existing_config.light_theme_id = config.light_theme_id;
+        }
+        if config.dark_theme_id.is_some() {
+            existing_config.dark_theme_id = config.dark_theme_id;
         }
         if config.language.is_some() {
             existing_config.language = config.language;
@@ -852,6 +868,23 @@ pub fn save_config_json(app: AppHandle, json: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_config_deserializes_system_theme_fields() {
+        let json = r#"{"theme":"tabularis-dark","followSystemTheme":true,"lightThemeId":"tabularis-light","darkThemeId":"dracula"}"#;
+        let config: AppConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.follow_system_theme, Some(true));
+        assert_eq!(config.light_theme_id.as_deref(), Some("tabularis-light"));
+        assert_eq!(config.dark_theme_id.as_deref(), Some("dracula"));
+    }
+
+    #[test]
+    fn app_config_defaults_system_theme_fields_to_none() {
+        let config: AppConfig = serde_json::from_str("{}").unwrap();
+        assert!(config.follow_system_theme.is_none());
+        assert!(config.light_theme_id.is_none());
+        assert!(config.dark_theme_id.is_none());
+    }
 
     #[test]
     fn selected_schemas_default_is_none() {
