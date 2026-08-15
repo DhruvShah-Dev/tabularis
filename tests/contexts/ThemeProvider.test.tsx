@@ -783,5 +783,41 @@ describe("ThemeProvider", () => {
       act(() => fireSystemThemeChange(false));
       expect(result.current.currentTheme.id).toBe("tabularis-dark");
     });
+
+    it("replaces the active theme with the OS-mode preset when deleting an active per-mode pick in follow-system mode", async () => {
+      const customLightTheme: Theme = {
+        ...mockLightTheme,
+        id: "custom-light-1",
+        name: "Custom Light",
+        isPreset: false,
+        isReadOnly: false,
+      };
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
+        if (cmd === "get_config") {
+          return Promise.resolve({
+            theme: "custom-light-1",
+            followSystemTheme: true,
+            lightThemeId: "custom-light-1",
+            darkThemeId: "tabularis-dark",
+          });
+        }
+        if (cmd === "save_config") return Promise.resolve(undefined);
+        if (cmd === "get_all_themes") return Promise.resolve([customLightTheme]);
+        if (cmd === "delete_custom_theme") return Promise.resolve(undefined);
+        return Promise.reject(new Error(`Unexpected command: ${cmd}`));
+      });
+      const { result } = renderHook(() => useTheme(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      // OS is light; custom-light-1 resolves to active.
+      expect(result.current.currentTheme.id).toBe("custom-light-1");
+
+      await act(async () => {
+        await result.current.deleteCustomTheme("custom-light-1");
+      });
+
+      // Replacement must match the current OS mode (light), not getDefault().
+      expect(result.current.currentTheme.id).toBe("tabularis-light");
+      expect(result.current.settings.lightThemeId).toBe("tabularis-light");
+    });
   });
 });

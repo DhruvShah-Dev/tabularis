@@ -312,14 +312,33 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         setSettings((prev) => ({ ...prev, lightThemeId, darkThemeId }));
       }
 
-      // If the deleted theme was active, switch to default
+      // Active branch: in follow-system mode, resolve through the current OS
+      // mode and the just-reset per-mode picks (same fallback chain as the
+      // listener and load path). Static mode keeps the registry default.
       if (currentTheme.id === themeId) {
-        const defaultTheme = themeRegistry.getDefault();
-        setCurrentTheme(defaultTheme);
-        setSettings((prev) => ({ ...prev, activeThemeId: defaultTheme.id }));
+        let replacement: Theme;
+        if (settings.followSystemTheme) {
+          const systemIsDark = window.matchMedia(
+            "(prefers-color-scheme: dark)",
+          ).matches;
+          const targetId = getSystemThemeId(systemIsDark, {
+            ...settings,
+            lightThemeId,
+            darkThemeId,
+          });
+          replacement =
+            allThemes.find((t) => t.id === targetId) ||
+            themeRegistry.getPreset(
+              systemIsDark ? "tabularis-dark" : "tabularis-light",
+            );
+        } else {
+          replacement = themeRegistry.getDefault();
+        }
+        setCurrentTheme(replacement);
+        setSettings((prev) => ({ ...prev, activeThemeId: replacement.id }));
       }
     },
-    [allThemes, currentTheme.id, settings.lightThemeId, settings.darkThemeId],
+    [allThemes, currentTheme.id, settings.lightThemeId, settings.darkThemeId, settings.followSystemTheme],
   );
 
   const duplicateTheme = useCallback(
