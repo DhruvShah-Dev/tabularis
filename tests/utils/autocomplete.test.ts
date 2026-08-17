@@ -4,6 +4,7 @@ import {
   registerSqlAutocomplete,
 } from '../../src/utils/autocomplete';
 import type { TableInfo } from '../../src/contexts/DatabaseContext';
+import type { PluginManifest } from '../../src/types/plugins';
 
 // Mock @tauri-apps/api/core
 vi.mock('@tauri-apps/api/core', () => ({
@@ -159,6 +160,41 @@ describe('autocomplete', () => {
         [{ name: 'AccountEventLog' }],
         null,
         'postgres',
+      );
+
+      const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+      const result = await provider.provideCompletionItems(
+        createMockModel('SELECT * FROM '),
+        { lineNumber: 1, column: 15 },
+      );
+
+      const tableSuggestions = result.suggestions.filter((s: { sortText?: string }) =>
+        s.sortText?.startsWith('1_'),
+      );
+      expect(tableSuggestions[0]?.insertText).toBe('"AccountEventLog"');
+    });
+
+    it('inserts double-quoted table names for a postgres-dialect plugin manifest, same as the bare "postgres" string (issue #614)', async () => {
+      const pluginManifest: PluginManifest = {
+        id: 'postgresql',
+        name: 'PostgreSQL',
+        version: '1.0.0',
+        description: '',
+        default_port: 5432,
+        capabilities: {
+          schemas: true, views: true, routines: true,
+          file_based: false, folder_based: false,
+          identifier_quote: '"', alter_primary_key: true,
+          sql_dialect: 'postgres',
+        },
+      };
+      const monaco = createMockMonaco();
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        [{ name: 'AccountEventLog' }],
+        null,
+        pluginManifest,
       );
 
       const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];

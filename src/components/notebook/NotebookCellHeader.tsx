@@ -169,7 +169,7 @@ export function NotebookCellHeader({
         <CellTypeBadge cellType={cellType} />
         <span className="text-[10px] text-muted">#{index + 1}</span>
         {isEditingName ? (
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             type="text"
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}

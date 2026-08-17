@@ -18,6 +18,7 @@ import { areTableItemPropsEqual } from "../../../utils/sidebarTableItem";
 import { groupIndexes } from "../../../utils/indexes";
 import type { TableColumn, ForeignKey, Index } from "../../../types/schema";
 import type { ContextMenuData } from "../../../types/sidebar";
+import type { DriverCapabilities } from "../../../types/plugins";
 
 interface SidebarTableItemProps {
   table: { name: string };
@@ -33,6 +34,9 @@ interface SidebarTableItemProps {
   ) => void;
   connectionId: string;
   driver: string;
+  /** Capability-driven identifier quoting (issue #614): forwarded to
+   * `SidebarColumnItem`, which prefers it over the bare `driver` id. */
+  capabilities?: DriverCapabilities | null;
   onAddColumn: (tableName: string) => void;
   onEditColumn: (tableName: string, col: TableColumn) => void;
   onAddIndex: (tableName: string) => void;
@@ -52,6 +56,7 @@ const SidebarTableItemImpl = ({
   onContextMenu,
   connectionId,
   driver,
+  capabilities,
   canManage,
   onAddColumn,
   onEditColumn,
@@ -229,6 +234,7 @@ const SidebarTableItemImpl = ({
                         tableName={table.name}
                         connectionId={connectionId}
                         driver={driver}
+                        capabilities={capabilities}
                         canManage={canManage}
                         onRefresh={refreshMetadata}
                         onEdit={(c) => onEditColumn(table.name, c)}

@@ -234,7 +234,8 @@ export function AiApprovalModal({
             <label className="text-xs uppercase font-bold text-muted mb-2 block">
               {t("aiApproval.reasonLabel")}
             </label>
-            <input
+            {/* Prose field: natural-language input, so spellcheck/autocorrect stay ON; only the WebKit autofill pill is disabled. */}
+            <input autoComplete="off" spellCheck={true}
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}

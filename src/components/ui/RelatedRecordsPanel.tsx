@@ -9,6 +9,7 @@ import {
 import { MiniResultGrid } from './MiniResultGrid';
 import { useReferencedRecord } from '../../hooks/useReferencedRecord';
 import type { ForeignKey } from '../../types/editor';
+import type { DriverCapabilities } from '../../types/plugins';
 
 interface RelatedRecordsPanelProps {
   activeFkQuery: {
@@ -18,6 +19,11 @@ interface RelatedRecordsPanelProps {
   };
   connectionId: string;
   driver?: string | null;
+  /** Capability-driven identifier quoting (issue #614): when available,
+   * takes precedence over the bare `driver` id so a postgres-compatible
+   * driver registered under a different id (e.g. a standalone PostgreSQL
+   * plugin) is quoted the same as the builtin "postgres" driver. */
+  capabilities?: DriverCapabilities | null;
   schema?: string | null;
   onClose: () => void;
   onNavigateToTab: (fk: ForeignKey, value: unknown) => void;
@@ -27,6 +33,7 @@ export function RelatedRecordsPanel({
   activeFkQuery,
   connectionId,
   driver,
+  capabilities,
   schema,
   onClose,
   onNavigateToTab,
@@ -37,7 +44,7 @@ export function RelatedRecordsPanel({
     connectionId,
     fk,
     value,
-    driver,
+    driver: capabilities ?? driver,
     schema,
     sourceColumnType,
   });

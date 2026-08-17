@@ -1,17 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ForeignKey, QueryResult } from '../types/editor';
+import type { DriverCapabilities, PluginManifest } from '../types/plugins';
 import { quoteTableRef } from '../utils/identifiers';
 import {
   isForeignKeyValueNavigable,
   buildForeignKeyFilterClause,
 } from '../utils/foreignKeys';
 
+type DriverArg = string | PluginManifest | DriverCapabilities | null | undefined;
+
 export interface FetchReferencedRecordParams {
   connectionId: string;
   fk: ForeignKey;
   value: unknown;
-  driver?: string | null;
+  driver?: DriverArg;
   schema?: string | null;
   sourceColumnType?: string;
 }
@@ -53,7 +56,7 @@ export interface UseReferencedRecordParams {
   connectionId: string;
   fk: ForeignKey | null | undefined;
   value: unknown;
-  driver?: string | null;
+  driver?: DriverArg;
   schema?: string | null;
   sourceColumnType?: string;
 }

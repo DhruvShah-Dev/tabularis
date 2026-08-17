@@ -120,7 +120,7 @@ export const GeometryInput = ({
   if (!isGeometricType(dataType)) {
     // Fallback to regular input for non-geometric types
     return (
-      <input
+      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
         ref={actualRef as React.RefObject<HTMLInputElement>}
         value={value}
         onChange={handleChange}
@@ -136,7 +136,7 @@ export const GeometryInput = ({
   return (
     <div className="relative w-full" ref={dropdownRef}>
       <div className="flex items-center gap-1">
-        <input
+        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
           ref={actualRef as React.RefObject<HTMLInputElement>}
           value={value}
           onChange={handleChange}

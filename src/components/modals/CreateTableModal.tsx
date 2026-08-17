@@ -182,7 +182,7 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess, schema }: CreateT
             {/* Table Name */}
             <div>
                 <label className="block text-xs uppercase font-bold text-muted mb-1">{t('createTable.tableName')}</label>
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                     value={tableName}
                     onChange={(e) => { setTableName(e.target.value); setError(''); }}
                     className={`w-full bg-base border rounded-lg px-3 py-2 text-primary focus:border-blue-500 focus:outline-none transition-all font-mono ${!tableName.trim() && error ? 'border-red-500' : 'border-strong'}`}
@@ -220,7 +220,7 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess, schema }: CreateT
                                 <tr key={col.id} className="hover:bg-surface-secondary/30 group">
                                     <td className="p-2 w-8"></td>
                                     <td className="p-2">
-                                        <input
+                                        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                                             value={col.name}
                                             onChange={(e) => updateColumn(col.id, 'name', e.target.value)}
                                             className={`w-full bg-transparent text-sm text-primary focus:outline-none border-b font-mono placeholder:text-muted ${!col.name.trim() ? 'border-red-500/50' : 'border-transparent focus:border-blue-500'}`}
@@ -249,7 +249,7 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess, schema }: CreateT
                                         />
                                     </td>
                                     <td className="p-2">
-                                        <input
+                                        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                                             value={col.length}
                                             onChange={(e) => updateColumn(col.id, 'length', e.target.value)}
                                             className="w-full bg-transparent text-xs text-secondary focus:outline-none border-b border-transparent focus:border-blue-500 text-center disabled:opacity-30"
@@ -287,7 +287,7 @@ export const CreateTableModal = ({ isOpen, onClose, onSuccess, schema }: CreateT
                                         />
                                     </td>
                                     <td className="p-2">
-                                         <input
+                                         <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                                             value={col.isAutoInc ? '' : col.defaultValue}
                                             onChange={(e) => updateColumn(col.id, 'defaultValue', e.target.value)}
                                             disabled={col.isAutoInc}

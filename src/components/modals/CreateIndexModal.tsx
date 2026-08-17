@@ -140,7 +140,7 @@ export const CreateIndexModal = ({
         <div className="p-6 flex flex-col gap-4 overflow-y-auto">
             <div>
                 <label className="block text-xs uppercase font-bold text-muted mb-1">{t('createIndex.name')}</label>
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                     value={indexName}
                     onChange={(e) => { setIndexName(e.target.value); setError(''); }}
                     className={`w-full bg-base border rounded-lg px-3 py-2 text-primary text-sm focus:border-blue-500 focus:outline-none font-mono ${!indexName.trim() && error ? 'border-red-500' : 'border-strong'}`}

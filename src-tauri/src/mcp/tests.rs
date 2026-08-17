@@ -69,3 +69,37 @@ async fn list_databases_unknown_connection_errors() {
         Some("__tabularis_nonexistent_mcp_test_connection__")
     );
 }
+
+/// `resolve_default_schema` (issue #614): the schema default used to key off
+/// `driver == "postgres"` literally, so a postgres-compatible driver
+/// registered under a different id (e.g. the standalone PostgreSQL plugin)
+/// never got the `"public"` default. Exercised against the real concrete
+/// driver types — not a mock — so a manifest change on any of them would
+/// actually be caught here.
+#[test]
+fn resolve_default_schema_defaults_postgres_to_public() {
+    let driver: Arc<dyn DatabaseDriver> = Arc::new(postgres::PostgresDriver::new());
+    assert_eq!(resolve_default_schema(&driver, None), Some("public"));
+}
+
+#[test]
+fn resolve_default_schema_prefers_a_caller_supplied_schema_on_postgres() {
+    let driver: Arc<dyn DatabaseDriver> = Arc::new(postgres::PostgresDriver::new());
+    assert_eq!(
+        resolve_default_schema(&driver, Some("analytics")),
+        Some("analytics"),
+    );
+}
+
+#[test]
+fn resolve_default_schema_passes_through_unchanged_on_non_postgres_drivers() {
+    let mysql: Arc<dyn DatabaseDriver> = Arc::new(mysql::MysqlDriver::new());
+    assert_eq!(resolve_default_schema(&mysql, None), None);
+    assert_eq!(
+        resolve_default_schema(&mysql, Some("whatever")),
+        Some("whatever"),
+    );
+
+    let sqlite: Arc<dyn DatabaseDriver> = Arc::new(sqlite::SqliteDriver::new());
+    assert_eq!(resolve_default_schema(&sqlite, None), None);
+}

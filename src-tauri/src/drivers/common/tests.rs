@@ -27,7 +27,10 @@ fn test_decode_blob_wire_format_not_wire_format() {
 fn test_decode_blob_wire_format_truncated_preview() {
     // Even if the wire format contains only a truncated preview, the decoded
     // bytes should equal the preview portion (first MAX_BLOB_PREVIEW_SIZE bytes)
-    let data: Vec<u8> = (0u8..=255u8).cycle().take(8192).collect();
+    let data: Vec<u8> = (0u8..=255u8)
+        .cycle()
+        .take(MAX_BLOB_PREVIEW_SIZE * 2)
+        .collect();
     let wire = encode_blob(&data);
     let decoded = decode_blob_wire_format(&wire, DEFAULT_MAX_BLOB_SIZE)
         .expect("should decode truncated wire format");

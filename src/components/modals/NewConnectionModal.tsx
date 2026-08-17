@@ -264,6 +264,16 @@ export const NewConnectionModal = ({
   // ── form state ──
   const [driver, setDriver] = useState<string>("mysql");
   const activeDriver = drivers.find((d) => d.id === driver) ?? drivers[0];
+  // Capability-driven, not driver-id-driven: a driver whose manifest EXPLICITLY
+  // declares the postgres SQL dialect (builtin "postgres" or a plugin like
+  // "postgresql") gets Postgres-style SSL mode options. Deliberately requires
+  // an explicit declaration rather than falling back to the schema's default
+  // (unlike identifier quoting / statement splitting elsewhere) — most shipped
+  // plugins omit `sql_dialect` entirely, and defaulting them into the
+  // Postgres SSL branch would silently change behavior for drivers unrelated
+  // to this fix (e.g. the Oracle plugin, which sets supports_ssl but declares
+  // no dialect).
+  const isPostgresDialect = activeDriver?.capabilities?.sql_dialect === "postgres";
 
   // ── driver install state ──
   const [installStatus, setInstallStatus] = useState<
@@ -2533,7 +2543,7 @@ export const NewConnectionModal = ({
             <div
               className={clsx(
                 "grid gap-3",
-                driver === "postgres" ? "grid-cols-4" : "grid-cols-3",
+                isPostgresDialect ? "grid-cols-4" : "grid-cols-3",
               )}
             >
               <FieldInput
@@ -2975,33 +2985,33 @@ export const NewConnectionModal = ({
         <Select
           value={
             formData.ssl_mode ||
-            (driver === "postgres"
-              ? "prefer"
-              : driver === "clickhouse"
-                ? "disable"
+            (driver === "clickhouse"
+              ? "disable"
+              : isPostgresDialect
+                ? "prefer"
                 : "required")
           }
           options={
-            driver === "postgres"
-              ? ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
-              : driver === "clickhouse"
-                ? ["disable", "require"]
+            driver === "clickhouse"
+              ? ["disable", "require"]
+              : isPostgresDialect
+                ? ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
                 : ["disabled", "preferred", "required", "verify_ca", "verify_identity"]
           }
           labels={
-            driver === "postgres"
+            driver === "clickhouse"
               ? {
                   disable: t("newConnection.sslModes.disable", { defaultValue: "Disable" }),
-                  allow: t("newConnection.sslModes.allow", { defaultValue: "Allow" }),
-                  prefer: t("newConnection.sslModes.prefer", { defaultValue: "Prefer" }),
                   require: t("newConnection.sslModes.require", { defaultValue: "Require" }),
-                  "verify-ca": t("newConnection.sslModes.verify-ca", { defaultValue: "Verify CA" }),
-                  "verify-full": t("newConnection.sslModes.verify-full", { defaultValue: "Verify Full" }),
                 }
-              : driver === "clickhouse"
+              : isPostgresDialect
                 ? {
                     disable: t("newConnection.sslModes.disable", { defaultValue: "Disable" }),
+                    allow: t("newConnection.sslModes.allow", { defaultValue: "Allow" }),
+                    prefer: t("newConnection.sslModes.prefer", { defaultValue: "Prefer" }),
                     require: t("newConnection.sslModes.require", { defaultValue: "Require" }),
+                    "verify-ca": t("newConnection.sslModes.verify-ca", { defaultValue: "Verify CA" }),
+                    "verify-full": t("newConnection.sslModes.verify-full", { defaultValue: "Verify Full" }),
                   }
                 : {
                     disabled: t("newConnection.sslModes.disabled", { defaultValue: "Disabled" }),
