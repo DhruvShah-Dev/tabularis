@@ -6,8 +6,8 @@ import { useTranslation } from "react-i18next";
 import type { PluginManifest } from "../../../types/plugins";
 import type { CatalogueDriver, EngineGroup } from "../../../utils/connectionCatalogue";
 import { labelForParadigm } from "../../../utils/connectionCatalogue";
-import { getDriverIcon } from "../../../utils/driverUI";
-import { RegistryDriverIcon } from "./RegistryDriverIcon";
+import { getDriverIcon, isUrlIcon } from "../../../utils/driverUI";
+import { RegistryDriverIcon } from "../../RegistryDriverIcon";
 
 interface EngineCardProps {
   group: EngineGroup;
@@ -33,7 +33,7 @@ function accentFor(group: EngineGroup, rep: CatalogueDriver): string {
 
 function renderIcon(rep: CatalogueDriver) {
   const icon = rep.icon ?? "";
-  if (/^https?:\/\//.test(icon) || icon.startsWith("data:")) {
+  if (isUrlIcon(icon)) {
     return <RegistryDriverIcon src={icon} size={24} fallback={<Database size={20} />} />;
   }
   if (rep.isBuiltin) {

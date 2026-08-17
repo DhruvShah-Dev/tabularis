@@ -95,8 +95,10 @@ export interface PluginManifest {
   default_username?: string;
   /** CSS hex color for UI accents (e.g. "#f97316"). Undefined falls back to a neutral color. */
   color?: string;
-  /** Icon name: built-in values are "mysql" | "postgres" | "sqlite" | "network" | "database" | "folder-open".
-   * External plugins can reference a file bundled in the plugin package. */
+  /** Icon: a hosted URL (`https://...`) or `data:` URI, resolved to an
+   * `<img>` (see the Tabularium manifest docs); or one of the built-in
+   * lookup keys "mysql" | "postgres" | "sqlite" | "network" | "database" |
+   * "folder-open", resolved to an inline brand/lucide icon. */
   icon?: string;
   /** Plugin-declared setting definitions. Empty/absent for built-in drivers. */
   settings?: PluginSettingDefinition[];
