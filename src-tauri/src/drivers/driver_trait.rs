@@ -39,15 +39,6 @@ pub enum SqlDialect {
     Generic,
 }
 
-impl Default for SqlDialect {
-    /// Preserves the behavior shipped before `sql_dialect` was introduced:
-    /// every driver — including PG-compat plugins already in the wild —
-    /// went through postgres-flavored splitting via `postgreSplitterOptions`.
-    fn default() -> Self {
-        Self::Postgres
-    }
-}
-
 /// Capabilities advertised by a driver.
 /// The frontend uses these flags to decide which UI sections to show.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -155,11 +146,22 @@ pub struct DriverCapabilities {
     /// Defaults to `false`.
     #[serde(default)]
     pub readonly: bool,
-    /// SQL dialect for the statement splitter / classifier. Plugins that
-    /// omit the field fall back to `postgres` (matches pre-existing
-    /// behavior shipped via the previous `postgreSplitterOptions`).
-    #[serde(default)]
-    pub sql_dialect: SqlDialect,
+    /// SQL dialect for the statement splitter / classifier, and for any
+    /// other check that needs to distinguish "postgres-compatible" from
+    /// "not." `None` when the manifest omits the field — deliberately NOT
+    /// defaulted to `Some(Postgres)` at this layer (issue #614): a type-level
+    /// default here would be indistinguishable, once serialized to the
+    /// frontend, from a manifest that explicitly declared `"postgres"` —
+    /// which broke a security-relevant check (SSL mode dropdown/migration)
+    /// that needs to tell "explicitly postgres" apart from "unspecified."
+    /// The frontend's own splitter still applies the historical
+    /// postgres-default at its point of use (`?? "postgres"` in
+    /// `src/utils/identifiers.ts`/`sqlSplitter`); this Rust-side field
+    /// stays a strict `Option` so security-relevant Rust consumers (the SSL
+    /// mode migration, the MCP schema default) can't inherit that default
+    /// by accident.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sql_dialect: Option<SqlDialect>,
 }
 
 fn default_double_quote() -> String {
@@ -709,6 +711,7 @@ pub trait DatabaseDriver: Send + Sync {
 
     async fn get_create_foreign_key_sql(
         &self,
+        _params: &ConnectionParams,
         _table: &str,
         _fk_name: &str,
         _column: &str,

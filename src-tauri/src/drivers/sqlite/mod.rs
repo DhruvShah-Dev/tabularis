@@ -1006,7 +1006,7 @@ impl SqliteDriver {
                     triggers: true,
                     supports_ssl: false,
                     user_management: false,
-                    sql_dialect: SqlDialect::Sqlite,
+                    sql_dialect: Some(SqlDialect::Sqlite),
                 },
                 is_builtin: true,
                 engine: Some("sqlite".to_string()),
@@ -1434,6 +1434,7 @@ impl DatabaseDriver for SqliteDriver {
 
     async fn get_create_foreign_key_sql(
         &self,
+        _params: &crate::models::ConnectionParams,
         _table: &str,
         _fk_name: &str,
         _column: &str,

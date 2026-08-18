@@ -122,7 +122,7 @@ export const Select = ({
         <div className="p-2 border-b border-default bg-elevated">
           <div className="flex items-center gap-2 bg-base border border-strong rounded px-2 py-1.5 focus-within:border-blue-500 transition-colors">
             <Search size={14} className="text-muted shrink-0" />
-            <input
+            <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
               ref={searchInputRef}
               type="text"
               placeholder={searchPlaceholder}

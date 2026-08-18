@@ -89,7 +89,7 @@ vi.mock("../../../src/hooks/useDrivers", () => ({
           file_based: false,
           folder_based: false,
           connection_string: true,
-          supports_ssl: false,
+          supports_ssl: true,
         },
       },
       {
@@ -103,6 +103,23 @@ vi.mock("../../../src/hooks/useDrivers", () => ({
           folder_based: false,
           connection_string: false,
           supports_ssl: false,
+        },
+      },
+      {
+        // Simulates the standalone PostgreSQL plugin (issue #614): a
+        // non-"postgres" driver id whose manifest explicitly declares the
+        // postgres SQL dialect.
+        id: "postgresql",
+        name: "PostgreSQL",
+        version: "1.0.0-beta.2",
+        default_port: 5432,
+        is_builtin: false,
+        capabilities: {
+          file_based: false,
+          folder_based: false,
+          connection_string: true,
+          supports_ssl: true,
+          sql_dialect: "postgres",
         },
       },
     ],
@@ -1276,5 +1293,82 @@ describe("NewConnectionModal SQLite file creation", () => {
     expect(
       screen.getByPlaceholderText("newConnection.filePathPlaceholder"),
     ).toHaveValue("");
+  });
+});
+
+describe("NewConnectionModal SSL mode options (issue #614)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sshMocks.loadSshConnections.mockResolvedValue([]);
+    k8sMocks.loadK8sConnections.mockResolvedValue([]);
+  });
+
+  // Regression test for issue #614: the SSL mode dropdown used to branch on
+  // `driver === "postgres"` literally, so a non-builtin driver whose manifest
+  // declares the postgres SQL dialect (e.g. the standalone PostgreSQL plugin,
+  // id "postgresql") fell into the MySQL-style branch instead. The plugin's
+  // own `needs_tls()` only recognizes the Postgres-style hyphenated values
+  // ("require"/"verify-ca"/"verify-full"), so a connection saved with the
+  // MySQL-style "required"/"verify_ca" would silently connect in cleartext.
+  it("shows Postgres-style SSL mode options for a non-'postgres' driver with sql_dialect: postgres", async () => {
+    renderModal(createInitialConnection({ driver: "postgresql" }));
+
+    fireEvent.click(screen.getByText("SSL"));
+
+    const select = screen.getByLabelText("select");
+    const optionValues = Array.from(select.querySelectorAll("option"))
+      .map((o) => o.getAttribute("value"))
+      .filter((v) => v !== "");
+    expect(optionValues).toEqual([
+      "disable",
+      "allow",
+      "prefer",
+      "require",
+      "verify-ca",
+      "verify-full",
+    ]);
+    expect(select).toHaveValue("prefer");
+  });
+
+  it("still shows MySQL-style SSL mode options for the mysql driver", async () => {
+    renderModal(createInitialConnection({ driver: "mysql" }));
+
+    fireEvent.click(screen.getByText("SSL"));
+
+    const select = screen.getByLabelText("select");
+    const optionValues = Array.from(select.querySelectorAll("option"))
+      .map((o) => o.getAttribute("value"))
+      .filter((v) => v !== "");
+    expect(optionValues).toEqual([
+      "disabled",
+      "preferred",
+      "required",
+      "verify_ca",
+      "verify_identity",
+    ]);
+  });
+
+  // Regression test for issue #614: the host/port grid also branched on
+  // `driver === "postgres"` literally, so a non-builtin driver whose
+  // manifest declares the postgres SQL dialect got a 3-column grid instead
+  // of the 4-column grid the builtin driver got for the same two fields —
+  // a real (if purely visual) layout inconsistency between the builtin and
+  // the plugin, not just a cosmetic no-op.
+  it("uses a 4-column host/port grid for a non-'postgres' driver with sql_dialect: postgres, same as the builtin", () => {
+    renderModal(createInitialConnection({ driver: "postgresql" }));
+
+    const hostInput = screen.getByPlaceholderText("localhost");
+    const grid = hostInput.closest(".grid");
+    expect(grid).not.toBeNull();
+    expect(grid).toHaveClass("grid-cols-4");
+  });
+
+  it("uses a 3-column host/port grid for the mysql driver", () => {
+    renderModal(createInitialConnection({ driver: "mysql" }));
+
+    const hostInput = screen.getByPlaceholderText("localhost");
+    const grid = hostInput.closest(".grid");
+    expect(grid).not.toBeNull();
+    expect(grid).toHaveClass("grid-cols-3");
   });
 });

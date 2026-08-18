@@ -17,6 +17,7 @@ import {
   type WhereCondition,
   type OrderByClause,
 } from '../../src/utils/visualQuery';
+import type { PluginManifest } from '../../src/types/plugins';
 
 describe('visualQuery utils', () => {
   describe('collectTableAliases', () => {
@@ -60,6 +61,19 @@ describe('visualQuery utils', () => {
       const result = generateTableList(nodes, aliases);
 
       expect(result).toEqual(['users t1', 'posts t2']);
+    });
+
+    it('should quote table names that need it for postgres', () => {
+      const nodes: QueryNode[] = [
+        { id: 'n1', data: { label: 'user', columns: [], selectedColumns: {} } },
+        { id: 'n2', data: { label: 'AccountEventLog', columns: [], selectedColumns: {} } },
+      ];
+      const aliases = { n1: 't1', n2: 't2' };
+
+      expect(generateTableList(nodes, aliases, 'postgres')).toEqual([
+        '"user" t1',
+        '"AccountEventLog" t2',
+      ]);
     });
 
     it('should include schema-qualified MySQL table references', () => {
@@ -167,6 +181,27 @@ describe('visualQuery utils', () => {
       expect(result.columns[0].expr).toBe('SUM(t1.total) AS total_sum');
     });
 
+    it('should quote aggregation aliases that need it for postgres', () => {
+      const nodes: QueryNode[] = [
+        {
+          id: 'n1',
+          data: {
+            label: 'orders',
+            columns: [{ name: 'total', type: 'DECIMAL' }],
+            selectedColumns: { total: true },
+            columnAggregations: {
+              total: { function: 'SUM', alias: 'Total Count' },
+            },
+          },
+        },
+      ];
+      const aliases = { n1: 't1' };
+
+      const result = collectSelectedColumns(nodes, aliases, 'postgres');
+
+      expect(result.columns[0].expr).toBe('SUM(t1.total) AS "Total Count"');
+    });
+
     it('should handle column aliases without aggregation', () => {
       const nodes: QueryNode[] = [
         {
@@ -187,6 +222,27 @@ describe('visualQuery utils', () => {
 
       expect(result.columns[0].expr).toBe('t1.first_name AS name');
       expect(result.nonAggregatedCols).toContain('t1.first_name');
+    });
+
+    it('should quote column aliases that need it for postgres', () => {
+      const nodes: QueryNode[] = [
+        {
+          id: 'n1',
+          data: {
+            label: 'users',
+            columns: [{ name: 'first_name', type: 'VARCHAR' }],
+            selectedColumns: { first_name: true },
+            columnAliases: {
+              first_name: { alias: 'Display Name' },
+            },
+          },
+        },
+      ];
+      const aliases = { n1: 't1' };
+
+      const result = collectSelectedColumns(nodes, aliases, 'postgres');
+
+      expect(result.columns[0].expr).toBe('t1.first_name AS "Display Name"');
     });
 
     it('should handle custom ordering', () => {
@@ -624,6 +680,37 @@ describe('visualQuery utils', () => {
     it('should return empty string for no aggregate conditions', () => {
       expect(generateHavingClause([])).toBe('');
     });
+
+    it('should quote generated HAVING column references for postgres', () => {
+      const conditions: WhereCondition[] = [
+        { id: '1', column: 't1.AccountId', operator: '>', value: '0', logicalOperator: 'AND', isAggregate: true },
+      ];
+
+      expect(generateHavingClause(conditions, 'postgres')).toBe(
+        '\nHAVING\n  t1."AccountId" > 0',
+      );
+    });
+
+    it('should preserve COUNT(*) HAVING expressions for postgres', () => {
+      const conditions: WhereCondition[] = [
+        { id: '1', column: 'COUNT(*)', operator: '>', value: '0', logicalOperator: 'AND', isAggregate: true },
+      ];
+
+      expect(generateHavingClause(conditions, 'postgres')).toBe(
+        '\nHAVING\n  COUNT(*) > 0',
+      );
+    });
+
+    it('should preserve aggregate HAVING expressions while formatting postgres column refs', () => {
+      const conditions: WhereCondition[] = [
+        { id: '1', column: 'SUM(t1.amount)', operator: '>', value: '1000', logicalOperator: 'AND', isAggregate: true },
+        { id: '2', column: 'COUNT(t1.AccountId)', operator: '>', value: '0', logicalOperator: 'AND', isAggregate: true },
+      ];
+
+      expect(generateHavingClause(conditions, 'postgres')).toBe(
+        '\nHAVING\n  SUM(t1.amount) > 1000\n  AND COUNT(t1."AccountId") > 0',
+      );
+    });
   });
 
   describe('generateOrderByClause', () => {
@@ -800,6 +887,79 @@ describe('visualQuery utils', () => {
       expect(result).toContain('t1.id');
       expect(result).toContain('t1."order"');
       expect(result).toContain('FROM\n  "user" t1');
+    });
+
+    it('should generate the same postgres SQL for a postgres-dialect plugin manifest as for the bare "postgres" string (issue #614)', () => {
+      const nodes: QueryNode[] = [
+        {
+          id: 'n1',
+          data: {
+            label: 'user',
+            columns: [{ name: 'id', type: 'INT' }, { name: 'order', type: 'INT' }],
+            selectedColumns: { id: true, order: true },
+          },
+        },
+      ];
+      const pluginManifest: PluginManifest = {
+        id: 'postgresql',
+        name: 'PostgreSQL',
+        version: '1.0.0',
+        description: '',
+        default_port: 5432,
+        capabilities: {
+          schemas: true, views: true, routines: true,
+          file_based: false, folder_based: false,
+          identifier_quote: '"', alter_primary_key: true,
+          sql_dialect: 'postgres',
+        },
+      };
+
+      const result = generateVisualQuerySQL(nodes, [], [], [], [], '', pluginManifest);
+
+      expect(result).toBe(generateVisualQuerySQL(nodes, [], [], [], [], '', 'postgres'));
+    });
+
+    it('should quote postgres SQL when the driver id is postgresql', () => {
+      const nodes: QueryNode[] = [
+        {
+          id: 'n1',
+          data: {
+            label: 'AccountEventLog',
+            columns: [{ name: 'AccountId', type: 'INT' }],
+            selectedColumns: { AccountId: true },
+          },
+        },
+      ];
+
+      const result = generateVisualQuerySQL(nodes, [], [], [], [], '', 'postgresql');
+
+      expect(result).toContain('t1."AccountId"');
+      expect(result).toContain('FROM\n  "AccountEventLog" t1');
+    });
+
+    it('should generate postgres SQL with quoted HAVING refs and aliases', () => {
+      const nodes: QueryNode[] = [
+        {
+          id: 'n1',
+          data: {
+            label: 'AccountEventLog',
+            columns: [{ name: 'AccountId', type: 'INT' }],
+            selectedColumns: { AccountId: true },
+            columnAggregations: {
+              AccountId: { function: 'COUNT', alias: 'Total Count' },
+            },
+          },
+        },
+      ];
+      const whereConditions: WhereCondition[] = [
+        { id: '1', column: 'COUNT(t1.AccountId)', operator: '>', value: '0', logicalOperator: 'AND', isAggregate: true },
+      ];
+
+      const result = generateVisualQuerySQL(nodes, [], whereConditions, [], [], '', 'postgres');
+
+      expect(result).toContain('COUNT(t1."AccountId") AS "Total Count"');
+      expect(result).toContain('FROM\n  "AccountEventLog" t1');
+      expect(result).toContain('HAVING\n  COUNT(t1."AccountId") > 0');
     });
   });
 });

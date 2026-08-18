@@ -78,6 +78,24 @@ pub(super) fn build_pk_predicate(
                 }
             }
 
+            // Keyless tables (#598) identify rows by every column, so the
+            // predicate can target numeric/temporal columns whose values reach
+            // the driver as JSON strings (numeric serializes as string to
+            // preserve arbitrary precision). Route them through the same
+            // coercions as SET binding — a plain TEXT bind trips SQLSTATE
+            // 42883, e.g. "operator does not exist: numeric = text".
+            if let Some(pk_type) = pk_type {
+                if let Some(bound) = bind_pg_numeric_string(&s, pk_type, placeholder_idx)
+                    .or_else(|| bind_pg_temporal_string(&s, pk_type, placeholder_idx))
+                {
+                    let bound = bound?;
+                    let param = bound
+                        .param
+                        .ok_or_else(|| "Internal PostgreSQL numeric binding error".to_string())?;
+                    return Ok((format!("{} = {}", col, bound.sql), Some(param)));
+                }
+            }
+
             // Bigint PK values outside JS safe range arrive from the UI as
             // strings. Cast through bigint so the equality test against an int8
             // column does not trip a type mismatch — but skip for known text

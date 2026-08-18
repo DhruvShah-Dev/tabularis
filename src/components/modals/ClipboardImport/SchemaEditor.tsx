@@ -228,7 +228,7 @@ export function SchemaEditor({
                       {isAppend && !col.isNewColumn ? (
                         <span className="w-full text-sm text-primary font-mono truncate">{col.name}</span>
                       ) : (
-                        <input
+                        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                           value={col.name}
                           onChange={(e) => onColumnChange(i, { name: e.target.value })}
                           className="w-full bg-transparent text-sm text-primary focus:outline-none border-b border-transparent focus:border-blue-500 font-mono"

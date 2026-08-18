@@ -87,7 +87,7 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -181,7 +181,7 @@ jobs:
           sed -i.bak "0,/^version = \".*\"/s//version = \"$v\"/" src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
           echo "Patched version to $v"
 
-      - uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0.6.1
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_BUNDLER_NEW_APPIMAGE_FORMAT: ${{ inputs.experimental_appimage && 'true' || '' }}

@@ -154,7 +154,7 @@ export const PluginSettingsModal = ({
     if (def.type === "number") {
       return (
         <div className="flex items-start gap-2">
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             type="number"
             value={typeof value === "number" ? value : ""}
             onChange={(e) => handleDynamicChange(def.key, e.target.value === "" ? undefined : Number(e.target.value))}
@@ -167,7 +167,7 @@ export const PluginSettingsModal = ({
 
     return (
       <div className="flex items-start gap-2">
-        <input
+        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
           type="text"
           value={typeof value === "string" ? value : ""}
           onChange={(e) => handleDynamicChange(def.key, e.target.value)}
@@ -210,7 +210,7 @@ export const PluginSettingsModal = ({
               {t("settings.plugins.pluginSettings.interpreterDesc")}
             </p>
             <div className="flex gap-2">
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                 type="text"
                 value={interpreter}
                 placeholder={t("settings.plugins.pluginSettings.interpreterPlaceholder")}

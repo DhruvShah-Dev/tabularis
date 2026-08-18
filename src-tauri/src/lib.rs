@@ -61,6 +61,8 @@ pub mod models;
 pub mod models_tests;
 pub mod notebooks;
 pub mod paths; // Added
+#[cfg(test)]
+pub mod paths_tests;
 pub mod persistence;
 pub mod plugins;
 pub mod pool_manager;

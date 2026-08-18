@@ -141,7 +141,7 @@ export const SpotlightPalette = ({
           >
             {ariaLabel}
           </span>
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             role="combobox"
             aria-label={searchLabel}
             aria-controls={resultsId}

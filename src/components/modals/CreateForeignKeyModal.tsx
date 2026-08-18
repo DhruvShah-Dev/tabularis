@@ -198,7 +198,7 @@ export const CreateForeignKeyModal = ({
 
             <div>
                 <label className="block text-xs uppercase font-bold text-muted mb-1">{t('createFk.name')}</label>
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                     value={fkName}
                     onChange={(e) => { setFkName(e.target.value); setError(''); }}
                     autoFocus

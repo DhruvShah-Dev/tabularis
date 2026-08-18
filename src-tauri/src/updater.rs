@@ -6,6 +6,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::{AppHandle, Manager};
 
+mod installation_source;
+
+use installation_source::{detect_installation_source, is_managed_package};
+
 // Strutture dati
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -57,45 +61,6 @@ struct GitHubAsset {
 // Constants
 const GITHUB_REPO: &str = "TabularisDB/tabularis";
 const CACHE_DURATION_SECS: u64 = 43200; // 12 hours
-/// Returns the installation source: "snap", "aur", or None for direct installs.
-/// Only meaningful on Linux; always returns None on other platforms.
-fn detect_installation_source() -> Option<String> {
-    #[cfg(target_os = "linux")]
-    {
-        // Snap sets the SNAP env var when running inside a snap sandbox
-        if std::env::var("SNAP").is_ok() {
-            return Some("snap".to_string());
-        }
-
-        // Flatpak sets FLATPAK_ID when running inside a Flatpak sandbox
-        if std::env::var("FLATPAK_ID").is_ok() {
-            return Some("flatpak".to_string());
-        }
-
-        // AUR: check if pacman's local database has a tabularis-bin entry.
-        // Skipped in dev builds — a tabularis-bin package installed alongside
-        // the dev environment would otherwise be misdetected as the source.
-        if !cfg!(debug_assertions) {
-            if let Ok(entries) = std::fs::read_dir("/var/lib/pacman/local") {
-                let is_aur = entries.filter_map(|e| e.ok()).any(|e| {
-                    e.file_name()
-                        .to_string_lossy()
-                        .starts_with("tabularis-bin-")
-                });
-                if is_aur {
-                    return Some("aur".to_string());
-                }
-            }
-        }
-    }
-
-    None
-}
-
-/// Returns true when updates should not be managed by the app itself.
-fn is_managed_package() -> bool {
-    detect_installation_source().is_some()
-}
 
 #[tauri::command]
 pub fn get_installation_source() -> Option<String> {
@@ -227,7 +192,7 @@ fn release_channel<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> String {
 // Tauri commands
 #[tauri::command]
 pub async fn check_for_updates(app: AppHandle, force: bool) -> Result<UpdateCheckResult, String> {
-    // Managed packages (AUR, Snap) should not use the built-in updater
+    // Package-managed installations should not use the built-in updater.
     if is_managed_package() {
         return Err("Updates are managed by the package manager".to_string());
     }
@@ -375,7 +340,11 @@ pub async fn check_for_updates(app: AppHandle, force: bool) -> Result<UpdateChec
 
 #[tauri::command]
 pub async fn download_and_install_update(app: AppHandle) -> Result<(), String> {
-    // Usa tauri-plugin-updater per gestire il download e installazione
+    if is_managed_package() {
+        return Err("Updates are managed by the package manager".to_string());
+    }
+
+    // Use tauri-plugin-updater to handle the download and installation.
     use tauri_plugin_updater::UpdaterExt;
 
     let mut builder = app.updater_builder();
@@ -390,7 +359,7 @@ pub async fn download_and_install_update(app: AppHandle) -> Result<(), String> {
     let updater = builder.build().map_err(|e| e.to_string())?;
 
     if let Some(update) = updater.check().await.map_err(|e| e.to_string())? {
-        // Emetti eventi per aggiornare la UI sul progresso
+        // Emit progress events for the frontend.
         let mut downloaded = 0;
 
         update
@@ -406,7 +375,7 @@ pub async fn download_and_install_update(app: AppHandle) -> Result<(), String> {
                     let _ = app.emit("update-progress", progress);
                 },
                 || {
-                    // Pre-installazione: salva stato, chiudi connessioni, etc.
+                    // Notify the frontend immediately before installation.
                     let _ = app.emit("update-installing", ());
                 },
             )
@@ -555,45 +524,6 @@ mod tests {
     fn test_cache_duration() {
         assert_eq!(CACHE_DURATION_SECS, 43200); // 12 hours in seconds
         assert_eq!(CACHE_DURATION_SECS / 3600, 12); // Verify it's 12 hours
-    }
-
-    // Mutex to serialize env var mutations across parallel tests
-    #[cfg(target_os = "linux")]
-    static ENV_MUTEX: std::sync::LazyLock<std::sync::Mutex<()>> =
-        std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
-
-    // Installation source detection tests
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn test_detect_installation_source_snap() {
-        let _lock = ENV_MUTEX.lock().unwrap();
-        std::env::remove_var("FLATPAK_ID");
-        std::env::set_var("SNAP", "/snap/tabularis/current");
-        let source = detect_installation_source();
-        std::env::remove_var("SNAP");
-        assert_eq!(source.as_deref(), Some("snap"));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn test_detect_installation_source_flatpak() {
-        let _lock = ENV_MUTEX.lock().unwrap();
-        std::env::remove_var("SNAP");
-        std::env::set_var("FLATPAK_ID", "io.github.debba.tabularis");
-        let source = detect_installation_source();
-        std::env::remove_var("FLATPAK_ID");
-        assert_eq!(source.as_deref(), Some("flatpak"));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn test_detect_installation_source_direct() {
-        let _lock = ENV_MUTEX.lock().unwrap();
-        std::env::remove_var("SNAP");
-        std::env::remove_var("FLATPAK_ID");
-        let source = detect_installation_source();
-        // On a dev/CI machine without pacman or tabularis-bin installed, must be None
-        assert!(source.is_none() || source.as_deref() == Some("aur"));
     }
 
     fn mk_release(tag: &str, prerelease: bool, published_at: &str, assets: &[&str]) -> GitHubRelease {

@@ -97,6 +97,48 @@ describe("notebookParams", () => {
       ]);
       expect(result.sql).toBe("SELECT $' OR $` OR $$ FROM t");
     });
+
+    it("should resolve ${name} template syntax", () => {
+      const result = resolveParams("SELECT * FROM t WHERE id = ${email}", [
+        { name: "email", value: "'user@example.com'" },
+      ]);
+      expect(result.sql).toBe(
+        "SELECT * FROM t WHERE id = 'user@example.com'",
+      );
+      expect(result.unresolvedParams).toEqual([]);
+    });
+
+    it("should resolve mixed @name and ${name} syntax", () => {
+      const result = resolveParams(
+        "SELECT * FROM t WHERE a = @limit AND b = ${email}",
+        [
+          { name: "limit", value: "100" },
+          { name: "email", value: "'test@example.com'" },
+        ],
+      );
+      expect(result.sql).toBe(
+        "SELECT * FROM t WHERE a = 100 AND b = 'test@example.com'",
+      );
+    });
+
+    it("should report unresolved ${name} template params", () => {
+      const result = resolveParams("SELECT ${unknown}", []);
+      expect(result.unresolvedParams).toEqual(["unknown"]);
+    });
+
+    it("should extract ${name} template references", () => {
+      const refs = extractParamReferences(
+        "SELECT * WHERE id = ${user_id} AND name = ${name}",
+      );
+      expect(refs).toHaveLength(2);
+      expect(refs[0]).toEqual({ match: "${user_id}", name: "user_id" });
+      expect(refs[1]).toEqual({ match: "${name}", name: "name" });
+    });
+
+    it("should detect ${name} with hasParamReferences", () => {
+      expect(hasParamReferences("SELECT ${foo}")).toBe(true);
+      expect(hasParamReferences("SELECT 1")).toBe(false);
+    });
   });
 
   describe("validateParamName", () => {

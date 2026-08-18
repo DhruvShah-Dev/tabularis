@@ -258,7 +258,7 @@ export const JsonInput: React.FC<JsonInputProps> = ({
         )}
 
         {mode === "raw" && (
-          <textarea
+          <textarea autoCorrect="off" autoCapitalize="off" autoComplete="off"
             data-testid="json-input-raw"
             value={text}
             onChange={handleRawChange}

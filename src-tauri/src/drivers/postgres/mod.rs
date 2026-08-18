@@ -1783,7 +1783,7 @@ impl PostgresDriver {
                     triggers: true,
                     supports_ssl: true,
                     user_management: false,
-                    sql_dialect: SqlDialect::Postgres,
+                    sql_dialect: Some(SqlDialect::Postgres),
                 },
                 is_builtin: true,
                 engine: Some("postgres".to_string()),
@@ -2428,6 +2428,7 @@ impl DatabaseDriver for PostgresDriver {
 
     async fn get_create_foreign_key_sql(
         &self,
+        _params: &crate::models::ConnectionParams,
         table: &str,
         fk_name: &str,
         column: &str,

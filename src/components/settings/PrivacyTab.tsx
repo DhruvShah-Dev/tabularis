@@ -50,7 +50,7 @@ export function PrivacyTab() {
           description={t("settings.maskingPatternsDesc")}
           vertical
         >
-          <textarea
+          <textarea autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             value={patternsDraft ?? patterns.join("\n")}
             disabled={!maskingEnabled}
             onChange={(e) => setPatternsDraft(e.target.value)}

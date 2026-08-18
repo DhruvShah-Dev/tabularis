@@ -1,3 +1,4 @@
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 import { quoteTableRef } from "./identifiers";
 
 export interface NewConsoleSpec {
@@ -12,7 +13,7 @@ export function newConsoleForDatabase(databaseName: string): NewConsoleSpec {
 
 export function newConsoleForTable(
   tableName: string,
-  driver: string | null | undefined,
+  driver: string | PluginManifest | DriverCapabilities | null | undefined,
   schema?: string,
 ): NewConsoleSpec {
   return {

@@ -921,7 +921,7 @@ export function PluginsTab({
                 size={12}
                 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
               />
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                 type="text"
                 placeholder={t("settings.plugins.searchPlaceholder")}
                 value={searchQuery}

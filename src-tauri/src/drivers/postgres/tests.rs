@@ -902,6 +902,62 @@ mod build_pk_predicate_tests {
         assert_eq!(format!("{:?}", param), format!("{:?}", expected));
     }
 
+    // Keyless tables (#598) route numeric-column string values through the
+    // numeric coercion: a plain TEXT bind trips SQLSTATE 42883
+    // ("operator does not exist: numeric = text").
+    #[test]
+    fn numeric_column_string_value_casts_to_numeric() {
+        let (sql, param) =
+            build_pk_predicate("amount", serde_json::json!("1500.00"), 2, Some("numeric"))
+                .unwrap();
+        let (_, pg_type) = param.unwrap();
+        assert_eq!(sql, "\"amount\" = CAST($2 AS numeric)");
+        assert_eq!(pg_type, tokio_postgres::types::Type::NUMERIC);
+    }
+
+    #[test]
+    fn double_precision_column_string_value_casts_to_double() {
+        let (sql, param) =
+            build_pk_predicate("score", serde_json::json!("1.5"), 1, Some("double precision"))
+                .unwrap();
+        let (_, pg_type) = param.unwrap();
+        assert_eq!(sql, "\"score\" = CAST($1 AS double precision)");
+        assert_eq!(pg_type, tokio_postgres::types::Type::FLOAT8);
+    }
+
+    #[test]
+    fn integer_column_string_value_casts_to_bigint() {
+        let (sql, param) =
+            build_pk_predicate("id", serde_json::json!("42"), 1, Some("integer")).unwrap();
+        let (_, pg_type) = param.unwrap();
+        assert_eq!(sql, "\"id\" = CAST($1 AS bigint)");
+        assert_eq!(pg_type, tokio_postgres::types::Type::INT8);
+    }
+
+    #[test]
+    fn numeric_column_unparsable_string_is_rejected() {
+        assert!(
+            build_pk_predicate("amount", serde_json::json!("abc"), 1, Some("numeric")).is_err()
+        );
+    }
+
+    // Temporal columns share the fate of numeric ones in keyless predicates:
+    // a TEXT bind against timestamp trips 42883, so the value casts through
+    // the canonical temporal type with the wire type pinned to TEXT (#401).
+    #[test]
+    fn timestamp_column_string_value_casts_through_text() {
+        let (sql, param) = build_pk_predicate(
+            "imported_at",
+            serde_json::json!("2024-05-01 10:30:00"),
+            3,
+            Some("timestamp without time zone"),
+        )
+        .unwrap();
+        let (_, pg_type) = param.unwrap();
+        assert_eq!(sql, "\"imported_at\" = CAST($3 AS timestamp)");
+        assert_eq!(pg_type, tokio_postgres::types::Type::TEXT);
+    }
+
     #[test]
     fn plain_string_pk_binds_without_cast() {
         let (sql, _) = build_pk_predicate("name", serde_json::json!("alice"), 1, None).unwrap();
