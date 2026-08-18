@@ -30,7 +30,7 @@ function ParamRow({
         @{param.name}
       </span>
       <span className="text-[10px] text-muted">=</span>
-      <input
+      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
         type="text"
         value={param.value}
         onChange={(e) => onValueChange(e.target.value)}
@@ -73,7 +73,7 @@ function AddParamForm({
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-[10px] text-muted shrink-0">@</span>
-      <input
+      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
         type="text"
         value={name}
         onChange={(e) => {
@@ -85,7 +85,7 @@ function AddParamForm({
         onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
       />
       <span className="text-[10px] text-muted">=</span>
-      <input
+      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}

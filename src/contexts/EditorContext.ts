@@ -17,7 +17,10 @@ export interface EditorContextType {
   closeOtherTabs: (id: string) => void;
   closeTabsToLeft: (id: string) => void;
   closeTabsToRight: (id: string) => void;
-  updateTab: (id: string, partial: Partial<Tab>) => void;
+  updateTab: (
+    id: string,
+    partial: Partial<Tab> | ((tab: Tab) => Partial<Tab>),
+  ) => void;
   /**
    * Reorder a tab within its own connection's tab list. `insertAt` is a gap
    * index into the *filtered* (per-connection) `tabs` array — 0 means

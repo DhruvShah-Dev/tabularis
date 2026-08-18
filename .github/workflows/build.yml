@@ -181,7 +181,7 @@ jobs:
           sed -i.bak "0,/^version = \".*\"/s//version = \"$v\"/" src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
           echo "Patched version to $v"
 
-      - uses: tauri-apps/tauri-action@73fb865345c54760d875b94642314f8c0c894afa # v0.6.1
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_BUNDLER_NEW_APPIMAGE_FORMAT: ${{ inputs.experimental_appimage && 'true' || '' }}

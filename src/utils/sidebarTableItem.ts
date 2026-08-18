@@ -9,12 +9,20 @@
  * table only re-renders the two affected items instead of all of them.
  */
 
+import type { DriverCapabilities } from "../types/plugins";
+
 /** Subset of the table item props that actually affect its rendered output. */
 export interface TableItemComparableProps {
   table: { name: string };
   activeTable: string | null;
   connectionId: string;
   driver: string;
+  /** Drives identifier quoting in the nested `SidebarColumnItem` (issue
+   * #614) — must be compared, or a capabilities-only update (e.g. the
+   * driver's manifest finishes resolving after mount) would be silently
+   * skipped by memo and the item would keep quoting as if no capabilities
+   * were available. */
+  capabilities?: DriverCapabilities | null;
   canManage?: boolean;
   schemaVersion: number;
   schema?: string;
@@ -41,6 +49,7 @@ export function areTableItemPropsEqual(
     wasActive === isActive &&
     prev.connectionId === next.connectionId &&
     prev.driver === next.driver &&
+    prev.capabilities === next.capabilities &&
     prev.canManage === next.canManage &&
     prev.schemaVersion === next.schemaVersion &&
     prev.schema === next.schema

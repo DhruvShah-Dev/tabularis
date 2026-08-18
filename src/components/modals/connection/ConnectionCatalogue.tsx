@@ -73,7 +73,7 @@ export function ConnectionCatalogue({
             size={15}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
           />
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

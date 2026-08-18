@@ -17,6 +17,7 @@ import {
   type WhereCondition,
   type OrderByClause,
 } from '../../src/utils/visualQuery';
+import type { PluginManifest } from '../../src/types/plugins';
 
 describe('visualQuery utils', () => {
   describe('collectTableAliases', () => {
@@ -886,6 +887,36 @@ describe('visualQuery utils', () => {
       expect(result).toContain('t1.id');
       expect(result).toContain('t1."order"');
       expect(result).toContain('FROM\n  "user" t1');
+    });
+
+    it('should generate the same postgres SQL for a postgres-dialect plugin manifest as for the bare "postgres" string (issue #614)', () => {
+      const nodes: QueryNode[] = [
+        {
+          id: 'n1',
+          data: {
+            label: 'user',
+            columns: [{ name: 'id', type: 'INT' }, { name: 'order', type: 'INT' }],
+            selectedColumns: { id: true, order: true },
+          },
+        },
+      ];
+      const pluginManifest: PluginManifest = {
+        id: 'postgresql',
+        name: 'PostgreSQL',
+        version: '1.0.0',
+        description: '',
+        default_port: 5432,
+        capabilities: {
+          schemas: true, views: true, routines: true,
+          file_based: false, folder_based: false,
+          identifier_quote: '"', alter_primary_key: true,
+          sql_dialect: 'postgres',
+        },
+      };
+
+      const result = generateVisualQuerySQL(nodes, [], [], [], [], '', pluginManifest);
+
+      expect(result).toBe(generateVisualQuerySQL(nodes, [], [], [], [], '', 'postgres'));
     });
 
     it('should quote postgres SQL when the driver id is postgresql', () => {

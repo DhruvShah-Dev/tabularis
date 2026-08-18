@@ -157,7 +157,8 @@ export const AiQueryModal = ({
             <label className="block text-sm font-medium text-secondary mb-2">
               Describe your query in natural language
             </label>
-            <textarea
+            {/* Prose field: natural-language input, so spellcheck/autocorrect stay ON; only the WebKit autofill pill is disabled. */}
+            <textarea autoComplete="off" spellCheck={true}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="e.g. Find all users who signed up last month and ordered a 'Premium' plan..."

@@ -105,7 +105,7 @@ export const FilterRow = ({
       {noValue && <div className="flex-1" />}
       {isBetween && (
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <input
+          <input autoComplete="off"
             type="text"
             spellCheck={false}
             autoCorrect="off"
@@ -117,7 +117,7 @@ export const FilterRow = ({
             placeholder={t("toolbar.fromPlaceholder")}
           />
           <span className="text-[10px] text-muted shrink-0 font-mono uppercase tracking-wider">AND</span>
-          <input
+          <input autoComplete="off"
             type="text"
             spellCheck={false}
             autoCorrect="off"

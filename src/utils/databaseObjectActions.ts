@@ -6,8 +6,16 @@ import type {
   EditorNavigationRequest,
   TableEditorNavigationRequest,
 } from "../types/editor";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 import { quoteTableRef } from "./identifiers";
 import { newConsoleForTable } from "./newConsole";
+
+/** Driver argument accepted throughout this module: a bare driver id
+ * string, a resolved manifest, or a bare capabilities object. Capability-
+ * driven when available (issue #614): a postgres-compatible driver
+ * registered under a different id (e.g. a standalone PostgreSQL plugin) is
+ * quoted the same as the builtin "postgres" driver. */
+type DriverArg = string | PluginManifest | DriverCapabilities | null;
 
 export interface DatabaseObjectTarget {
   connectionId: string;
@@ -16,7 +24,7 @@ export interface DatabaseObjectTarget {
 }
 
 interface QueryableObjectOptions extends DatabaseObjectTarget {
-  driver: string | null;
+  driver: DriverArg;
   materialized?: boolean;
   qualifySchema?: boolean;
   title?: string;
@@ -28,7 +36,7 @@ interface QueryableObjectRequests {
 }
 
 interface CountRequestOptions extends DatabaseObjectTarget {
-  driver: string | null;
+  driver: DriverArg;
   qualifySchema?: boolean;
 }
 
@@ -53,7 +61,7 @@ interface DatabaseObjectBase {
 }
 
 interface QueryableDatabaseObjectBase extends DatabaseObjectBase {
-  driver: string | null;
+  driver: DriverArg;
   materialized?: boolean;
   qualifySchema?: boolean;
   title?: string;
@@ -209,7 +217,7 @@ export function createQueryableObjectRequests({
 
 export function createTableConsoleRequest(
   target: DatabaseObjectTarget,
-  driver: string | null,
+  driver: DriverArg,
 ): ConsoleEditorNavigationRequest {
   const spec = newConsoleForTable(
     target.objectName,
@@ -229,7 +237,7 @@ export function createTableConsoleRequest(
 
 export function createTableCountRequest(
   target: DatabaseObjectTarget,
-  driver: string | null,
+  driver: DriverArg,
 ): ConsoleEditorNavigationRequest {
   return createCountRequest({
     ...target,

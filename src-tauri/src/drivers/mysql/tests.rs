@@ -297,6 +297,29 @@ mod push_pk_condition_tests {
     }
 
     #[test]
+    fn binary_wire_value_binds_with_equality() {
+        let wire_value = crate::drivers::common::encode_blob(&[
+            0x55, 0x0e, 0x84, 0x00, 0xe2, 0x9b, 0x41, 0xd4, 0xa7, 0x16, 0x44, 0x66, 0x55, 0x44,
+            0x00, 0x00,
+        ]);
+        assert_eq!(render(serde_json::json!(wire_value)), "`col` = ?");
+    }
+
+    #[test]
+    fn binary_wire_value_inlines_hex_literal_in_text_protocol() {
+        let wire_value = crate::drivers::common::encode_blob(&[0x00, 0x7f, 0xff]);
+        let mut qb = sqlx::QueryBuilder::<sqlx::MySql>::new("");
+        push_pk_condition(
+            &mut qb,
+            "col",
+            &serde_json::json!(wire_value),
+            TextProto::protocol_only(true),
+        )
+        .unwrap();
+        assert_eq!(qb.sql(), "`col` = x'007fff'");
+    }
+
+    #[test]
     fn bool_binds_with_equality() {
         assert_eq!(render(serde_json::json!(true)), "`col` = ?");
     }

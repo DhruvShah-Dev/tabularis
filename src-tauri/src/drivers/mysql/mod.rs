@@ -218,7 +218,16 @@ fn push_pk_value(
             }
         }
         serde_json::Value::String(s) => {
-            if let Some(n) = parse_unsafe_bigint_string(s) {
+            if let Some(bytes) = crate::drivers::common::decode_blob_wire_format(
+                s,
+                crate::drivers::common::DEFAULT_MAX_BLOB_SIZE,
+            ) {
+                if text.enabled {
+                    qb.push(mysql_bytes_literal(&bytes));
+                } else {
+                    qb.push_bind(bytes);
+                }
+            } else if let Some(n) = parse_unsafe_bigint_string(s) {
                 if text.enabled {
                     qb.push(n.to_string());
                 } else {
@@ -1807,7 +1816,7 @@ impl MysqlDriver {
                     triggers: true,
                     user_management: true,
                     supports_ssl: true,
-                    sql_dialect: SqlDialect::Mysql,
+                    sql_dialect: Some(SqlDialect::Mysql),
                 },
                 is_builtin: true,
                 engine: Some("mysql".to_string()),

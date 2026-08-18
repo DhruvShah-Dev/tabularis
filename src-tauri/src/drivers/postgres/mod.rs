@@ -1783,7 +1783,7 @@ impl PostgresDriver {
                     triggers: true,
                     supports_ssl: true,
                     user_management: false,
-                    sql_dialect: SqlDialect::Postgres,
+                    sql_dialect: Some(SqlDialect::Postgres),
                 },
                 is_builtin: true,
                 engine: Some("postgres".to_string()),
