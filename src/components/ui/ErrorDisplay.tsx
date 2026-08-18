@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy } from "lucide-react";
 import type { TFunction } from "i18next";
 
 interface ErrorDisplayProps {
@@ -9,15 +9,33 @@ interface ErrorDisplayProps {
 
 export function ErrorDisplay({ error, t }: ErrorDisplayProps) {
   const [showDetails, setShowDetails] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const separatorIndex = error.indexOf("\n\n");
   const hasDetails = separatorIndex !== -1 && separatorIndex < error.length - 2;
   const brief = hasDetails ? error.slice(0, separatorIndex) : error;
   const details = hasDetails ? error.slice(separatorIndex + 2) : "";
 
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(error);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
-    <div className="p-4 text-red-400 font-mono text-sm bg-red-900/10 h-full overflow-auto">
-      <div className="whitespace-pre-wrap">Error: {brief}</div>
+    <div className="p-4 text-red-400 font-mono text-sm bg-red-900/10 h-full overflow-auto select-text">
+      <div className="flex items-start gap-3">
+        <div className="whitespace-pre-wrap flex-1 min-w-0">Error: {brief}</div>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex items-center gap-1 rounded border border-red-400/30 px-2 py-1 text-xs text-red-300/80 hover:bg-red-400/10 hover:text-red-200 transition-colors select-none shrink-0"
+          title={t("common.copyError")}
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? t("common.copied") : t("common.copy")}
+        </button>
+      </div>
       {hasDetails && (
         <>
           <button
