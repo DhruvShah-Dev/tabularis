@@ -31,6 +31,7 @@ import {
   Home,
   FolderOpen,
   BookOpen,
+  CircleStop,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSettings } from "../../hooks/useSettings";
@@ -52,6 +53,8 @@ import { SlotAnchor } from "../ui/SlotAnchor";
 
 type CardAccent = "green" | "amber" | "blue" | null;
 type AvailableFilter = "all" | "installed" | "updates";
+
+const INSTALL_CANCELLED_ERROR = "PLUGIN_INSTALL_CANCELLED";
 
 /* ── Band palette (deterministic per plugin name) ── */
 
@@ -134,11 +137,11 @@ function PluginCard({
   return (
     <div
       className={clsx(
-        "group relative flex h-full flex-col rounded-xl bg-elevated overflow-hidden",
+        "group relative flex h-full flex-col overflow-hidden rounded-2xl bg-elevated",
         "transition-all duration-200 ease-out",
         "hover:-translate-y-0.5",
         !accent &&
-          "border border-default hover:border-strong hover:shadow-lg hover:shadow-black/20",
+          "border border-default hover:border-strong hover:shadow-xl hover:shadow-black/20",
         accent === "green" && [
           "border border-default border-l-[3px] border-l-green-500/80",
           "hover:border-strong hover:shadow-lg hover:shadow-green-900/30",
@@ -158,35 +161,37 @@ function PluginCard({
       {showBand && (
         <div
           className={clsx(
-            "relative flex h-14 shrink-0 items-center justify-center overflow-hidden",
+            "relative flex h-[72px] shrink-0 items-center justify-center overflow-hidden",
             band.bg,
           )}
         >
-          {/* Subtle radial highlight so the band reads as a "platform" surface, not a flat stripe. */}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.04] via-transparent to-black/20" />
-          {iconUrl ? (
-            <img
-              src={iconUrl}
-              alt=""
-              loading="lazy"
-              className="relative h-10 w-10 object-contain drop-shadow-md"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
-            />
-          ) : (
-            <span
-              className={clsx(
-                "relative select-none text-4xl font-bold leading-none",
-                band.text,
-              )}
-            >
-              {name.trim().charAt(0).toUpperCase()}
-            </span>
-          )}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/[0.08] via-transparent to-black/25" />
+          <div className="pointer-events-none absolute -top-12 left-1/2 h-24 w-40 -translate-x-1/2 rounded-full bg-white/[0.06] blur-2xl" />
+          <div className="relative flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-base/35 shadow-lg shadow-black/15 backdrop-blur-sm transition-transform duration-200 group-hover:scale-105">
+            {iconUrl ? (
+              <img
+                src={iconUrl}
+                alt=""
+                loading="lazy"
+                className="h-9 w-9 object-contain drop-shadow-md"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+            ) : (
+              <span
+                className={clsx(
+                  "select-none text-2xl font-bold leading-none",
+                  band.text,
+                )}
+              >
+                {name.trim().charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
           {!!downloads && downloads > 0 && (
-            <span className="absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded-full bg-black/40 px-1.5 py-px text-[10px] font-medium text-white/80 backdrop-blur-sm">
-              <Download size={9} />
+            <span className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-semibold text-white/75 shadow-sm backdrop-blur-md">
+              <Download size={10} />
               {formatCount(downloads)}
             </span>
           )}
@@ -206,23 +211,23 @@ function PluginCard({
         </div>
       )}
 
-      <div className="flex flex-1 flex-col p-4 gap-2.5">
+      <div className="flex flex-1 flex-col gap-3 p-5">
         {/* Header */}
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {primaryHref ? (
                 <button
                   type="button"
                   onClick={() => openUrl(primaryHref)}
                   title={primaryHref}
-                  className="inline-flex min-w-0 items-center gap-1 text-left text-sm font-semibold text-primary cursor-pointer hover:underline underline-offset-2"
+                  className="inline-flex min-w-0 items-center gap-1.5 text-left text-[15px] font-semibold tracking-tight text-primary transition-colors hover:text-blue-300"
                 >
                   <span className="truncate">{name}</span>
-                  <ExternalLink size={11} className="shrink-0 text-muted" />
+                  <ExternalLink size={12} className="shrink-0 text-muted" />
                 </button>
               ) : (
-                <span className="block truncate text-sm font-semibold text-primary">
+                <span className="block truncate text-[15px] font-semibold tracking-tight text-primary">
                   {name}
                 </span>
               )}
@@ -234,9 +239,9 @@ function PluginCard({
                   aria-label={t("settings.plugins.openHomepage", {
                     defaultValue: "Open homepage",
                   })}
-                  className="text-muted hover:text-primary cursor-pointer transition-colors"
+                  className="rounded-md p-0.5 text-muted transition-colors hover:bg-surface-secondary hover:text-primary"
                 >
-                  <Home size={11} />
+                  <Home size={12} />
                 </button>
               )}
               {onShowReadme && (
@@ -249,9 +254,9 @@ function PluginCard({
                   aria-label={t("connectionCatalogue.viewDetails", {
                     defaultValue: "More details",
                   })}
-                  className="text-muted hover:text-primary cursor-pointer transition-colors"
+                  className="rounded-md p-0.5 text-muted transition-colors hover:bg-surface-secondary hover:text-primary"
                 >
-                  <BookOpen size={11} />
+                  <BookOpen size={12} />
                 </button>
               )}
               {version && (
@@ -261,7 +266,7 @@ function PluginCard({
               )}
             </div>
             {parsedAuthor && (
-              <p className="mt-0.5 text-[10px] text-muted">
+              <p className="mt-1 text-[11px] text-muted">
                 {t("settings.plugins.by")}{" "}
                 {parsedAuthor.url ?? homepage ? (
                   <button
@@ -280,7 +285,7 @@ function PluginCard({
           {status && <div className="shrink-0 mt-0.5">{status}</div>}
         </div>
 
-        <p className="text-xs leading-relaxed text-secondary line-clamp-2 flex-1">
+        <p className="line-clamp-2 flex-1 text-[13px] leading-5 text-secondary">
           {description}
         </p>
 
@@ -291,7 +296,7 @@ function PluginCard({
         )}
       </div>
 
-      <div className="flex min-h-11 items-center justify-end gap-2 border-t border-default bg-base/50 px-4 py-2.5">
+      <div className="flex min-h-14 w-full items-center gap-2 border-t border-default bg-base/40 px-4 py-3">
         {actions}
       </div>
     </div>
@@ -574,6 +579,9 @@ export function PluginsTab({
   const [installingPluginId, setInstallingPluginId] = useState<string | null>(
     null,
   );
+  const [cancellingPluginId, setCancellingPluginId] = useState<string | null>(
+    null,
+  );
   const [pluginInstallError, setPluginInstallError] = useState<{
     pluginId: string;
     error: string;
@@ -742,17 +750,34 @@ export function PluginsTab({
           pluginId;
         onPluginsChanged?.({ type: "install", pluginId, pluginName });
       } catch (err) {
-        setPluginInstallError({
-          pluginId,
-          error: String(err),
-          operation: "install",
-        });
+        if (String(err) !== INSTALL_CANCELLED_ERROR) {
+          setPluginInstallError({
+            pluginId,
+            error: String(err),
+            operation: "install",
+          });
+        }
       } finally {
         setInstallingPluginId(null);
+        setCancellingPluginId(null);
       }
     },
     [refreshRegistry, refreshDrivers, onPluginsChanged, registryPlugins],
   );
+
+  const doCancelInstall = useCallback(async (pluginId: string) => {
+    setCancellingPluginId(pluginId);
+    try {
+      await invoke<boolean>("cancel_plugin_install", { pluginId });
+    } catch (err) {
+      setCancellingPluginId(null);
+      setPluginInstallError({
+        pluginId,
+        error: String(err),
+        operation: "install",
+      });
+    }
+  }, []);
 
   const doRemove = useCallback(
     (pluginId: string, pluginName: string) => {
@@ -1341,14 +1366,14 @@ export function PluginsTab({
                     plugin.kind || remainingTags.length > 0 ? (
                       <>
                         {plugin.kind && (
-                          <span className="rounded-md border border-blue-700/30 bg-blue-900/20 px-1.5 py-px text-blue-300">
+                          <span className="rounded-full border border-blue-700/30 bg-blue-900/20 px-2 py-0.5 font-medium text-blue-300">
                             {plugin.kind}
                           </span>
                         )}
                         {remainingTags.slice(0, 4).map((tag) => (
                           <span
                             key={tag}
-                            className="rounded-md border border-default bg-base px-1.5 py-px"
+                            className="rounded-full border border-default bg-base px-2 py-0.5"
                           >
                             {tag}
                           </span>
@@ -1409,24 +1434,33 @@ export function PluginsTab({
                               (isCompatible ? (
                                 <button
                                   onClick={() =>
-                                    doInstall(plugin.id, selectedVer)
+                                    installingPluginId === plugin.id
+                                      ? doCancelInstall(plugin.id)
+                                      : doInstall(plugin.id, selectedVer)
                                   }
                                   disabled={
-                                    installingPluginId === plugin.id
+                                    (installingPluginId !== null &&
+                                      installingPluginId !== plugin.id) ||
+                                    cancellingPluginId === plugin.id
                                   }
-                                  className={`w-full flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium text-white transition-colors disabled:opacity-50 ${
-                                    isDowngrade
-                                      ? "bg-amber-600 hover:bg-amber-500"
-                                      : isUpdate
-                                        ? "bg-green-600 hover:bg-green-500"
-                                        : "bg-blue-600 hover:bg-blue-500"
-                                  }`}
+                                  className={clsx(
+                                    "flex min-h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors disabled:opacity-50",
+                                    installingPluginId === plugin.id
+                                      ? "bg-red-600 hover:bg-red-500"
+                                      : isDowngrade
+                                        ? "bg-amber-600 hover:bg-amber-500"
+                                        : isUpdate
+                                          ? "bg-green-600 hover:bg-green-500"
+                                          : "bg-blue-600 hover:bg-blue-500",
+                                  )}
                                 >
-                                  {installingPluginId === plugin.id ? (
+                                  {cancellingPluginId === plugin.id ? (
                                     <Loader2
                                       size={12}
                                       className="animate-spin"
                                     />
+                                  ) : installingPluginId === plugin.id ? (
+                                    <CircleStop size={12} />
                                   ) : isDowngrade ? (
                                     <RotateCcw size={12} />
                                   ) : isUpdate ? (
@@ -1434,27 +1468,29 @@ export function PluginsTab({
                                   ) : (
                                     <Download size={12} />
                                   )}
-                                  {isDowngrade
-                                    ? `${t("settings.plugins.downgrade")} v${selectedVer}`
-                                    : isUpdate
-                                      ? `${t("settings.plugins.update")} v${selectedVer}`
-                                      : `${t("settings.plugins.install")} v${selectedVer}`}
+                                  {installingPluginId === plugin.id
+                                    ? t("common.cancel")
+                                    : isDowngrade
+                                      ? `${t("settings.plugins.downgrade")} v${selectedVer}`
+                                      : isUpdate
+                                        ? `${t("settings.plugins.update")} v${selectedVer}`
+                                        : `${t("settings.plugins.install")} v${selectedVer}`}
                                 </button>
                               ) : (
-                                <div className="w-full flex flex-col items-end gap-1">
+                                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                                   <button
                                     disabled
                                     title={t(
                                       "settings.plugins.requiresVersion",
                                       { version: minVersion },
                                     )}
-                                    className="w-full flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium text-muted bg-surface-tertiary cursor-not-allowed opacity-50"
+                                    className="flex min-h-8 w-full cursor-not-allowed items-center justify-center gap-1.5 rounded-lg border border-default bg-surface-tertiary px-4 py-1.5 text-xs font-medium text-muted opacity-60"
                                   >
                                     <Download size={12} />
                                     {t("settings.plugins.install")} v
                                     {selectedVer}
                                   </button>
-                                  <span className="text-[10px] text-amber-400/80 text-right">
+                                  <span className="truncate text-center text-[10px] font-medium text-amber-400/90">
                                     {t("settings.plugins.requiresVersion", {
                                       version: minVersion,
                                     })}

@@ -1,10 +1,14 @@
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use tokio::time::sleep;
+
+use super::install_cancellation::{InstallCancellation, INSTALL_CANCELLED_ERROR};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InstalledPluginInfo {
@@ -158,7 +162,9 @@ pub async fn download_and_install(
     download_url: &str,
     expected_sha256: Option<&str>,
     expected_version: Option<&str>,
+    cancellation: &InstallCancellation,
 ) -> Result<(), String> {
+    cancellation.check()?;
     let plugins_dir = get_plugins_dir()?;
     let tmp_dir = plugins_dir.join(format!(".tmp-{}", plugin_id));
     let final_dir = plugins_dir.join(plugin_id);
@@ -171,9 +177,13 @@ pub async fn download_and_install(
 
     // Download ZIP to memory
     log::info!("Downloading plugin '{}' from: {}", plugin_id, download_url);
-    let response = reqwest::get(download_url)
-        .await
-        .map_err(|e| format!("Failed to download plugin: {}", e))?;
+    let response = tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => return Err(INSTALL_CANCELLED_ERROR.to_string()),
+        result = reqwest::get(download_url) => {
+            result.map_err(|e| format!("Failed to download plugin: {}", e))?
+        }
+    };
 
     let status = response.status();
     let content_type = response
@@ -204,10 +214,13 @@ pub async fn download_and_install(
         ));
     }
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read plugin download: {}", e))?;
+    let bytes = tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => return Err(INSTALL_CANCELLED_ERROR.to_string()),
+        result = response.bytes() => {
+            result.map_err(|e| format!("Failed to read plugin download: {}", e))?
+        }
+    };
 
     log::info!(
         "Plugin '{}' downloaded {} bytes (content-type: {})",
@@ -241,6 +254,8 @@ pub async fn download_and_install(
         log::info!("Plugin '{}' SHA-256 verified ({})", plugin_id, actual);
     }
 
+    cancellation.check()?;
+
     // Extract to temp dir
     fs::create_dir_all(&tmp_dir).map_err(|e| format!("Failed to create temp directory: {}", e))?;
 
@@ -262,6 +277,12 @@ pub async fn download_and_install(
     })?;
 
     for i in 0..archive.len() {
+        if cancellation.is_cancelled() {
+            drop(archive);
+            fs::remove_dir_all(&tmp_dir).ok();
+            return Err(INSTALL_CANCELLED_ERROR.to_string());
+        }
+
         let mut file = archive
             .by_index(i)
             .map_err(|e| format!("Failed to read ZIP entry: {}", e))?;
@@ -282,8 +303,22 @@ pub async fn download_and_install(
                 }
             }
             let mut buf = Vec::new();
-            file.read_to_end(&mut buf)
-                .map_err(|e| format!("Failed to read ZIP file content: {}", e))?;
+            let mut chunk = [0_u8; 64 * 1024];
+            while !cancellation.is_cancelled() {
+                let read = file
+                    .read(&mut chunk)
+                    .map_err(|e| format!("Failed to read ZIP file content: {}", e))?;
+                if read == 0 {
+                    break;
+                }
+                buf.extend_from_slice(&chunk[..read]);
+            }
+            if cancellation.is_cancelled() {
+                drop(file);
+                drop(archive);
+                fs::remove_dir_all(&tmp_dir).ok();
+                return Err(INSTALL_CANCELLED_ERROR.to_string());
+            }
             fs::write(&out_path, &buf).map_err(|e| format!("Failed to write file: {}", e))?;
 
             // Set executable permissions on Unix
@@ -334,8 +369,21 @@ pub async fn download_and_install(
         }
     }
 
-    // Remove existing plugin dir if present
+    // Cancellation remains safe until this commit point: the existing plugin
+    // is still registered and its files have not been touched.
+    if cancellation.is_cancelled() {
+        fs::remove_dir_all(&tmp_dir).ok();
+        return Err(INSTALL_CANCELLED_ERROR.to_string());
+    }
+
+    // Updating an installed plugin must stop its process immediately before
+    // replacing files, otherwise the OS may keep them locked. Once this short
+    // commit phase starts, installation is completed atomically rather than
+    // leaving the existing plugin disabled.
     if final_dir.exists() {
+        crate::drivers::registry::unregister_driver(plugin_id).await;
+        crate::drivers::registry::unregister_manifest(plugin_id).await;
+        sleep(Duration::from_millis(500)).await;
         fs::remove_dir_all(&final_dir)
             .map_err(|e| format!("Failed to remove existing plugin: {}", e))?;
     }

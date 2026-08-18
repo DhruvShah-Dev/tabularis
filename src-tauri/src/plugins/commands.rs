@@ -1,12 +1,10 @@
 use std::fs;
-use std::time::Duration;
 
 use crate::drivers::driver_trait::PluginManifest;
 use crate::plugins::installer::{self, InstalledPluginInfo};
 use crate::plugins::manager::ConfigManifest;
 use crate::plugins::registry::{self, RegistryPlugin, RegistryPluginWithStatus, RegistryReleaseWithStatus};
 use tauri::AppHandle;
-use tokio::time::sleep;
 
 /// Resolves which Tabularium registry to talk to. Operators pin a
 /// URL via `tabularium_registry_url` in `config.json`; otherwise the
@@ -157,11 +155,9 @@ pub async fn install_plugin(
     plugin_id: String,
     version: Option<String>,
 ) -> Result<(), String> {
-    // Updating an installed plugin must stop the existing process first,
-    // otherwise the OS may keep files locked while we replace the directory.
-    crate::drivers::registry::unregister_driver(&plugin_id).await;
-    crate::drivers::registry::unregister_manifest(&plugin_id).await;
-    sleep(Duration::from_millis(500)).await;
+    let install_guard = crate::plugins::install_cancellation::begin(&plugin_id)?;
+    let cancellation = install_guard.cancellation();
+    cancellation.check()?;
 
     let config = crate::config::load_config_internal(&app);
     let platform = registry::get_current_platform();
@@ -206,11 +202,13 @@ pub async fn install_plugin(
     // happens inside download_and_install, while the bundle is still in its
     // temp dir — a mismatching archive is discarded without ever touching an
     // existing installation.
+    cancellation.check()?;
     installer::download_and_install(
         &plugin_id,
         &download_url,
         expected_sha256.as_deref(),
         Some(&target_version),
+        cancellation,
     )
     .await?;
 
@@ -225,6 +223,11 @@ pub async fn install_plugin(
         .map_err(|e| format!("Plugin installed but failed to load: {}", e))?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn cancel_plugin_install(plugin_id: String) -> bool {
+    crate::plugins::install_cancellation::cancel(&plugin_id)
 }
 
 #[tauri::command]
