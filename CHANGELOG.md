@@ -1,4 +1,4 @@
-# [0.20.0](https://github.com/TabularisDB/tabularis/compare/v0.19.0...v0.20.0) (2026-08-17)
+# [0.20.0](https://github.com/TabularisDB/tabularis/compare/v0.19.0...v0.20.0) (2026-08-18)
 
 
 ### Bug Fixes
