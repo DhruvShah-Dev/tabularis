@@ -1821,12 +1821,17 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
     // Monaco Editor: handle selection and multi-query
     if (!editorsRef.current[activeTab.id]) {
-      // Fallback: no cursor context available (editor ref not mounted, e.g.
-      // after tab restore) — run everything, same precedent as runAutoQuery.
+      // Fallback: no cursor context available (editor not mounted yet). Never
+      // fire a whole script the user didn't ask for — with more than one
+      // statement, ask which one to run.
       if (activeTab.query?.trim()) {
         const queries = splitQueries(activeTab.query, activeDialect);
-        if (queries.length <= 1) runQuery(queries[0] || activeTab.query, 1);
-        else runMultipleQueries(queries);
+        if (queries.length <= 1) {
+          runQuery(queries[0] || activeTab.query, 1);
+        } else {
+          setSelectableQueries(queries);
+          setIsQuerySelectionModalOpen(true);
+        }
       }
       return;
     }
@@ -3094,9 +3099,12 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
   ) => {
     editorsRef.current[tabId] = editor;
     setMonacoInstance(monaco);
-    // Focus the editor when a console tab is opened (Ctrl+T / new console)
+    // Focus the editor when a console tab is opened (Ctrl+T / new console).
+    // Background tabs mount too, and must not steal focus from the active one.
     const mountedTab = tabsRef.current.find((t) => t.id === tabId);
-    if (mountedTab?.type === "console") editor.focus();
+    if (mountedTab?.type === "console" && tabId === activeTabIdRef.current) {
+      editor.focus();
+    }
     editor.addAction({
       id: "run-selection",
       label: "Execute Selection",
@@ -3980,11 +3988,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                 onRun={handleRunButton}
                 onRunAll={handleRunAll}
                 onRunContextChange={isActive ? handleRunContextChange : undefined}
-                onMount={
-                  isActive
-                    ? (editor, monaco) =>
-                        handleEditorMount(editor, monaco, tab.id)
-                    : undefined
+                onMount={(editor, monaco) =>
+                  handleEditorMount(editor, monaco, tab.id)
                 }
                 editorKey={tab.id}
                 options={{
