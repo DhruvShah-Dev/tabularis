@@ -455,6 +455,59 @@ describe('autocomplete', () => {
   });
 
   describe('dot trigger (table.column)', () => {
+    it('should suggest tables after an active database qualifier', async () => {
+      const monaco = createMockMonaco();
+      const tables: TableInfo[] = [
+        { name: 'Addresses', schema: 'Ops' },
+        { name: 'AuditLog', schema: 'Ops' },
+        { name: 'Addresses', schema: 'Archive' },
+      ];
+
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        tables,
+        'Ops',
+        'mysql',
+      );
+
+      const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+      const value = 'SELECT * FROM Ops.';
+      const result = await provider.provideCompletionItems(
+        createMockModel(value),
+        { lineNumber: 1, column: value.length + 1 },
+      );
+
+      expect(result.suggestions.map((suggestion: { label: string }) => suggestion.label))
+        .toEqual(['Addresses', 'AuditLog']);
+      expect(result.suggestions[0]?.insertText).toBe('Addresses');
+      expect(result.suggestions[0]?.detail).toBe('Table · Ops');
+      expect(invoke).not.toHaveBeenCalled();
+    });
+
+    it('should replace only the partial table name after a database qualifier', async () => {
+      const monaco = createMockMonaco();
+      registerSqlAutocomplete(
+        monaco as unknown as Parameters<typeof registerSqlAutocomplete>[0],
+        'conn1',
+        [{ name: 'Addresses', schema: 'Ops' }],
+        'Ops',
+        'mysql',
+      );
+
+      const provider = monaco.languages.registerCompletionItemProvider.mock.calls[0][1];
+      const value = 'SELECT * FROM Ops.Add';
+      const result = await provider.provideCompletionItems(
+        createMockModel(value, 'Add'),
+        { lineNumber: 1, column: value.length + 1 },
+      );
+
+      expect(result.suggestions[0]?.label).toBe('Addresses');
+      expect(result.suggestions[0]?.range.startColumn).toBe(value.length - 2);
+      expect(result.suggestions[0]?.range.endColumn).toBe(value.length + 1);
+      expect(invoke).not.toHaveBeenCalled();
+    });
+
     it('should provide column suggestions after typing table name with dot', async () => {
       const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
       mockInvoke.mockResolvedValue([
