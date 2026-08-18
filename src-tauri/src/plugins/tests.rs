@@ -2,8 +2,36 @@ use std::fs;
 
 use tempfile::tempdir;
 
+use super::install_cancellation::{begin, cancel, INSTALL_CANCELLED_ERROR};
 use super::installer::{has_manifest, migrate_plugins_between, read_plugin_info_from_dir};
 use super::manager::ConfigManifest;
+
+#[test]
+fn cancellation_marks_an_active_install() {
+    let guard = begin("cancellation-test-plugin").expect("begin install");
+
+    assert!(!guard.cancellation().is_cancelled());
+    assert!(cancel("cancellation-test-plugin"));
+    assert_eq!(
+        guard.cancellation().check().expect_err("cancelled install"),
+        INSTALL_CANCELLED_ERROR
+    );
+
+    drop(guard);
+    assert!(!cancel("cancellation-test-plugin"));
+}
+
+#[test]
+fn duplicate_install_is_rejected_until_guard_is_dropped() {
+    let guard = begin("duplicate-install-test-plugin").expect("begin install");
+    let error = begin("duplicate-install-test-plugin")
+        .err()
+        .expect("duplicate install must fail");
+    assert!(error.contains("already running"));
+
+    drop(guard);
+    assert!(begin("duplicate-install-test-plugin").is_ok());
+}
 
 #[test]
 fn reads_canonical_tabularium_manifest() {
