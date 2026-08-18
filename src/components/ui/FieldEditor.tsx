@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Sparkles, Ban, Eraser, FileDigit } from "lucide-react";
 import { GeometryInput } from "./GeometryInput";
 import { BlobInput } from "./BlobInput";
+import { BlobHexInput } from "./BlobHexInput";
 import { DateInput } from "./DateInput";
 import { JsonInput } from "./JsonInput";
 import { TextInput } from "./TextInput";
@@ -14,7 +15,11 @@ import {
   parseSetValues,
 } from "../../utils/columnTypes";
 import { EnumSetInput } from "./EnumSetInput";
-import { isBlobColumn } from "../../utils/blob";
+import {
+  blobValueToEditableHex,
+  isBlobColumn,
+  isBlobWireFormat,
+} from "../../utils/blob";
 import {
   isJsonColumn,
   isJsonContent,
@@ -75,7 +80,10 @@ export const FieldEditor = ({
 }: FieldEditorProps) => {
   const { t } = useTranslation();
   const isGeometric = type && isGeometricType(type);
-  const isBlob = type && isBlobColumn(type, characterMaximumLength);
+  const isBlob =
+    type &&
+    (isBlobColumn(type, characterMaximumLength) || isBlobWireFormat(value));
+  const editableBlobHex = isBlob ? blobValueToEditableHex(value) : null;
   const isJsonByType = !!(type && (isJsonColumn(type) || isHstoreColumn(type)));
   const detectedJson =
     !isBlob &&
@@ -121,17 +129,25 @@ export const FieldEditor = ({
 
   const inputElement = isBlob ? (
     <div className={`${className}`}>
-      <BlobInput
-        value={value}
-        dataType={type}
-        onChange={(newValue) => onChange(newValue)}
-        placeholder={defaultPlaceholder}
-        connectionId={connectionId}
-        tableName={tableName}
-        pkMap={pkMap}
-        colName={name}
-        schema={schema}
-      />
+      {editableBlobHex !== null ? (
+        <BlobHexInput
+          key={String(value)}
+          value={value}
+          onChange={(newValue) => onChange(newValue)}
+        />
+      ) : (
+        <BlobInput
+          value={value}
+          dataType={type}
+          onChange={(newValue) => onChange(newValue)}
+          placeholder={defaultPlaceholder}
+          connectionId={connectionId}
+          tableName={tableName}
+          pkMap={pkMap}
+          colName={name}
+          schema={schema}
+        />
+      )}
     </div>
   ) : isGeometric ? (
     <div className={`bg-base border border-strong rounded-lg p-3 ${className}`}>
@@ -177,7 +193,7 @@ export const FieldEditor = ({
       className={className}
     />
   ) : (
-    <textarea
+    <textarea autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
       value={String(value ?? "")}
       onChange={(e) => onChange(e.target.value)}
       placeholder={defaultPlaceholder}

@@ -741,7 +741,7 @@ const BulkGroupSelector = ({
           </div>
           {value === GROUP_NEW && (
             <div className="mt-2 flex items-center gap-2">
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                 type="text"
                 value={newGroupName}
                 autoFocus
@@ -927,7 +927,7 @@ const PreviewRow = ({
           />
           {groupChoice === GROUP_NEW && (
             <>
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                 type="text"
                 value={newGroupName}
                 onChange={(e) => onNewGroupNameChange(e.target.value)}

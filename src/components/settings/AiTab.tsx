@@ -382,7 +382,7 @@ export function AiTab() {
                   <div className="space-y-2">
                     <div className="flex gap-2">
                       <div className="relative flex-1 group">
-                        <input
+                        <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                           type={showKey ? "text" : "password"}
                           value={keyInput}
                           placeholder={t("settings.ai.enterKey", {
@@ -436,7 +436,7 @@ export function AiTab() {
                 <label className="block text-sm font-medium text-secondary">
                   {t("settings.ai.endpointUrl")}
                 </label>
-                <input
+                <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                   type="text"
                   value={settings.aiCustomOpenaiUrl || ""}
                   onChange={(e) =>
@@ -498,7 +498,7 @@ export function AiTab() {
                   <label className="text-sm text-secondary whitespace-nowrap">
                     {t("settings.ai.ollamaPort")}:
                   </label>
-                  <input
+                  <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                     type="number"
                     value={settings.aiOllamaPort || 11434}
                     onChange={(e) =>
@@ -636,7 +636,7 @@ export function AiTab() {
                 </button>
                 {isOpen && (
                   <div className="px-5 pb-5 pt-1 border-t border-default">
-                    <textarea
+                    <textarea autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       className="w-full h-36 bg-base border border-strong rounded-lg p-3 text-primary text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors resize-y"

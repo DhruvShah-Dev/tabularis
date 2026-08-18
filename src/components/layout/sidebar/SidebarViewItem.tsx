@@ -15,6 +15,7 @@ import { SidebarIndexList } from "./SidebarIndexList";
 import { groupIndexes } from "../../../utils/indexes";
 import type { TableColumn, Index } from "../../../types/schema";
 import type { ContextMenuData } from "../../../types/sidebar";
+import type { DriverCapabilities } from "../../../types/plugins";
 
 interface SidebarViewItemProps {
   view: { name: string };
@@ -30,6 +31,9 @@ interface SidebarViewItemProps {
   ) => void;
   connectionId: string;
   driver: string;
+  /** Capability-driven identifier quoting (issue #614): forwarded to
+   * `SidebarColumnItem`, which prefers it over the bare `driver` id. */
+  capabilities?: DriverCapabilities | null;
   schema?: string;
   materialized?: boolean;
   isRefreshing?: boolean;
@@ -43,6 +47,7 @@ export const SidebarViewItem = ({
   onContextMenu,
   connectionId,
   driver,
+  capabilities,
   schema,
   materialized = false,
   isRefreshing = false,
@@ -168,6 +173,7 @@ export const SidebarViewItem = ({
                     tableName={view.name}
                     connectionId={connectionId}
                     driver={driver}
+                    capabilities={capabilities}
                     onRefresh={refreshColumns}
                     onEdit={() => {}}
                     isView={true}

@@ -24,6 +24,7 @@ jobs:
       ref: ${{ steps.meta.outputs.ref }}
       tag: ${{ steps.meta.outputs.tag }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
+      body: ${{ steps.body.outputs.body }}
     steps:
       - name: Resolve build ref + tag
         id: meta
@@ -49,6 +50,43 @@ jobs:
             fi
           fi
 
+      # The changelog mapping lives on the tagged commit, not on PR heads,
+      # so always read it from the ref that triggered the workflow.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Prepend the announcement blog post (from src/data/changelog.ts) to the
+      # release body when one exists for this version. GitHub's auto-generated
+      # "What's Changed" section is appended after the body, so the link always
+      # shows up above it.
+      - name: Compose release body
+        id: body
+        shell: bash
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          blog_url="$(node -e '
+            const fs = require("fs");
+            const src = fs.readFileSync("src/data/changelog.ts", "utf8");
+            const version = process.argv[1];
+            const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const m = src.match(new RegExp(`"${escaped}":\\s*"([^"]+)"`));
+            if (m) process.stdout.write(m[1]);
+          ' "$version")"
+          {
+            echo "body<<RELEASE_BODY_EOF"
+            if [ -n "$blog_url" ]; then
+              echo "📖 **Read the announcement blog post:** ${blog_url}?utm_src=github-release"
+              echo ""
+            fi
+            echo "See the assets below to download this version and install."
+            echo ""
+            echo "---"
+            echo "**Stay in touch:** [Website](https://tabularis.dev) · [Discord](https://discord.com/invite/K2hmhfHRSt) · [X](https://x.com/tabularisdb) · [Bluesky](https://bsky.app/profile/tabularis.bsky.social) · [Mastodon](https://mastodon.social/@tabularis) · [GitHub](https://github.com/TabularisDB/tabularis)"
+            echo "RELEASE_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
   publish-tauri:
     needs: meta
     permissions:
@@ -59,10 +97,6 @@ jobs:
       ref: ${{ needs.meta.outputs.ref }}
       tag: ${{ needs.meta.outputs.tag }}
       release_name: "v__VERSION__"
-      release_body: |
-        See the assets below to download this version and install.
-
-        ---
-        **Stay in touch:** [Website](https://tabularis.dev) · [Discord](https://discord.com/invite/K2hmhfHRSt) · [X](https://x.com/tabularisdb) · [Bluesky](https://bsky.app/profile/tabularis.bsky.social) · [Mastodon](https://mastodon.social/@tabularis) · [GitHub](https://github.com/TabularisDB/tabularis)
+      release_body: ${{ needs.meta.outputs.body }}
       draft: true
       prerelease: ${{ needs.meta.outputs.prerelease == 'true' }}

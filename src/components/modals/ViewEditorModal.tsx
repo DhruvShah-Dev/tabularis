@@ -212,7 +212,7 @@ export const ViewEditorModal = ({
             <label htmlFor="view-name" className="text-xs uppercase font-bold text-muted mb-1 block">
               {t("views.viewName")}
             </label>
-            <input
+            <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
               id="view-name"
               type="text"
               value={name}

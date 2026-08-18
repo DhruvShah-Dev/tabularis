@@ -11,7 +11,7 @@ import {
   type ConnectionParams,
   type DatabaseDriver,
 } from '../../src/utils/connections';
-import type { DriverCapabilities } from '../../src/types/plugins';
+import type { DriverCapabilities, PluginManifest } from '../../src/types/plugins';
 import type { SavedConnection } from '../../src/contexts/DatabaseContext';
 
 const makeFileCaps = (): DriverCapabilities => ({
@@ -96,6 +96,42 @@ describe('connections', () => {
 
     it('should return 0 for SQLite', () => {
       expect(getDefaultPort('sqlite')).toBe(0);
+    });
+
+    it('should return 0 for an unrecognized bare driver id (e.g. a plugin id with no manifest resolved)', () => {
+      expect(getDefaultPort('postgresql')).toBe(0);
+    });
+
+    it('should read default_port off a PluginManifest for a non-"postgres" plugin id (issue #614)', () => {
+      const manifest: PluginManifest = {
+        id: 'postgresql',
+        name: 'PostgreSQL',
+        version: '1.0.0',
+        description: '',
+        default_port: 5432,
+        capabilities: {
+          schemas: true, views: true, routines: true,
+          file_based: false, folder_based: false,
+          identifier_quote: '"', alter_primary_key: true,
+        },
+      };
+      expect(getDefaultPort(manifest)).toBe(5432);
+    });
+
+    it('should fall back to 0 when a PluginManifest declares no default_port', () => {
+      const manifest: PluginManifest = {
+        id: 'some-plugin',
+        name: 'Some Plugin',
+        version: '1.0.0',
+        description: '',
+        default_port: null,
+        capabilities: {
+          schemas: false, views: false, routines: false,
+          file_based: false, folder_based: false,
+          identifier_quote: '"', alter_primary_key: false,
+        },
+      };
+      expect(getDefaultPort(manifest)).toBe(0);
     });
   });
 
@@ -288,6 +324,26 @@ describe('connections', () => {
 
     it('should return human-readable label for SQLite', () => {
       expect(getDriverLabel('sqlite')).toBe('SQLite');
+    });
+
+    it('should return an all-caps fallback for an unrecognized bare driver id', () => {
+      expect(getDriverLabel('postgresql')).toBe('POSTGRESQL');
+    });
+
+    it('should read name off a PluginManifest for a non-"postgres" plugin id (issue #614), not the all-caps fallback', () => {
+      const manifest: PluginManifest = {
+        id: 'postgresql',
+        name: 'PostgreSQL',
+        version: '1.0.0',
+        description: '',
+        default_port: 5432,
+        capabilities: {
+          schemas: true, views: true, routines: true,
+          file_based: false, folder_based: false,
+          identifier_quote: '"', alter_primary_key: true,
+        },
+      };
+      expect(getDriverLabel(manifest)).toBe('PostgreSQL');
     });
   });
 

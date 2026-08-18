@@ -46,6 +46,37 @@ vi.mock("../../../src/utils/notebookStore", async (importOriginal) => {
 // (the global setup mock only stubs a fixed subset).
 vi.mock("lucide-react", async (importOriginal) => await importOriginal());
 
+const sidebarItemMocks = vi.hoisted(() => ({
+  sidebarTableItemProps: [] as Array<Record<string, unknown>>,
+  sidebarViewItemProps: [] as Array<Record<string, unknown>>,
+}));
+
+vi.mock("../../../src/components/layout/sidebar/SidebarTableItem", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("../../../src/components/layout/sidebar/SidebarTableItem")
+  >();
+  return {
+    ...actual,
+    SidebarTableItem: (props: Record<string, unknown>) => {
+      sidebarItemMocks.sidebarTableItemProps.push(props);
+      return <actual.SidebarTableItem {...(props as Parameters<typeof actual.SidebarTableItem>[0])} />;
+    },
+  };
+});
+
+vi.mock("../../../src/components/layout/sidebar/SidebarViewItem", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("../../../src/components/layout/sidebar/SidebarViewItem")
+  >();
+  return {
+    ...actual,
+    SidebarViewItem: (props: Record<string, unknown>) => {
+      sidebarItemMocks.sidebarViewItemProps.push(props);
+      return <actual.SidebarViewItem {...(props as Parameters<typeof actual.SidebarViewItem>[0])} />;
+    },
+  };
+});
+
 const DISPLAY = "could not connect: TLS handshake failed";
 const DEBUG = 'InvalidCertificate(UnknownIssuer)\n  caused by: certificate verify failed';
 const RAW_ERROR = `${DISPLAY}\n\n${DEBUG}`;
@@ -350,5 +381,106 @@ describe("ExplorerSidebar — database object navigation", () => {
         name: "sidebar.viewTriggerDefinition",
       }),
     ).toBeDisabled();
+  });
+});
+
+describe("ExplorerSidebar — capabilities threading (issue #614)", () => {
+  const databaseState = {
+    activeConnectionId: "c1" as string | null,
+    activeDriver: "postgresql",
+    activeCapabilities: { sql_dialect: "postgres", identifier_quote: '"' },
+    activeTable: null,
+    setActiveTable: vi.fn(),
+    tables: [{ name: "orders" }],
+    views: [{ name: "active_orders" }],
+    routines: [],
+    triggers: [],
+    schemas: [] as string[],
+    connectionDataMap: { c1: {} },
+    schemaDataMap: {},
+    databaseDataMap: {},
+    selectedSchemas: [] as string[],
+    selectedDatabases: [] as string[],
+    connections: [],
+    isLoadingTables: false,
+    isLoadingSchemas: false,
+    connect: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sidebarItemMocks.sidebarTableItemProps.length = 0;
+    sidebarItemMocks.sidebarViewItemProps.length = 0;
+
+    vi.mocked(useDatabaseObjectNavigation).mockReturnValue({
+      open: vi.fn(),
+      count: vi.fn(),
+      newConsole: vi.fn(),
+      openRoutineDefinition: vi.fn(),
+      openTriggerDefinition: vi.fn(),
+      openDefinition: vi.fn(),
+    } as unknown as ReturnType<typeof useDatabaseObjectNavigation>);
+
+    vi.mocked(useDatabase).mockReturnValue(
+      databaseState as unknown as ReturnType<typeof useDatabase>,
+    );
+
+    vi.mocked(useSavedQueries).mockReturnValue({
+      queries: [],
+      deleteQuery: vi.fn(),
+      updateQuery: vi.fn(),
+      saveQuery: vi.fn(),
+    } as unknown as ReturnType<typeof useSavedQueries>);
+
+    vi.mocked(useQueryHistory).mockReturnValue({
+      entries: [],
+      isLoading: false,
+      deleteEntry: vi.fn(),
+      clearHistory: vi.fn(),
+      recoveryNotice: null,
+      dismissRecoveryNotice: vi.fn(),
+    } as unknown as ReturnType<typeof useQueryHistory>);
+
+    vi.mocked(useAlert).mockReturnValue({
+      showAlert: vi.fn(),
+    } as unknown as ReturnType<typeof useAlert>);
+
+    vi.mocked(useDrivers).mockReturnValue({
+      allDrivers: [],
+    } as unknown as ReturnType<typeof useDrivers>);
+
+    vi.mocked(useEditor).mockReturnValue({
+      tabs: [],
+      openNotebook: vi.fn(),
+      updateTab: vi.fn(),
+      closeTab: vi.fn(),
+    } as unknown as ReturnType<typeof useEditor>);
+
+    vi.mocked(useSettings).mockReturnValue({
+      settings: { displayTimezone: "auto" },
+    } as unknown as ReturnType<typeof useSettings>);
+
+    vi.mocked(useConnectionLayoutContext).mockReturnValue({
+      splitView: { connectionIds: [] },
+      isSplitVisible: false,
+      explorerConnectionId: null,
+      setExplorerConnectionId: vi.fn(),
+    } as unknown as ReturnType<typeof useConnectionLayoutContext>);
+  });
+
+  it("passes activeCapabilities through to SidebarTableItem, not just the driver id", () => {
+    renderSidebar();
+    expect(sidebarItemMocks.sidebarTableItemProps).toHaveLength(1);
+    expect(sidebarItemMocks.sidebarTableItemProps[0].capabilities).toBe(
+      databaseState.activeCapabilities,
+    );
+  });
+
+  it("passes activeCapabilities through to SidebarViewItem, not just the driver id", () => {
+    renderSidebar();
+    expect(sidebarItemMocks.sidebarViewItemProps).toHaveLength(1);
+    expect(sidebarItemMocks.sidebarViewItemProps[0].capabilities).toBe(
+      databaseState.activeCapabilities,
+    );
   });
 });

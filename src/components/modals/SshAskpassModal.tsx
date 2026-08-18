@@ -85,7 +85,7 @@ export const SshAskpassModal = ({
           </p>
 
           {isSecret && (
-            <input
+            <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
               type="password"
               value={value}
               onChange={(e) => setValue(e.target.value)}

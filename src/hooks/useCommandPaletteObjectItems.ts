@@ -8,7 +8,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 import type { TableTarget } from "../types/databaseObjects";
-import { getDatabaseList, isMultiDatabaseCapable } from "../utils/database";
+import { usesMultiDatabaseLayout } from "../utils/database";
 import {
   createObjectPaletteItems,
   type ObjectPaletteRuntime,
@@ -24,6 +24,7 @@ import { useDatabaseObjectActionRuntime } from "./useDatabaseObjectActionRuntime
  * a broken schema from looping the backend; the failure surfaces in the palette.
  */
 const MAX_OBJECT_LOAD_ATTEMPTS = 2;
+const EMPTY_SELECTED_DATABASES: string[] = [];
 
 export function useCommandPaletteObjectItems(
   onGenerateSql: (target: TableTarget) => void,
@@ -35,7 +36,6 @@ export function useCommandPaletteObjectItems(
   const {
     activeConnectionId,
     connectionDataMap,
-    connections,
     loadDatabaseData,
     loadSchemaData,
     setActiveTable,
@@ -89,16 +89,12 @@ export function useCommandPaletteObjectItems(
   const connectionData = connectionId
     ? connectionDataMap[connectionId]
     : undefined;
-  const connection = connections.find(
-    (candidate) => candidate.id === connectionId,
-  );
-  const configuredDatabases = useMemo(
-    () => getDatabaseList(connection?.params.database ?? ""),
-    [connection?.params.database],
-  );
+  const selectedDatabases =
+    connectionData?.selectedDatabases ?? EMPTY_SELECTED_DATABASES;
   const hasSchemas = !!connectionData?.capabilities?.schemas;
-  const isMultiDatabase = isMultiDatabaseCapable(
+  const isMultiDatabase = usesMultiDatabaseLayout(
     connectionData?.capabilities,
+    selectedDatabases,
   );
 
   useEffect(() => {
@@ -127,7 +123,7 @@ export function useCommandPaletteObjectItems(
     }
 
     if (isMultiDatabase) {
-      configuredDatabases.forEach((database) => {
+      selectedDatabases.forEach((database) => {
         const databaseData = connectionData?.databaseDataMap[database];
         const requestKey = `database:${connectionId}:${database}`;
         if (databaseData?.isLoaded) {
@@ -147,13 +143,13 @@ export function useCommandPaletteObjectItems(
       });
     }
   }, [
-    configuredDatabases,
     connectionData?.databaseDataMap,
     connectionData?.schemaDataMap,
     connectionData?.schemas,
     connectionId,
     hasSchemas,
     isMultiDatabase,
+    selectedDatabases,
   ]);
 
   const navigatorItems = useMemo(
@@ -164,7 +160,7 @@ export function useCommandPaletteObjectItems(
         isMultiDb: isMultiDatabase,
         schemas: connectionData?.schemas ?? [],
         schemaDataMap: connectionData?.schemaDataMap ?? {},
-        configuredDatabases,
+        selectedDatabases,
         databaseDataMap: connectionData?.databaseDataMap ?? {},
         tables: connectionData?.tables ?? [],
         views: connectionData?.views ?? [],
@@ -173,7 +169,6 @@ export function useCommandPaletteObjectItems(
         activeSchema: connectionData?.activeSchema ?? null,
       }),
     [
-      configuredDatabases,
       connectionData?.activeSchema,
       connectionData?.databaseDataMap,
       connectionData?.routines,
@@ -185,6 +180,7 @@ export function useCommandPaletteObjectItems(
       connectionId,
       hasSchemas,
       isMultiDatabase,
+      selectedDatabases,
     ],
   );
 
@@ -194,7 +190,7 @@ export function useCommandPaletteObjectItems(
     return createObjectPaletteItems({
       navigatorItems,
       connectionId,
-      driver: connectionData?.driver ?? null,
+      driver: connectionData?.capabilities ?? connectionData?.driver ?? null,
       hasGroups: hasSchemas || isMultiDatabase,
       isMultiDatabase,
       runtime,
@@ -217,6 +213,7 @@ export function useCommandPaletteObjectItems(
     });
   }, [
     connectionData?.driver,
+    connectionData?.capabilities,
     connectionId,
     hasSchemas,
     isMultiDatabase,
