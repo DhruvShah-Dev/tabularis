@@ -278,9 +278,13 @@ export function closeTabsToRight(
 export function updateTabInList(
   tabs: Tab[],
   tabId: string,
-  partial: Partial<Tab>,
+  partial: Partial<Tab> | ((tab: Tab) => Partial<Tab>),
 ): Tab[] {
-  return tabs.map((t) => (t.id === tabId ? { ...t, ...partial } : t));
+  return tabs.map((t) =>
+    t.id === tabId
+      ? { ...t, ...(typeof partial === "function" ? partial(t) : partial) }
+      : t,
+  );
 }
 
 // Schema cache utilities

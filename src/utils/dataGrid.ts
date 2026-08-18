@@ -383,3 +383,155 @@ export function getCellStateClass(params: CellClassParams): string {
 function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+/** One cell write produced by a paste operation */
+export interface PasteTarget {
+  rowIndex: number;
+  colIndex: number;
+  value: string;
+}
+
+/** Splits one delimited line into cells, honoring double-quote escaping. */
+function splitDelimitedLine(line: string, delimiter: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === delimiter && !inQuotes) {
+      cells.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  cells.push(current);
+  return cells;
+}
+
+/**
+ * Parses clipboard text into a cell matrix. Tab-separated cells win
+ * (spreadsheet convention); multi-line text without tabs is parsed as CSV so
+ * the grid's own comma/semicolon/pipe copy formats round-trip. A single line
+ * without tabs is always one value — free text like "hello, world" must land
+ * in one cell. A single trailing newline (Excel/Sheets append one to every
+ * copy) is ignored.
+ *
+ * `delimiterHint` is the grid's configured CSV delimiter; when it appears in
+ * the text it takes precedence over frequency-based detection.
+ */
+export function parsePasteMatrix(
+  text: string,
+  delimiterHint?: string,
+): string[][] {
+  if (!text) return [];
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+
+  if (lines.some((line) => line.includes("\t"))) {
+    return lines.map((line) => line.split("\t"));
+  }
+
+  if (lines.length === 1) {
+    return lines[0] === "" ? [] : [[lines[0]]];
+  }
+
+  const first = lines[0];
+  const count = (d: string) => first.split(d).length - 1;
+  let delimiter: string | null = null;
+  if (delimiterHint && delimiterHint !== "\t" && count(delimiterHint) > 0) {
+    delimiter = delimiterHint;
+  } else {
+    let best = 0;
+    for (const candidate of [";", ",", "|"]) {
+      if (count(candidate) > best) {
+        best = count(candidate);
+        delimiter = candidate;
+      }
+    }
+  }
+  if (!delimiter) {
+    return lines.map((line) => [line]);
+  }
+  return lines.map((line) => splitDelimitedLine(line, delimiter!));
+}
+
+/**
+ * Drops a leading header row that round-tripped from the grid's own copy
+ * (the "export column names" option). Because targets are mapped
+ * positionally, the first row must match the column names starting at the
+ * paste anchor, in order — a positional match, not a membership test, so
+ * external data whose values merely coincide with column names is kept.
+ */
+export function stripHeaderRow(
+  matrix: string[][],
+  columnNames: string[],
+  anchorCol: number,
+): string[][] {
+  if (matrix.length < 2) return matrix;
+  const first = matrix[0];
+  if (
+    first.length > 0 &&
+    first.every((cell, i) => columnNames[anchorCol + i] === cell)
+  ) {
+    return matrix.slice(1);
+  }
+  return matrix;
+}
+
+/**
+ * Maps a parsed paste matrix onto grid cells.
+ *
+ * A single value fills every cell of the selected range (spreadsheet-style
+ * fill); a multi-cell matrix is anchored at the range's top-left (or the
+ * anchor cell when no range is selected) and clipped at the grid's edges.
+ */
+export function computePasteTargets(
+  matrix: string[][],
+  anchor: { rowIndex: number; colIndex: number },
+  totalRows: number,
+  totalCols: number,
+  range?: {
+    minRow: number;
+    maxRow: number;
+    minCol: number;
+    maxCol: number;
+  } | null,
+): PasteTarget[] {
+  const targets: PasteTarget[] = [];
+  if (matrix.length === 0) return targets;
+
+  if (range && matrix.length === 1 && matrix[0].length === 1) {
+    const value = matrix[0][0];
+    for (let r = range.minRow; r <= Math.min(range.maxRow, totalRows - 1); r++) {
+      for (
+        let c = range.minCol;
+        c <= Math.min(range.maxCol, totalCols - 1);
+        c++
+      ) {
+        targets.push({ rowIndex: r, colIndex: c, value });
+      }
+    }
+    return targets;
+  }
+
+  const baseRow = range ? range.minRow : anchor.rowIndex;
+  const baseCol = range ? range.minCol : anchor.colIndex;
+  matrix.forEach((cells, r) => {
+    const rowIndex = baseRow + r;
+    if (rowIndex >= totalRows) return;
+    cells.forEach((value, c) => {
+      const colIndex = baseCol + c;
+      if (colIndex >= totalCols) return;
+      targets.push({ rowIndex, colIndex, value });
+    });
+  });
+  return targets;
+}

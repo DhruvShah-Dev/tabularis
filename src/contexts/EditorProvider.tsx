@@ -346,9 +346,12 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     [activeConnectionId, activeTabId],
   );
 
-  const updateTab = useCallback((id: string, partial: Partial<Tab>) => {
-    setTabs((prev) => updateTabInList(prev, id, partial));
-  }, []);
+  const updateTab = useCallback(
+    (id: string, partial: Partial<Tab> | ((tab: Tab) => Partial<Tab>)) => {
+      setTabs((prev) => updateTabInList(prev, id, partial));
+    },
+    [],
+  );
 
   const reorderTab = useCallback(
     (fromTabId: string, insertAt: number) => {
