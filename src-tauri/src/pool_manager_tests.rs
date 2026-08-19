@@ -131,6 +131,24 @@ mod tests {
     }
 
     #[test]
+    fn postgres_pool_key_ignores_ssl_cert_and_key_when_ssl_disabled() {
+        let base = connection_params("postgres", Some("disable"));
+        let mut with_cert = connection_params("postgres", Some("disable"));
+        with_cert.ssl_cert = Some("/tmp/client-cert.pem".to_string());
+        let mut with_key = connection_params("postgres", Some("disable"));
+        with_key.ssl_key = Some("/tmp/client-key.pem".to_string());
+
+        assert_eq!(
+            build_connection_key(&base, Some("conn-1")),
+            build_connection_key(&with_cert, Some("conn-1"))
+        );
+        assert_eq!(
+            build_connection_key(&base, Some("conn-1")),
+            build_connection_key(&with_key, Some("conn-1"))
+        );
+    }
+
+    #[test]
     fn sqlite_pool_key_ignores_tls_key_fields() {
         let required = connection_params("sqlite", Some("required"));
         let mut disabled = connection_params("sqlite", Some("disabled"));
@@ -1002,9 +1020,9 @@ mod postgres_tls_connector_tests {
         use crate::pool_manager::load_client_auth_from_pem;
         use std::io::Write;
 
-        let temp_dir = std::env::temp_dir();
-        let cert_path = temp_dir.join("test_client_cert.pem");
-        let key_path = temp_dir.join("test_client_key.pem");
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cert_path = temp_dir.path().join("test_client_cert.pem");
+        let key_path = temp_dir.path().join("test_client_key.pem");
 
         let cert_pem = b"-----BEGIN CERTIFICATE-----\n\
 MIIDDTCCAfWgAwIBAgIUJ8HHuLoSwWh1pDLxr7Tq1SLa59AwDQYJKoZIhvcNAQEL\n\
@@ -1072,10 +1090,21 @@ dBNMbRP5kADLpoevZgLZECs=\n\
         params.ssl_key = Some(key_path.to_str().unwrap().to_string());
         let conn_res = build_postgres_tls_connector(&params);
         assert!(conn_res.is_ok());
+    }
 
-        // Cleanup
-        let _ = std::fs::remove_file(&cert_path);
-        let _ = std::fs::remove_file(&key_path);
+    #[test]
+    fn test_tls_connector_disabled_ssl_ignores_client_cert_and_key() {
+        let mut params = params_with_ssl("disable");
+        // Mismatched or non-existent client cert/key paths should be ignored when SSL is disabled.
+        params.ssl_cert = Some("/path/to/nonexistent_cert.pem".to_string());
+        params.ssl_key = None;
+
+        let result = build_postgres_tls_connector(&params);
+        assert!(result.is_ok());
+
+        params.ssl_key = Some("/path/to/nonexistent_key.pem".to_string());
+        let result = build_postgres_tls_connector(&params);
+        assert!(result.is_ok());
     }
 
     #[test]

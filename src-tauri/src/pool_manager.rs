@@ -120,8 +120,14 @@ pub(crate) fn build_connection_key(
                 "verify-ca" | "verify-full" => params.ssl_ca.as_deref().unwrap_or(""),
                 _ => "",
             };
-            let ssl_cert = params.ssl_cert.as_deref().unwrap_or("");
-            let ssl_key = params.ssl_key.as_deref().unwrap_or("");
+            let (ssl_cert, ssl_key) = if ssl_mode == "disable" {
+                ("", "")
+            } else {
+                (
+                    params.ssl_cert.as_deref().unwrap_or(""),
+                    params.ssl_key.as_deref().unwrap_or(""),
+                )
+            };
             Some(format!("ssl:{ssl_mode}:{ssl_ca}:{ssl_cert}:{ssl_key}"))
         }
         _ => None,
@@ -442,21 +448,25 @@ pub(crate) fn build_postgres_tls_connector(
     let user_cert = params.ssl_cert.as_deref().filter(|s| !s.trim().is_empty());
     let user_key = params.ssl_key.as_deref().filter(|s| !s.trim().is_empty());
 
-    let client_auth = match (user_cert, user_key) {
-        (Some(cert), Some(key)) => Some(load_client_auth_from_pem(cert, key)?),
-        (Some(_), None) => {
-            return Err(
-                "Client certificate provided (ssl_cert) without a client private key (ssl_key)"
-                    .to_string(),
-            );
+    let client_auth = if ssl_mode == "disable" {
+        None
+    } else {
+        match (user_cert, user_key) {
+            (Some(cert), Some(key)) => Some(load_client_auth_from_pem(cert, key)?),
+            (Some(_), None) => {
+                return Err(
+                    "Client certificate provided (ssl_cert) without a client private key (ssl_key)"
+                        .to_string(),
+                );
+            }
+            (None, Some(_)) => {
+                return Err(
+                    "Client private key provided (ssl_key) without a client certificate (ssl_cert)"
+                        .to_string(),
+                );
+            }
+            (None, None) => None,
         }
-        (None, Some(_)) => {
-            return Err(
-                "Client private key provided (ssl_key) without a client certificate (ssl_cert)"
-                    .to_string(),
-            );
-        }
-        (None, None) => None,
     };
 
     let builder = match ssl_mode {
