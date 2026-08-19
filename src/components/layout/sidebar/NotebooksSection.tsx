@@ -230,7 +230,7 @@ export function NotebooksSection({
             size={12}
             className="absolute left-2 top-1/2 -translate-y-1/2 text-muted"
           />
-          <input
+          <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -280,7 +280,7 @@ export function NotebooksSection({
             title={nb.title}
           >
             {editingId === nb.id ? (
-              <input
+              <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
                 type="text"
                 value={editingTitle}
                 autoFocus

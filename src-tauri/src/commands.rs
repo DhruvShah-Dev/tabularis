@@ -808,7 +808,15 @@ pub async fn get_routines<R: Runtime>(
     let params = resolve_connection_params_with_id(&expanded_params, &connection_id)?;
 
     let drv = driver_for(&saved_conn.params.driver).await?;
-    drv.get_routines(&params, schema.as_deref()).await
+    let result = drv.get_routines(&params, schema.as_deref()).await;
+    let database = schema.as_deref().unwrap_or_else(|| params.database.primary());
+
+    match &result {
+        Ok(routines) => log::info!("Retrieved {} routines from {}", routines.len(), database),
+        Err(error) => log::error!("Failed to get routines from {}: {}", database, error),
+    }
+
+    result
 }
 
 #[tauri::command]
@@ -1424,8 +1432,9 @@ pub async fn duplicate_connection<R: Runtime>(
 pub async fn get_connections<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<Vec<SavedConnection>, String> {
-    // Run migration if needed
+    // Run migrations if needed
     migrate_ssh_connections(&app).await.ok();
+    migrate_postgres_ssl_mode_spelling(&app).await.ok();
 
     let path = get_config_path(&app)?;
     // Use persistence function that handles both old and new formats
@@ -1556,6 +1565,34 @@ async fn migrate_ssh_connections<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
         "[Migration] Successfully migrated {} SSH connections",
         ssh_connections.len()
     );
+    Ok(())
+}
+
+// ==================== PostgreSQL Plugin SSL Mode Migration ====================
+//
+// The shared, path-based migration logic lives in `connection_migrations`
+// (also callable from the standalone `--mcp` server process, which has no
+// `AppHandle`). This is a thin wrapper: resolve the path, run the shared
+// core, and invalidate the connection cache only if it actually rewrote
+// something.
+
+/// Migrates already-persisted `ssl_mode` values on postgres-dialect
+/// connections (driver id other than the builtin `"postgres"`) from the
+/// stale MySQL-style spelling to the Postgres-style spelling the plugin
+/// actually understands. Idempotent — a no-op once every affected
+/// connection has been rewritten. See
+/// `connection_migrations::migrate_postgres_ssl_mode_spelling_at_path` for
+/// the full rationale, including the concurrency guard against a race with
+/// the `--mcp` process's own call to the same function.
+async fn migrate_postgres_ssl_mode_spelling<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let conn_path = get_config_path(app)?;
+    let migrated =
+        crate::connection_migrations::migrate_postgres_ssl_mode_spelling_at_path(&conn_path)
+            .await?;
+    if migrated {
+        app.state::<std::sync::Arc<crate::connection_cache::ConnectionCache>>()
+            .invalidate();
+    }
     Ok(())
 }
 
@@ -5466,8 +5503,9 @@ pub async fn get_connection_groups<R: Runtime>(
 pub async fn get_connections_with_groups<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<ConnectionsFile, String> {
-    // Run migration if needed
+    // Run migrations if needed
     migrate_ssh_connections(&app).await.ok();
+    migrate_postgres_ssl_mode_spelling(&app).await.ok();
 
     let path = get_config_path(&app)?;
     persistence::load_connections_file(&path)

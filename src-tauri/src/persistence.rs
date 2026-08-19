@@ -2,6 +2,29 @@ use crate::models::{ConnectionGroup, ConnectionsFile, SavedConnection};
 use std::fs;
 use std::path::Path;
 
+/// Parses connections file content already read from disk. Supports both
+/// the old format (a bare array of connections) and the new format (an
+/// object with groups/tags). Split out from `load_connections_file` so a
+/// caller that already has the file's content in hand (e.g. to compare
+/// against a later read, as `connection_migrations` does) can parse it
+/// without triggering a second `fs::read_to_string`.
+pub fn parse_connections_file(content: &str) -> Result<ConnectionsFile, String> {
+    // Try parsing as the new format first
+    if let Ok(file) = serde_json::from_str::<ConnectionsFile>(content) {
+        return Ok(file);
+    }
+
+    // Fall back to old format (array of connections)
+    let connections: Vec<SavedConnection> = serde_json::from_str(content)
+        .map_err(|_| "Failed to parse connections file".to_string())?;
+
+    Ok(ConnectionsFile {
+        groups: Vec::new(),
+        connections,
+        tags: Vec::new(),
+    })
+}
+
 /// Load connections file (raw, no keychain reads).
 /// Supports both old format (array of connections) and new format (with groups).
 /// Use `load_connections` or `load_connections_with_passwords` when passwords are needed.
@@ -10,21 +33,7 @@ pub fn load_connections_file(path: &Path) -> Result<ConnectionsFile, String> {
         return Ok(ConnectionsFile::default());
     }
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
-
-    // Try parsing as the new format first
-    if let Ok(file) = serde_json::from_str::<ConnectionsFile>(&content) {
-        return Ok(file);
-    }
-
-    // Fall back to old format (array of connections)
-    let connections: Vec<SavedConnection> = serde_json::from_str(&content)
-        .map_err(|_| "Failed to parse connections file".to_string())?;
-
-    Ok(ConnectionsFile {
-        groups: Vec::new(),
-        connections,
-        tags: Vec::new(),
-    })
+    parse_connections_file(&content)
 }
 
 /// Load connections list (raw, no keychain reads) — for listing UI.

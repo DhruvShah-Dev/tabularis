@@ -70,7 +70,7 @@ const Spinner = ({
     <div
       className={`flex items-center border border-strong rounded bg-base ${width}`}
     >
-      <input
+      <input autoCorrect="off" autoCapitalize="off" autoComplete="off" spellCheck={false}
         ref={inputRef}
         type="number"
         min={min}

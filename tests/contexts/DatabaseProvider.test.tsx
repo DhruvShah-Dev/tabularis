@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { DatabaseProvider } from '../../src/contexts/DatabaseProvider';
+import { ToastContext } from '../../src/contexts/ToastContext';
 import { useDatabase } from '../../src/hooks/useDatabase';
 import { invoke } from '@tauri-apps/api/core';
 import React from 'react';
@@ -275,6 +276,55 @@ describe('DatabaseProvider', () => {
       expect(result.current.selectedDatabases).toEqual(['firstdb', 'seconddb']);
       expect(result.current.activeSchema).toBeNull();
     });
+  });
+
+  it('should keep object browsing available when routine metadata fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === 'get_connections') return Promise.resolve(mockConnections);
+      if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
+      if (cmd === 'get_tables') return Promise.resolve(mockTables);
+      if (cmd === 'get_views') return Promise.resolve(mockViews);
+      if (cmd === 'get_routines') return Promise.reject(new Error('Routine metadata unavailable'));
+      if (cmd === 'set_window_title') return Promise.resolve(undefined);
+      if (cmd === 'register_active_connection') return Promise.resolve(undefined);
+      return Promise.reject(new Error(`Unexpected command: ${cmd}`));
+    });
+
+    const showToast = vi.fn();
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        ToastContext.Provider,
+        { value: { showToast } },
+        React.createElement(DatabaseProvider, null, children),
+      );
+
+    const { result } = renderHook(() => useDatabase(), { wrapper });
+
+    await act(async () => {
+      await result.current.connect('conn-123');
+    });
+
+    await waitFor(() => {
+      expect(result.current.activeConnectionId).toBe('conn-123');
+      expect(result.current.tables).toEqual(mockTables);
+      expect(result.current.views).toEqual(mockViews);
+      expect(result.current.routines).toEqual([]);
+      expect(result.current.routineError).toBe('Routine metadata unavailable');
+    });
+
+    expect(invoke).toHaveBeenCalledWith('get_routines', {
+      connectionId: 'conn-123',
+      schema: undefined,
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      'Failed to load routines:',
+      expect.any(Error),
+    );
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining('Routine metadata unavailable'),
+      expect.objectContaining({ kind: 'error' }),
+    );
   });
 
   it('should handle connection failure', async () => {

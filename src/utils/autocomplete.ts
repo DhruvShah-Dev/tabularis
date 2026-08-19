@@ -1,6 +1,7 @@
 import type { Monaco } from "@monaco-editor/react";
 import { invoke } from "@tauri-apps/api/core";
 import type { TableInfo } from "../contexts/DatabaseContext";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 import { formatSqlIdentifier, getQuoteChar, quoteIdentifier } from "./identifiers";
 import { getCurrentStatement, parseTablesFromQuery, type ParsedTableRef } from "./sqlAnalysis";
 import { analyzeSqlContext, findStatementScopeEnd, getKeywordRelevance, getSuggestionKinds } from "./sqlContext";
@@ -117,7 +118,7 @@ export const registerSqlAutocomplete = (
   connectionId: string | null,
   tables: TableInfo[],
   schema?: string | null,
-  driver?: string | null,
+  driver?: string | PluginManifest | DriverCapabilities | null,
 ) => {
   const provider = monaco.languages.registerCompletionItemProvider("sql", {
     triggerCharacters: [".", " "],

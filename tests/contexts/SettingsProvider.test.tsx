@@ -68,6 +68,7 @@ describe("SettingsProvider", () => {
     expect(result.current.settings.aiEnabled).toBe(false);
     expect(result.current.settings.aiProvider).toBeNull();
     expect(result.current.settings.aiModel).toBeNull();
+    expect(result.current.settings.safetyConfirmationDelayEnabled).toBe(false);
   });
 
   it("should load settings from backend config", async () => {
@@ -79,6 +80,7 @@ describe("SettingsProvider", () => {
       aiEnabled: true,
       aiProvider: "openai",
       aiModel: "gpt-4",
+      safetyConfirmationDelayEnabled: true,
     };
 
     vi.mocked(invoke).mockImplementation((cmd: string) => {
@@ -113,6 +115,7 @@ describe("SettingsProvider", () => {
     expect(result.current.settings.aiEnabled).toBe(true);
     expect(result.current.settings.aiProvider).toBe("openai");
     expect(result.current.settings.aiModel).toBe("gpt-4");
+    expect(result.current.settings.safetyConfirmationDelayEnabled).toBe(true);
   });
 
   it("hydrates persisted settings even while language application is still pending", async () => {

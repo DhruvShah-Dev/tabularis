@@ -1,4 +1,5 @@
 import type { ForeignKey } from "../types/schema";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 import { quoteIdentifier } from "./identifiers";
 
 const NUMERIC_TYPE_KEYWORDS = [
@@ -90,7 +91,7 @@ export function getForeignKeyForPreview(
 export function buildForeignKeyFilterClause(
   fk: ForeignKey,
   value: unknown,
-  driver: string | null | undefined,
+  driver: string | PluginManifest | DriverCapabilities | null | undefined,
   sourceColumnType?: string,
 ): string {
   const col = quoteIdentifier(fk.ref_column, driver);

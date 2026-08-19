@@ -4,6 +4,7 @@ import type {
   TableSchema,
   EditorPreferences,
 } from "../types/editor";
+import type { DriverCapabilities, PluginManifest } from "../types/plugins";
 import { quoteTableRef } from "./identifiers";
 import { invoke } from "@tauri-apps/api/core";
 import { cleanTabForStorage, restoreTabFromStorage } from "./tabCleaner";
@@ -277,9 +278,13 @@ export function closeTabsToRight(
 export function updateTabInList(
   tabs: Tab[],
   tabId: string,
-  partial: Partial<Tab>,
+  partial: Partial<Tab> | ((tab: Tab) => Partial<Tab>),
 ): Tab[] {
-  return tabs.map((t) => (t.id === tabId ? { ...t, ...partial } : t));
+  return tabs.map((t) =>
+    t.id === tabId
+      ? { ...t, ...(typeof partial === "function" ? partial(t) : partial) }
+      : t,
+  );
 }
 
 // Schema cache utilities
@@ -335,7 +340,7 @@ function normalizeSmartQuotes(s: string): string {
  */
 export function reconstructTableQuery(
   tab: Tab,
-  driver?: string,
+  driver?: string | PluginManifest | DriverCapabilities,
   options?: ReconstructQueryOptions,
 ): string {
   if (!tab.activeTable) {

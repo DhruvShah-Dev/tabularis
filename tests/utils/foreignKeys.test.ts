@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { ForeignKey } from "../../src/types/schema";
+import type { PluginManifest } from "../../src/types/plugins";
 import {
   pickPrimaryForeignKeyByColumn,
   isForeignKeyValueNavigable,
@@ -121,6 +122,25 @@ describe("foreignKeys", () => {
       expect(
         buildForeignKeyFilterClause(orgFk, BigInt("9007199254740993"), "postgres"),
       ).toBe('"id" = 9007199254740993');
+    });
+
+    it("quotes identically for a postgres-dialect plugin manifest as for the bare \"postgres\" string (issue #614)", () => {
+      const pluginManifest: PluginManifest = {
+        id: "postgresql",
+        name: "PostgreSQL",
+        version: "1.0.0",
+        description: "",
+        default_port: 5432,
+        capabilities: {
+          schemas: true, views: true, routines: true,
+          file_based: false, folder_based: false,
+          identifier_quote: '"', alter_primary_key: true,
+          sql_dialect: "postgres",
+        },
+      };
+      expect(buildForeignKeyFilterClause(orgFk, 42, pluginManifest)).toBe(
+        buildForeignKeyFilterClause(orgFk, 42, "postgres"),
+      );
     });
 
     it("quotes string values and escapes embedded single quotes", () => {

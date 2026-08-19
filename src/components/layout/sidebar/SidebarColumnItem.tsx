@@ -7,6 +7,7 @@ import { Key, Columns, Edit, Copy, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import { ContextMenu } from "../../ui/ContextMenu";
 import type { TableColumn } from "../../../types/schema";
+import type { DriverCapabilities } from "../../../types/plugins";
 import { quoteIdentifier, quoteTableRef } from "../../../utils/identifiers";
 
 interface SidebarColumnItemProps {
@@ -14,6 +15,11 @@ interface SidebarColumnItemProps {
   tableName: string;
   connectionId: string;
   driver: string;
+  /** Capability-driven identifier quoting (issue #614): when available,
+   * takes precedence over the bare `driver` id so a postgres-compatible
+   * driver registered under a different id (e.g. a standalone PostgreSQL
+   * plugin) is quoted the same as the builtin "postgres" driver. */
+  capabilities?: DriverCapabilities | null;
   onRefresh: () => void;
   onEdit: (column: TableColumn) => void;
   isView?: boolean;
@@ -26,6 +32,7 @@ export const SidebarColumnItem = ({
   tableName,
   connectionId,
   driver,
+  capabilities,
   onRefresh,
   onEdit,
   isView = false,
@@ -56,8 +63,9 @@ export const SidebarColumnItem = ({
 
     if (confirmed) {
       try {
-        const quotedTable = quoteTableRef(tableName, driver, schema);
-        const quotedColumn = quoteIdentifier(column.name, driver);
+        const quotingDriver = capabilities ?? driver;
+        const quotedTable = quoteTableRef(tableName, quotingDriver, schema);
+        const quotedColumn = quoteIdentifier(column.name, quotingDriver);
         const query = `ALTER TABLE ${quotedTable} DROP COLUMN ${quotedColumn}`;
 
         await invoke("execute_query", {

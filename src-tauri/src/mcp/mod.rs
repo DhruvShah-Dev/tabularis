@@ -7,7 +7,7 @@ use crate::config::{
     DEFAULT_MCP_APPROVAL_TIMEOUT_SECONDS, DEFAULT_MCP_PREFLIGHT_EXPLAIN,
 };
 use crate::credential_cache;
-use crate::drivers::driver_trait::DatabaseDriver;
+use crate::drivers::driver_trait::{DatabaseDriver, SqlDialect};
 use crate::drivers::registry as driver_registry;
 use crate::drivers::{mysql, postgres, sqlite};
 use crate::heartbeat;
@@ -321,6 +321,16 @@ async fn register_drivers_for_mcp() {
     let plugin_configs = app_config.plugins.unwrap_or_default();
     let enabled_ids = app_config.active_external_drivers;
     plugins::manager::load_plugins_with_configs(plugin_configs, enabled_ids.as_deref()).await;
+
+    // Must run after driver registration above — the migration resolves each
+    // connection's driver dialect via the same registry, so it needs plugin
+    // drivers already loaded. This is the standalone MCP process's own entry
+    // point for a migration that previously only ran from the GUI process's
+    // Tauri commands (issue #639) — never blocks server startup on failure.
+    let conn_path = paths::resolve_connections_path(&paths::get_app_config_dir());
+    crate::connection_migrations::migrate_postgres_ssl_mode_spelling_at_path(&conn_path)
+        .await
+        .ok();
 }
 
 /// Resolve the driver for an MCP-known connection. Returns the connection,
@@ -346,6 +356,27 @@ async fn resolve_db_driver(
             data: None,
         })?;
     Ok((conn, db_params, driver))
+}
+
+/// Resolves the schema to pass to a metadata fetch, defaulting to `"public"`
+/// on postgres-dialect drivers when the caller didn't supply one.
+///
+/// Capability-driven, not driver-id-driven (issue #614): checks the
+/// resolved driver's declared `sql_dialect` rather than comparing
+/// `driver == "postgres"` literally, so a postgres-compatible driver
+/// registered under a different id (e.g. the standalone PostgreSQL plugin,
+/// id `"postgresql"`) gets the same `"public"` default the builtin driver
+/// always did. Any other dialect passes `requested_schema` through
+/// unchanged.
+fn resolve_default_schema<'a>(
+    driver: &Arc<dyn DatabaseDriver>,
+    requested_schema: Option<&'a str>,
+) -> Option<&'a str> {
+    if driver.manifest().capabilities.sql_dialect == Some(SqlDialect::Postgres) {
+        Some(requested_schema.unwrap_or("public"))
+    } else {
+        requested_schema
+    }
 }
 
 pub async fn run_mcp_server() {
@@ -555,12 +586,8 @@ async fn handle_read_resource(params: Option<Value>) -> Result<Value, JsonRpcErr
 
         // Resolve through the same path as the tools so keychain passwords and
         // SSH tunnels are applied — not just the raw saved params.
-        let (conn, params, driver) = resolve_db_driver(conn_id).await?;
-        let schema = if conn.params.driver == "postgres" {
-            Some("public")
-        } else {
-            None
-        };
+        let (_conn, params, driver) = resolve_db_driver(conn_id).await?;
+        let schema = resolve_default_schema(&driver, None);
         let tables = driver
             .get_tables(&params, schema)
             .await
@@ -844,11 +871,7 @@ async fn tool_list_tables(
     let (conn, db_params, driver) = resolve_db_driver(conn_id).await?;
     audit.connection_name = Some(conn.name.clone());
 
-    let effective_schema = if conn.params.driver == "postgres" {
-        Some(schema.unwrap_or("public"))
-    } else {
-        schema
-    };
+    let effective_schema = resolve_default_schema(&driver, schema);
     let tables = driver
         .get_tables(&db_params, effective_schema)
         .await
@@ -931,11 +954,7 @@ async fn tool_describe_table(
     let (conn, db_params, driver) = resolve_db_driver(conn_id).await?;
     audit.connection_name = Some(conn.name.clone());
 
-    let effective_schema = if conn.params.driver == "postgres" {
-        Some(schema.unwrap_or("public"))
-    } else {
-        schema
-    };
+    let effective_schema = resolve_default_schema(&driver, schema);
     // Run the three metadata fetches concurrently so a slow driver costs one
     // round-trip's worth of latency, not three (and at most one call timeout
     // rather than three sequential ones blocking the MCP request loop).

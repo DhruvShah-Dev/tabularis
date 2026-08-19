@@ -2,6 +2,21 @@
 
 export type ConnectionEnvironment = "development" | "staging" | "production";
 
+interface EnvironmentConnection {
+  id: string;
+  environment?: ConnectionEnvironment;
+}
+
+export function isProductionConnection(
+  connections: readonly EnvironmentConnection[],
+  connectionId: string | null | undefined,
+): boolean {
+  return connections.some(
+    (connection) =>
+      connection.id === connectionId && connection.environment === "production",
+  );
+}
+
 /** Tailwind classes for the environment badge chip, per tier. */
 export const ENVIRONMENT_BADGE_CLASSES: Record<ConnectionEnvironment, string> = {
   development:
