@@ -7,7 +7,7 @@ use rustls::client::{verify_server_cert_signed_by_trust_anchor, WebPkiServerVeri
 use rustls::crypto::verify_tls12_signature;
 use rustls::crypto::verify_tls13_signature;
 use rustls::crypto::CryptoProvider;
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
 use rustls::server::ParsedCertificate;
 use rustls::DigitallySignedStruct;
 use rustls::{ClientConfig, Error as TlsError, RootCertStore};
@@ -120,7 +120,9 @@ pub(crate) fn build_connection_key(
                 "verify-ca" | "verify-full" => params.ssl_ca.as_deref().unwrap_or(""),
                 _ => "",
             };
-            Some(format!("ssl:{ssl_mode}:{ssl_ca}"))
+            let ssl_cert = params.ssl_cert.as_deref().unwrap_or("");
+            let ssl_key = params.ssl_key.as_deref().unwrap_or("");
+            Some(format!("ssl:{ssl_mode}:{ssl_ca}:{ssl_cert}:{ssl_key}"))
         }
         _ => None,
     };
@@ -437,15 +439,33 @@ pub(crate) fn build_postgres_tls_connector(
     ensure_rustls_crypto_provider();
     let ssl_mode = params.ssl_mode.as_deref().unwrap_or("prefer");
     let user_ca = params.ssl_ca.as_deref().filter(|s| !s.trim().is_empty());
+    let user_cert = params.ssl_cert.as_deref().filter(|s| !s.trim().is_empty());
+    let user_key = params.ssl_key.as_deref().filter(|s| !s.trim().is_empty());
 
-    let config = match ssl_mode {
+    let client_auth = match (user_cert, user_key) {
+        (Some(cert), Some(key)) => Some(load_client_auth_from_pem(cert, key)?),
+        (Some(_), None) => {
+            return Err(
+                "Client certificate provided (ssl_cert) without a client private key (ssl_key)"
+                    .to_string(),
+            );
+        }
+        (None, Some(_)) => {
+            return Err(
+                "Client private key provided (ssl_key) without a client certificate (ssl_cert)"
+                    .to_string(),
+            );
+        }
+        (None, None) => None,
+    };
+
+    let builder = match ssl_mode {
         "disable" | "allow" | "prefer" => {
             // No cert verification; PgSslMode below controls whether TLS is attempted.
             let verifier = Arc::new(NoCertVerifier::new());
             ClientConfig::builder()
                 .dangerous()
                 .with_custom_certificate_verifier(verifier)
-                .with_no_client_auth()
         }
         "require" => {
             // Force TLS, skip cert validation.
@@ -453,7 +473,6 @@ pub(crate) fn build_postgres_tls_connector(
             ClientConfig::builder()
                 .dangerous()
                 .with_custom_certificate_verifier(verifier)
-                .with_no_client_auth()
         }
         "verify-ca" => {
             // Validate chain, skip hostname. Requires an explicit CA file —
@@ -470,7 +489,6 @@ pub(crate) fn build_postgres_tls_connector(
             ClientConfig::builder()
                 .dangerous()
                 .with_custom_certificate_verifier(verifier)
-                .with_no_client_auth()
         }
         "verify-full" => {
             // Validate certificate chain AND hostname.
@@ -479,7 +497,6 @@ pub(crate) fn build_postgres_tls_connector(
                 ClientConfig::builder()
                     .with_platform_verifier()
                     .map_err(|e| format!("Failed to build platform TLS verifier: {}", e))?
-                    .with_no_client_auth()
             } else {
                 // Use custom CA with full hostname verification.
                 let roots = load_roots_from_pem(user_ca.unwrap())?;
@@ -489,7 +506,6 @@ pub(crate) fn build_postgres_tls_connector(
                 ClientConfig::builder()
                     .dangerous()
                     .with_custom_certificate_verifier(verifier)
-                    .with_no_client_auth()
             }
         }
         _ => {
@@ -498,10 +514,51 @@ pub(crate) fn build_postgres_tls_connector(
             ClientConfig::builder()
                 .dangerous()
                 .with_custom_certificate_verifier(verifier)
-                .with_no_client_auth()
         }
     };
+
+    let config = match client_auth {
+        Some((certs, key)) => builder
+            .with_client_auth_cert(certs, key)
+            .map_err(|e| format!("Failed to configure client certificate: {e}"))?,
+        None => builder.with_no_client_auth(),
+    };
+
     Ok(MakeRustlsConnect::new(config))
+}
+
+/// Load client certificate chain and private key from PEM files for mTLS.
+pub(crate) fn load_client_auth_from_pem(
+    cert_path: &str,
+    key_path: &str,
+) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>), String> {
+    let cert_bytes = std::fs::read(cert_path)
+        .map_err(|e| format!("Failed to read ssl_cert file '{}': {}", cert_path, e))?;
+    let mut cert_cursor = std::io::Cursor::new(&cert_bytes[..]);
+    let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut cert_cursor)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to parse ssl_cert '{}': {}", cert_path, e))?;
+
+    if certs.is_empty() {
+        return Err(format!(
+            "ssl_cert '{}' contained no PEM CERTIFICATE blocks",
+            cert_path
+        ));
+    }
+
+    let key_bytes = std::fs::read(key_path)
+        .map_err(|e| format!("Failed to read ssl_key file '{}': {}", key_path, e))?;
+    let mut key_cursor = std::io::Cursor::new(&key_bytes[..]);
+    let key = rustls_pemfile::private_key(&mut key_cursor)
+        .map_err(|e| format!("Failed to parse ssl_key '{}': {}", key_path, e))?
+        .ok_or_else(|| {
+            format!(
+                "ssl_key '{}' contained no private key in PEM format",
+                key_path
+            )
+        })?;
+
+    Ok((certs, key))
 }
 
 /// Load root certificates from a PEM file.

@@ -109,6 +109,28 @@ mod tests {
     }
 
     #[test]
+    fn postgres_pool_key_changes_when_ssl_cert_or_key_changes() {
+        let base = connection_params("postgres", Some("require"));
+        let mut with_cert = connection_params("postgres", Some("require"));
+        with_cert.ssl_cert = Some("/tmp/client-cert.pem".to_string());
+        let mut with_key = connection_params("postgres", Some("require"));
+        with_key.ssl_key = Some("/tmp/client-key.pem".to_string());
+
+        assert_ne!(
+            build_connection_key(&base, Some("conn-1")),
+            build_connection_key(&with_cert, Some("conn-1"))
+        );
+        assert_ne!(
+            build_connection_key(&base, Some("conn-1")),
+            build_connection_key(&with_key, Some("conn-1"))
+        );
+        assert_ne!(
+            build_connection_key(&with_cert, Some("conn-1")),
+            build_connection_key(&with_key, Some("conn-1"))
+        );
+    }
+
+    #[test]
     fn sqlite_pool_key_ignores_tls_key_fields() {
         let required = connection_params("sqlite", Some("required"));
         let mut disabled = connection_params("sqlite", Some("disabled"));
@@ -973,6 +995,113 @@ mod postgres_tls_connector_tests {
 
         // Cleanup
         let _ = std::fs::remove_file(&file_path);
+    }
+
+    #[test]
+    fn test_load_client_auth_from_pem_valid() {
+        use crate::pool_manager::load_client_auth_from_pem;
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir();
+        let cert_path = temp_dir.join("test_client_cert.pem");
+        let key_path = temp_dir.join("test_client_key.pem");
+
+        let cert_pem = b"-----BEGIN CERTIFICATE-----\n\
+MIIDDTCCAfWgAwIBAgIUJ8HHuLoSwWh1pDLxr7Tq1SLa59AwDQYJKoZIhvcNAQEL\n\
+BQAwFjEUMBIGA1UEAwwLdGVzdC1jbGllbnQwHhcNMjYwODE5MDMyNzEyWhcNMjcw\n\
+ODE5MDMyNzEyWjAWMRQwEgYDVQQDDAt0ZXN0LWNsaWVudDCCASIwDQYJKoZIhvcN\n\
+AQEBBQADggEPADCCAQoCggEBALg2eEdxdFRd6XsQkXuFWcvtZ4JXb5npWFnodU0J\n\
+9SQcMWonQaKnIkCktCyH/BhEU7GG61TwyF6WFXMAl8facpN7Y7vGxPfj8M6xmq0U\n\
+7iACDSHEH+jQ7yqqR/LzF/VFP/3+l8MiO5f/p39Dwl7yg+dwQKp2D7rN6wtHjTIj\n\
+t5M1295G3VvvfvrL7DtlrxUuFhKi00RfdfmmobGOPnB4Ta4pyb+Wxs2Pgiftvv5A\n\
+abcGtnmkB1j8ymAGlmCslfYtWWkShZhDdvA/jT2Ufsn98vq3vzkDSpADKVWGZZPH\n\
+IC0QM26fJTjzabkRbhdv/s7gSZJaQk5khPyS0pxuHI3NSiUCAwEAAaNTMFEwHQYD\n\
+VR0OBBYEFKG5VWX/3V8ELmZOuq8Xo0yltyKRMB8GA1UdIwQYMBaAFKG5VWX/3V8E\n\
+LmZOuq8Xo0yltyKRMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEB\n\
+ADKTW2L0fOtcCIBn1BjQYBpcFm9onk68OmCkcEjxPMVI82ywsusNknZV3aInrQOr\n\
+R8eHSnbLcWddBgT87I1uQNljoPxKgl6BHzmVE5i3sp2mV3+x9BYzCXfscvNlitUz\n\
+1o8CAYwv36ZCSdJzK5M73n/W4sv9QIlwqQ9uRtpOtyWNTpBsy2D0EQXvKmiOoLQm\n\
+9jzBlzmbYH+PfXE7dtWpnN4DuDf+LMKWvzB2VP0zQq5r7sCgG3b6uH2hMUbfDk80\n\
+lqTyecmlouEhCXwDn9565FSBOg/a1iNkUXo87rwY3GE5T40UKafllLhy9DDpJoOV\n\
+/XzcU5fETyl+X8bwhNHXnbk=\n\
+-----END CERTIFICATE-----\n";
+
+        let key_pem = b"-----BEGIN PRIVATE KEY-----\n\
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC4NnhHcXRUXel7\n\
+EJF7hVnL7WeCV2+Z6VhZ6HVNCfUkHDFqJ0GipyJApLQsh/wYRFOxhutU8MhelhVz\n\
+AJfH2nKTe2O7xsT34/DOsZqtFO4gAg0hxB/o0O8qqkfy8xf1RT/9/pfDIjuX/6d/\n\
+Q8Je8oPncECqdg+6zesLR40yI7eTNdveRt1b7376y+w7Za8VLhYSotNEX3X5pqGx\n\
+jj5weE2uKcm/lsbNj4In7b7+QGm3BrZ5pAdY/MpgBpZgrJX2LVlpEoWYQ3bwP409\n\
+lH7J/fL6t785A0qQAylVhmWTxyAtEDNunyU482m5EW4Xb/7O4EmSWkJOZIT8ktKc\n\
+bhyNzUolAgMBAAECggEADkhgOF8vlIBY41XRhzDmWXgQF9G3sXNKNQ5fqe16Yvux\n\
+880UuwvCYsi3v4wmRlYQjH8tgpR4tKdmWlhSwbLKQhfFuoAa3YLVikZy+7XXu1uY\n\
+BmTdJIFZSdw8tTWWnJ8V6xebpLbkGqY+fRDqjSS4iBqdU5omdhFpMU1cQTr2YiTK\n\
+gamazEZYwxk+uQOTikNJgS7y8Br6dPhRKGkmS7x4jfPFwO8mRIW9ZwvgkAXybs6p\n\
+vpJR5hT262mndLVU+3+UjEOpevrLZArrad0FNfRS5YBvgg66dirbem4rq4P+e9aq\n\
+5mElyAx0A5RQpFMqbF7uQLkVAIFnzQbrr128NmO4MQKBgQDlXuKfhU+epxE8zeai\n\
+5zhsW5wfSuMuyAN01vf0vFKDCDpxOYU2WXFYC0PQHog/12UWwtzL9c3l2LWaKf5v\n\
+ASdIuQ8C+ZGL9JSo3DRpdB2SjDEgr2vpfmAoK45dadV0AJoDjFGHs/W7vKVaq+Ze\n\
+Hrd9hW8YRVwcvIHeuvlaSs9xywKBgQDNmXMQVYaRDl8rc496L1y4M2jWjLORShVU\n\
+t/GCFdBDtTvwXlLDY1Lu9ZI9iiXNVkXE7u604oj9XStbjH0qEo1It+3+bDvGGJH/\n\
+eq2U4iAmKsftvovMkbz8MgOME2P4FrTbU45c57D2u9n2GZhVrZsP6eMmmLskSDEG\n\
+pDBln1v1zwKBgQCY20oV2wa7iUUQi3tHVuYgOFDr/cE23O6Iv/YQsCwgzKv95sJi\n\
+/OpvLVqs6JwOR6JDr+rrNc1YfrpPmerI2TDv4vwhFGatqXokqlN3b32Bu1HGIYG9\n\
+4o18V8KReEVbAEejU7DFyeVajpZ3vZVRZhEMYo8t0pNXRz0ZTOt+A9sJTwKBgCrv\n\
+Xp4MnjtwmuNCELZdaal14vDbFSzEIcw9VYvq7kEVedzqdbIj7c/FLLL5RIeq+orz\n\
+spnHrP/sEv/dSM4eba6/6k11YM4vl12YyuMKjdgqmvHFFwCzdpnb/+2ipv/KDh63\n\
+RkWUhNohxJSmJ6/Mv1MFbtBCmOIsyUAvzYOLUfL1AoGAAjwuwq/vQKeebkYd91T4\n\
+ygRQGhZXL1juHpZ/KPCDSb41dI7GmABtLfEG2SzzIl3nnuyq1VMzyyPiSbTggozo\n\
+MzZebKJ4qdpxkxKv9KQP63JVuE2MBQcFT0qhUSdpas2ENMaF7lXWABNCahBEL6jD\n\
+dBNMbRP5kADLpoevZgLZECs=\n\
+-----END PRIVATE KEY-----\n";
+
+        std::fs::File::create(&cert_path).unwrap().write_all(cert_pem).unwrap();
+        std::fs::File::create(&key_path).unwrap().write_all(key_pem).unwrap();
+
+        let result = load_client_auth_from_pem(
+            cert_path.to_str().unwrap(),
+            key_path.to_str().unwrap(),
+        );
+        assert!(result.is_ok());
+        let (certs, _key) = result.unwrap();
+        assert_eq!(certs.len(), 1);
+
+        // Test connector builder with client auth
+        let mut params = params_with_ssl("require");
+        params.ssl_cert = Some(cert_path.to_str().unwrap().to_string());
+        params.ssl_key = Some(key_path.to_str().unwrap().to_string());
+        let conn_res = build_postgres_tls_connector(&params);
+        assert!(conn_res.is_ok());
+
+        // Cleanup
+        let _ = std::fs::remove_file(&cert_path);
+        let _ = std::fs::remove_file(&key_path);
+    }
+
+    #[test]
+    fn test_tls_connector_client_cert_without_key_fails() {
+        let mut params = params_with_ssl("require");
+        params.ssl_cert = Some("/path/to/cert.pem".to_string());
+        params.ssl_key = None;
+
+        let result = build_postgres_tls_connector(&params);
+        match result {
+            Err(e) => assert!(e.contains("ssl_cert")),
+            Ok(_) => panic!("Expected error when ssl_cert is provided without ssl_key"),
+        }
+    }
+
+    #[test]
+    fn test_tls_connector_client_key_without_cert_fails() {
+        let mut params = params_with_ssl("require");
+        params.ssl_cert = None;
+        params.ssl_key = Some("/path/to/key.pem".to_string());
+
+        let result = build_postgres_tls_connector(&params);
+        match result {
+            Err(e) => assert!(e.contains("ssl_key")),
+            Ok(_) => panic!("Expected error when ssl_key is provided without ssl_cert"),
+        }
     }
 }
 
