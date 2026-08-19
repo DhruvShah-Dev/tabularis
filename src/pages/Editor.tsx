@@ -16,11 +16,9 @@ import {
 } from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
 import { useClickOutside } from "../hooks/useClickOutside";
-import {
-  useDangerousQueryGuard,
-  DANGEROUS_QUERY_I18N,
-} from "../hooks/useDangerousQueryGuard";
+import { DANGEROUS_QUERY_I18N } from "../hooks/useDangerousQueryGuard";
 import { useProductionGuard } from "../hooks/useProductionGuard";
+import { useQueryGuards } from "../hooks/useQueryGuards";
 import {
   generateTempId,
   initializeNewRow,
@@ -411,9 +409,9 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     useState(false);
   const {
     pending: dangerousQuery,
-    guardQuery: guardDangerousQuery,
+    guardQuery: guardQueryExecution,
     resolve: resolveDangerousQuery,
-  } = useDangerousQueryGuard();
+  } = useQueryGuards(activeConnectionId);
   const guardProductionWrite = useProductionGuard();
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
@@ -929,8 +927,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
       if (!textToRun || !textToRun.trim()) return;
 
-      if (!(await guardDangerousQuery(textToRun))) return;
-      if (!(await guardProductionWrite(activeConnectionId, textToRun))) return;
+      const mayRun = await guardQueryExecution(textToRun);
+      if (!mayRun) return;
 
       // Check for parameters
       const params = extractQueryParams(textToRun, activeDialect);
@@ -1157,8 +1155,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       isMultiDb,
       activeDatabaseName,
       addHistoryEntry,
-      guardDangerousQuery,
-      guardProductionWrite,
+      guardQueryExecution,
       activeDialect,
     ],
   );
@@ -1171,10 +1168,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const targetTab = tabsRef.current.find((t) => t.id === targetTabId);
       if (!targetTab) return;
 
-      if (!(await guardDangerousQuery(queries))) return;
-      if (!(await guardProductionWrite(activeConnectionId, queries.join(";\n")))) {
-        return;
-      }
+      const mayRun = await guardQueryExecution(queries);
+      if (!mayRun) return;
 
       // Collect all unique parameters across all queries
       const allParams = [
@@ -1358,8 +1353,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       isMultiDb,
       activeDatabaseName,
       addHistoryEntry,
-      guardDangerousQuery,
-      guardProductionWrite,
+      guardQueryExecution,
       activeDialect,
     ],
   );
@@ -1821,12 +1815,17 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
     // Monaco Editor: handle selection and multi-query
     if (!editorsRef.current[activeTab.id]) {
-      // Fallback: no cursor context available (editor ref not mounted, e.g.
-      // after tab restore) — run everything, same precedent as runAutoQuery.
+      // Fallback: no cursor context available (editor not mounted yet). Never
+      // fire a whole script the user didn't ask for — with more than one
+      // statement, ask which one to run.
       if (activeTab.query?.trim()) {
         const queries = splitQueries(activeTab.query, activeDialect);
-        if (queries.length <= 1) runQuery(queries[0] || activeTab.query, 1);
-        else runMultipleQueries(queries);
+        if (queries.length <= 1) {
+          runQuery(queries[0] || activeTab.query, 1);
+        } else {
+          setSelectableQueries(queries);
+          setIsQuerySelectionModalOpen(true);
+        }
       }
       return;
     }
@@ -2224,40 +2223,41 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       if (!activeTabIdRef.current) return;
       const tabId = activeTabIdRef.current;
 
-      const currentTab = tabsRef.current.find((t) => t.id === tabId);
-      if (!currentTab) return;
-
-      const pkKey = serializePkKey(pkVal as Record<string, unknown>);
-      const currentPending = currentTab.pendingChanges || {};
-      const rowEntry = currentPending[pkKey] || {
-        pkOriginalValue: pkVal,
-        changes: {},
-      };
-
-      // Create new changes object
-      const newChanges = { ...rowEntry.changes };
-
-      if (value === undefined) {
-        // Remove change
-        delete newChanges[colName];
-      } else {
-        // Update change
-        newChanges[colName] = value;
-      }
-
-      const newPending = { ...currentPending };
-
-      // If no changes left for this row, remove the row entry
-      if (Object.keys(newChanges).length === 0) {
-        delete newPending[pkKey];
-      } else {
-        newPending[pkKey] = {
-          ...rowEntry,
-          changes: newChanges,
+      // Functional update: rapid successive calls (e.g. a multi-cell paste)
+      // must each see the previous call's result, not a stale snapshot.
+      updateTab(tabId, (currentTab) => {
+        const pkKey = serializePkKey(pkVal as Record<string, unknown>);
+        const currentPending = currentTab.pendingChanges || {};
+        const rowEntry = currentPending[pkKey] || {
+          pkOriginalValue: pkVal,
+          changes: {},
         };
-      }
 
-      updateTab(tabId, { pendingChanges: newPending });
+        // Create new changes object
+        const newChanges = { ...rowEntry.changes };
+
+        if (value === undefined) {
+          // Remove change
+          delete newChanges[colName];
+        } else {
+          // Update change
+          newChanges[colName] = value;
+        }
+
+        const newPending = { ...currentPending };
+
+        // If no changes left for this row, remove the row entry
+        if (Object.keys(newChanges).length === 0) {
+          delete newPending[pkKey];
+        } else {
+          newPending[pkKey] = {
+            ...rowEntry,
+            changes: newChanges,
+          };
+        }
+
+        return { pendingChanges: newPending };
+      });
     },
     [updateTab],
   );
@@ -2328,29 +2328,30 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       if (!activeTabIdRef.current) return;
       const tabId = activeTabIdRef.current;
 
-      const currentTab = tabsRef.current.find((t) => t.id === tabId);
-      if (!currentTab) return;
+      // Functional update: rapid successive calls (e.g. a multi-cell paste)
+      // must each see the previous call's result, not a stale snapshot.
+      updateTab(tabId, (currentTab) => {
+        const currentPendingInsertions = currentTab.pendingInsertions || {};
+        const insertion = currentPendingInsertions[tempId];
+        if (!insertion) return {};
 
-      const currentPendingInsertions = currentTab.pendingInsertions || {};
-      const insertion = currentPendingInsertions[tempId];
-      if (!insertion) return;
+        const newData = { ...insertion.data };
+        if (value === undefined) {
+          delete newData[colName];
+        } else {
+          newData[colName] = value;
+        }
 
-      const newData = { ...insertion.data };
-      if (value === undefined) {
-        delete newData[colName];
-      } else {
-        newData[colName] = value;
-      }
-
-      const newPendingInsertions = {
-        ...currentPendingInsertions,
-        [tempId]: {
-          ...insertion,
-          data: newData,
-        },
-      };
-
-      updateTab(tabId, { pendingInsertions: newPendingInsertions });
+        return {
+          pendingInsertions: {
+            ...currentPendingInsertions,
+            [tempId]: {
+              ...insertion,
+              data: newData,
+            },
+          },
+        };
+      });
     },
     [updateTab],
   );
@@ -3092,9 +3093,12 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
   ) => {
     editorsRef.current[tabId] = editor;
     setMonacoInstance(monaco);
-    // Focus the editor when a console tab is opened (Ctrl+T / new console)
+    // Focus the editor when a console tab is opened (Ctrl+T / new console).
+    // Background tabs mount too, and must not steal focus from the active one.
     const mountedTab = tabsRef.current.find((t) => t.id === tabId);
-    if (mountedTab?.type === "console") editor.focus();
+    if (mountedTab?.type === "console" && tabId === activeTabIdRef.current) {
+      editor.focus();
+    }
     editor.addAction({
       id: "run-selection",
       label: "Execute Selection",
@@ -3978,11 +3982,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                 onRun={handleRunButton}
                 onRunAll={handleRunAll}
                 onRunContextChange={isActive ? handleRunContextChange : undefined}
-                onMount={
-                  isActive
-                    ? (editor, monaco) =>
-                        handleEditorMount(editor, monaco, tab.id)
-                    : undefined
+                onMount={(editor, monaco) =>
+                  handleEditorMount(editor, monaco, tab.id)
                 }
                 editorKey={tab.id}
                 options={{
@@ -4680,7 +4681,9 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         sql={dangerousQuery?.sql}
         confirmLabel={t("editor.dangerousQueryConfirm")}
         variant="danger"
-        confirmDelaySeconds={5}
+        confirmDelaySeconds={
+          settings.safetyConfirmationDelayEnabled ? 5 : undefined
+        }
       />
       <TabSwitcherModal
         isOpen={isTabSwitcherOpen}
@@ -4713,7 +4716,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         schema={activeTab?.schema ?? activeSchema ?? undefined}
         onInsert={(q) => {
           updateActiveTab({ query: q });
-          runQuery(q, 1);
+          // AI-generated SQL uses the same production-first safety pipeline.
+          void runQuery(q, 1);
         }}
       />
       <AiExplainModal

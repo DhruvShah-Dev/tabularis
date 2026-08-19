@@ -617,6 +617,7 @@ pub fn run() {
             // Plugin Registry
             plugins::commands::fetch_plugin_registry,
             plugins::commands::install_plugin,
+            plugins::commands::cancel_plugin_install,
             plugins::commands::uninstall_plugin,
             plugins::commands::get_installed_plugins,
             plugins::commands::disable_plugin,

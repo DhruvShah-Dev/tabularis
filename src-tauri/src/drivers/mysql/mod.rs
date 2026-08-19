@@ -218,7 +218,16 @@ fn push_pk_value(
             }
         }
         serde_json::Value::String(s) => {
-            if let Some(n) = parse_unsafe_bigint_string(s) {
+            if let Some(bytes) = crate::drivers::common::decode_blob_wire_format(
+                s,
+                crate::drivers::common::DEFAULT_MAX_BLOB_SIZE,
+            ) {
+                if text.enabled {
+                    qb.push(mysql_bytes_literal(&bytes));
+                } else {
+                    qb.push_bind(bytes);
+                }
+            } else if let Some(n) = parse_unsafe_bigint_string(s) {
                 if text.enabled {
                     qb.push(n.to_string());
                 } else {
@@ -748,6 +757,87 @@ pub async fn delete_record(
     .await
 }
 
+fn push_mysql_update_value(
+    qb: &mut sqlx::QueryBuilder<'_, sqlx::MySql>,
+    new_val: &serde_json::Value,
+    text: TextProto,
+    max_blob_size: u64,
+) -> Result<(), String> {
+    match new_val {
+        serde_json::Value::Number(n) => {
+            if n.is_i64() {
+                if text.enabled {
+                    qb.push(n.to_string());
+                } else {
+                    qb.push_bind(n.as_i64());
+                }
+            } else if text.enabled {
+                qb.push(n.to_string());
+            } else {
+                qb.push_bind(n.as_f64());
+            }
+        }
+        serde_json::Value::String(s) => {
+            if s == "__USE_DEFAULT__" {
+                qb.push("DEFAULT");
+            } else if let Some(bytes) =
+                crate::drivers::common::decode_blob_wire_format(s, max_blob_size)
+            {
+                // Blob wire format: decode to raw bytes so the DB stores binary data,
+                // not the internal wire format string.
+                if text.enabled {
+                    qb.push(mysql_bytes_literal(&bytes));
+                } else {
+                    qb.push_bind(bytes);
+                }
+            } else if is_raw_sql_function(s) {
+                qb.push(s);
+            } else if is_wkt_geometry(s) {
+                qb.push("ST_GeomFromText(");
+                if text.enabled {
+                    qb.push(mysql_string_literal(s, text.no_backslash_escapes));
+                } else {
+                    qb.push_bind(s.clone());
+                }
+                qb.push(")");
+            } else if let Some(n) = parse_unsafe_bigint_string(s) {
+                // Bigints outside JS safe range come back from the UI as strings
+                // (see drivers::common::i64_to_json). Bind them as native i64 so
+                // BIGINT columns receive the exact value.
+                if text.enabled {
+                    qb.push(n.to_string());
+                } else {
+                    qb.push_bind(n);
+                }
+            } else if text.enabled {
+                qb.push(mysql_string_literal(s, text.no_backslash_escapes));
+            } else {
+                qb.push_bind(s.clone());
+            }
+        }
+        serde_json::Value::Bool(b) => {
+            if text.enabled {
+                qb.push(if *b { "1" } else { "0" });
+            } else {
+                qb.push_bind(*b);
+            }
+        }
+        serde_json::Value::Null => {
+            qb.push("NULL");
+        }
+        serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
+            let json_str = serde_json::to_string(new_val).map_err(|e| e.to_string())?;
+            if text.enabled {
+                qb.push(mysql_string_literal(&json_str, text.no_backslash_escapes));
+            } else {
+                qb.push_bind(json_str);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn update_record(
     params: &ConnectionParams,
     table: &str,
@@ -768,79 +858,7 @@ pub async fn update_record(
         escape_identifier(col_name)
     ));
 
-    match new_val {
-        serde_json::Value::Number(n) => {
-            if n.is_i64() {
-                if text.enabled {
-                    qb.push(n.to_string());
-                } else {
-                    qb.push_bind(n.as_i64());
-                }
-            } else if text.enabled {
-                qb.push(n.to_string());
-            } else {
-                qb.push_bind(n.as_f64());
-            }
-        }
-        serde_json::Value::String(s) => {
-            if s == "__USE_DEFAULT__" {
-                qb.push("DEFAULT");
-            } else if let Some(bytes) =
-                crate::drivers::common::decode_blob_wire_format(&s, max_blob_size)
-            {
-                // Blob wire format: decode to raw bytes so the DB stores binary data,
-                // not the internal wire format string.
-                if text.enabled {
-                    qb.push(mysql_bytes_literal(&bytes));
-                } else {
-                    qb.push_bind(bytes);
-                }
-            } else if is_raw_sql_function(&s) {
-                qb.push(s);
-            } else if is_wkt_geometry(&s) {
-                qb.push("ST_GeomFromText(");
-                if text.enabled {
-                    qb.push(mysql_string_literal(&s, text.no_backslash_escapes));
-                } else {
-                    qb.push_bind(s);
-                }
-                qb.push(")");
-            } else if let Some(n) = parse_unsafe_bigint_string(&s) {
-                // Bigints outside JS safe range come back from the UI as strings
-                // (see drivers::common::i64_to_json). Bind them as native i64 so
-                // BIGINT columns receive the exact value.
-                if text.enabled {
-                    qb.push(n.to_string());
-                } else {
-                    qb.push_bind(n);
-                }
-            } else if text.enabled {
-                qb.push(mysql_string_literal(&s, text.no_backslash_escapes));
-            } else {
-                qb.push_bind(s);
-            }
-        }
-        serde_json::Value::Bool(b) => {
-            if text.enabled {
-                qb.push(if b { "1" } else { "0" });
-            } else {
-                qb.push_bind(b);
-            }
-        }
-        serde_json::Value::Null => {
-            qb.push("NULL");
-        }
-        serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
-            let json_str = serde_json::to_string(&new_val).map_err(|e| e.to_string())?;
-            qb.push("CAST(");
-            if text.enabled {
-                qb.push(mysql_string_literal(&json_str, text.no_backslash_escapes));
-            } else {
-                qb.push_bind(json_str);
-            }
-            qb.push(" AS JSON)");
-        }
-    }
+    push_mysql_update_value(&mut qb, &new_val, text, max_blob_size)?;
 
     qb.push(" WHERE ");
     let mut first = true;

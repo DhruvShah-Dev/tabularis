@@ -468,6 +468,81 @@ async fn test_mysql_affected_rows_reported_correctly() {
 }
 
 #[tokio::test]
+#[ignore]
+async fn test_mysql_delete_record_with_binary_primary_key() {
+    let params = get_mysql_params();
+    if !wait_for_mysql(&params).await {
+        eprintln!("SKIPPING: MySQL not reachable on 33060");
+        return;
+    }
+
+    let _ = mysql::execute_query(
+        &params,
+        "DROP TABLE IF EXISTS test_binary_pk_delete",
+        None,
+        1,
+        None,
+    )
+    .await;
+    mysql::execute_query(
+        &params,
+        "CREATE TABLE test_binary_pk_delete (id BINARY(16) PRIMARY KEY, description VARCHAR(100))",
+        None,
+        1,
+        None,
+    )
+    .await
+    .expect("table creation should succeed");
+    mysql::execute_query(
+        &params,
+        "INSERT INTO test_binary_pk_delete VALUES (UUID_TO_BIN('550e8400-e29b-41d4-a716-446655440000'), 'issue 646')",
+        None,
+        1,
+        None,
+    )
+    .await
+    .expect("row insertion should succeed");
+
+    let selected = mysql::execute_query(
+        &params,
+        "SELECT id, description FROM test_binary_pk_delete",
+        None,
+        1,
+        None,
+    )
+    .await
+    .expect("row selection should succeed");
+    let binary_id = selected.rows[0][0].clone();
+    assert!(binary_id.as_str().is_some_and(|value| value.starts_with("BLOB:")));
+
+    let pk_map = std::collections::HashMap::from([("id".to_string(), binary_id)]);
+    let affected = mysql::delete_record(&params, "test_binary_pk_delete", &pk_map)
+        .await
+        .expect("binary primary-key deletion should succeed");
+    assert_eq!(affected, 1);
+
+    let remaining = mysql::execute_query(
+        &params,
+        "SELECT COUNT(*) FROM test_binary_pk_delete",
+        None,
+        1,
+        None,
+    )
+    .await
+    .expect("row count should succeed");
+    assert_eq!(remaining.rows[0][0].as_i64(), Some(0));
+
+    let _ = mysql::execute_query(
+        &params,
+        "DROP TABLE test_binary_pk_delete",
+        None,
+        1,
+        None,
+    )
+    .await;
+}
+
+#[tokio::test]
 #[ignore] // Run via pg-integration.yml CI or --include-ignored
 async fn test_postgres_affected_rows_reported_correctly() {
     let params = get_postgres_params();

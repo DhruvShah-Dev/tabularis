@@ -39,9 +39,10 @@ export const DANGEROUS_QUERY_I18N: Record<
  * dialog) for safe statements; for dangerous ones it opens the dialog and
  * resolves once the user answers. A second dangerous statement submitted while
  * a dialog is already open is declined immediately instead of replacing the
- * pending one, so the first caller's promise always settles.
+ * pending one, so the first caller's promise always settles. Pass `false` to
+ * disable this guard when a higher-priority safety prompt handles the action.
  */
-export function useDangerousQueryGuard() {
+export function useDangerousQueryGuard(enabled = true) {
   const [pending, setPending] = useState<DangerousQueryInfo | null>(null);
   const resolverRef = useRef<((confirmed: boolean) => void) | null>(null);
 
@@ -64,6 +65,8 @@ export function useDangerousQueryGuard() {
 
   const guardQuery = useCallback(
     (sqlOrQueries: string | string[]): Promise<boolean> => {
+      if (!enabled) return Promise.resolve(true);
+
       const statements = Array.isArray(sqlOrQueries)
         ? sqlOrQueries
         : [sqlOrQueries];
@@ -80,7 +83,7 @@ export function useDangerousQueryGuard() {
       if (!first) return Promise.resolve(true);
       return requestConfirmation({ ...first, count });
     },
-    [requestConfirmation],
+    [enabled, requestConfirmation],
   );
 
   return { pending, isPending: pending !== null, guardQuery, resolve };

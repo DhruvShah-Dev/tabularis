@@ -3,9 +3,9 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::RwLock;
 use tauri::AppHandle;
 use tauri::Manager;
-use std::sync::RwLock;
 
 use std::collections::HashMap;
 
@@ -79,6 +79,8 @@ pub struct AppConfig {
     /// Default: `true` — matches the behaviour users expect from most editors.
     pub editor_accept_suggestion_on_enter: Option<bool>,
     pub run_statement_under_cursor: Option<bool>,
+    /// Delay destructive-query and production-write confirmations for five seconds. Default: false.
+    pub safety_confirmation_delay_enabled: Option<bool>,
     // ----- SQL Formatter -----
     pub formatter_keyword_case: Option<String>,
     pub formatter_indent_style: Option<String>,
@@ -371,6 +373,10 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         }
         if config.run_statement_under_cursor.is_some() {
             existing_config.run_statement_under_cursor = config.run_statement_under_cursor;
+        }
+        if config.safety_confirmation_delay_enabled.is_some() {
+            existing_config.safety_confirmation_delay_enabled =
+                config.safety_confirmation_delay_enabled;
         }
         if config.ping_interval.is_some() {
             let old_interval = existing_config.ping_interval;
@@ -923,6 +929,7 @@ mod tests {
     #[test]
     fn editor_fields_default_to_none() {
         let config = AppConfig::default();
+        assert!(config.safety_confirmation_delay_enabled.is_none());
         assert!(config.editor_theme.is_none());
         assert!(config.editor_font_family.is_none());
         assert!(config.editor_font_size.is_none());
@@ -944,6 +951,7 @@ mod tests {
         config.editor_show_line_numbers = Some(true);
         config.editor_theme = Some("tabularis-light".to_string());
         config.editor_accept_suggestion_on_enter = Some(true);
+        config.safety_confirmation_delay_enabled = Some(true);
 
         let json = serde_json::to_string(&config).unwrap();
         assert!(json.contains("editorFontFamily"));
@@ -954,9 +962,11 @@ mod tests {
         assert!(json.contains("editorShowLineNumbers"));
         assert!(json.contains("editorTheme"));
         assert!(json.contains("editorAcceptSuggestionOnEnter"));
+        assert!(json.contains("safetyConfirmationDelayEnabled"));
         // snake_case must not appear
         assert!(!json.contains("editor_font_family"));
         assert!(!json.contains("editor_accept_suggestion_on_enter"));
+        assert!(!json.contains("safety_confirmation_delay_enabled"));
     }
 
     #[test]
@@ -969,7 +979,8 @@ mod tests {
             "editorWordWrap": true,
             "editorShowLineNumbers": true,
             "editorTheme": "tabularis-dark",
-            "editorAcceptSuggestionOnEnter": true
+            "editorAcceptSuggestionOnEnter": true,
+            "safetyConfirmationDelayEnabled": true
         }"#;
 
         let config: AppConfig = serde_json::from_str(json).unwrap();
@@ -980,6 +991,7 @@ mod tests {
         assert_eq!(config.editor_show_line_numbers, Some(true));
         assert_eq!(config.editor_theme.as_deref(), Some("tabularis-dark"));
         assert_eq!(config.editor_accept_suggestion_on_enter, Some(true));
+        assert_eq!(config.safety_confirmation_delay_enabled, Some(true));
     }
 
     #[test]
