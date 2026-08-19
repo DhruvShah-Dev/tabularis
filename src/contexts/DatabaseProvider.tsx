@@ -728,7 +728,13 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
       // comes from the server on every connect, so databases created/dropped
       // outside the app show up without editing the connection.
       const allDatabasesMode = isMultiDatabaseCapable(capabilities) && savedDbList.length === 0;
-      let isMultiDb = savedDbList.length > 1;
+      // `>= 1`, not `> 1`: a connection saved with a single database is still a
+      // database *selection*, and `usesMultiDatabaseLayout` already accepts one.
+      // Gating here at `> 1` left `selectedDatabases` empty for that case, so
+      // the layout function's `>= 1` was unreachable and the sidebar lost the
+      // manage/refresh controls — leaving no way to pick another database
+      // without reopening the connection settings.
+      let isMultiDb = savedDbList.length >= 1;
       let dbList = isMultiDb ? savedDbList : [];
 
       if (allDatabasesMode) {
@@ -763,7 +769,7 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
             const { selection, removed } = reconcileDatabaseSelection(dbList, available);
             if (removed.length > 0) {
               dbList = selection;
-              isMultiDb = selection.length > 1;
+              isMultiDb = selection.length >= 1;
               invoke('set_selected_databases', {
                 connectionId,
                 databases: selection,
@@ -820,6 +826,11 @@ export const DatabaseProvider = ({ children }: { children: ReactNode }) => {
           databaseDataMap: initialDbMap,
           allDatabasesMode,
           ...(allDatabasesMode ? { databaseName: firstDb } : {}),
+          // A lone database has nothing to choose between, so mark it active:
+          // the tree expands the active database, and leaving it collapsed
+          // would put its tables one click further away than the flat
+          // single-database layout this replaces.
+          ...(dbList.length === 1 ? { activeSchema: firstDb } : {}),
           isLoadingTables: false,
           isLoadingViews: false,
           isLoadingRoutines: false,
