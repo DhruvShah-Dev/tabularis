@@ -15,14 +15,10 @@ import {
   usesMultiDatabaseLayout,
 } from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
-import { isProductionConnection } from "../utils/environment";
-import { passQueryGuards } from "../utils/queryGuard";
 import { useClickOutside } from "../hooks/useClickOutside";
-import {
-  useDangerousQueryGuard,
-  DANGEROUS_QUERY_I18N,
-} from "../hooks/useDangerousQueryGuard";
+import { DANGEROUS_QUERY_I18N } from "../hooks/useDangerousQueryGuard";
 import { useProductionGuard } from "../hooks/useProductionGuard";
+import { useQueryGuards } from "../hooks/useQueryGuards";
 import {
   generateTempId,
   initializeNewRow,
@@ -238,10 +234,6 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
   const driverReadonly = isReadonly(activeCapabilities);
   const driverSupportsExplain = supportsExplain(activeCapabilities);
   const activeDialect = activeCapabilities?.sql_dialect;
-  const hasProductionConnection = isProductionConnection(
-    connections,
-    activeConnectionId,
-  );
 
   // Editor panes stay mounted (hidden with display:none) so Monaco never
   // remounts. Render them sorted by id, decoupled from the tab-strip order:
@@ -417,9 +409,9 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     useState(false);
   const {
     pending: dangerousQuery,
-    guardQuery: guardDangerousQuery,
+    guardQuery: guardQueryExecution,
     resolve: resolveDangerousQuery,
-  } = useDangerousQueryGuard(!hasProductionConnection);
+  } = useQueryGuards(activeConnectionId);
   const guardProductionWrite = useProductionGuard();
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
@@ -935,11 +927,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
       if (!textToRun || !textToRun.trim()) return;
 
-      const mayRun = await passQueryGuards({
-        guardProduction: () =>
-          guardProductionWrite(activeConnectionId, textToRun),
-        guardDangerousQuery: () => guardDangerousQuery(textToRun),
-      });
+      const mayRun = await guardQueryExecution(textToRun);
       if (!mayRun) return;
 
       // Check for parameters
@@ -1167,8 +1155,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       isMultiDb,
       activeDatabaseName,
       addHistoryEntry,
-      guardDangerousQuery,
-      guardProductionWrite,
+      guardQueryExecution,
       activeDialect,
     ],
   );
@@ -1181,11 +1168,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const targetTab = tabsRef.current.find((t) => t.id === targetTabId);
       if (!targetTab) return;
 
-      const mayRun = await passQueryGuards({
-        guardProduction: () =>
-          guardProductionWrite(activeConnectionId, queries.join(";\n")),
-        guardDangerousQuery: () => guardDangerousQuery(queries),
-      });
+      const mayRun = await guardQueryExecution(queries);
       if (!mayRun) return;
 
       // Collect all unique parameters across all queries
@@ -1370,8 +1353,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       isMultiDb,
       activeDatabaseName,
       addHistoryEntry,
-      guardDangerousQuery,
-      guardProductionWrite,
+      guardQueryExecution,
       activeDialect,
     ],
   );

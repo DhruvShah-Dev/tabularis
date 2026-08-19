@@ -60,16 +60,11 @@ import {
 import { useDatabase } from "../../hooks/useDatabase";
 import { useSqlAutocompleteRegistration } from "../../hooks/useSqlAutocompleteRegistration";
 import { usesMultiDatabaseLayout } from "../../utils/database";
-import { isProductionConnection } from "../../utils/environment";
-import { passQueryGuards } from "../../utils/queryGuard";
 import { useSettings } from "../../hooks/useSettings";
 import { useAlert } from "../../hooks/useAlert";
 import { useKeybindings } from "../../hooks/useKeybindings";
-import {
-  useDangerousQueryGuard,
-  DANGEROUS_QUERY_I18N,
-} from "../../hooks/useDangerousQueryGuard";
-import { useProductionGuard } from "../../hooks/useProductionGuard";
+import { DANGEROUS_QUERY_I18N } from "../../hooks/useDangerousQueryGuard";
+import { useQueryGuards } from "../../hooks/useQueryGuards";
 import { ConfirmModal } from "../modals/ConfirmModal";
 import { NotebookToolbar } from "./NotebookToolbar";
 import { NotebookHistoryPanel } from "./NotebookHistoryPanel";
@@ -94,13 +89,8 @@ export function NotebookView({
   isActive,
 }: NotebookViewProps) {
   const { t } = useTranslation();
-  const {
-    activeSchema,
-    activeCapabilities,
-    selectedDatabases,
-    activeDriver,
-    connections,
-  } = useDatabase();
+  const { activeSchema, activeCapabilities, selectedDatabases, activeDriver } =
+    useDatabase();
   const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
   const effectiveSchema =
     tab.schema || activeSchema || (isMultiDb ? selectedDatabases[0] : null);
@@ -109,18 +99,13 @@ export function NotebookView({
     enabled: isActive,
   });
   const { settings } = useSettings();
-  const hasProductionConnection = isProductionConnection(
-    connections,
-    connectionId,
-  );
   const { showAlert } = useAlert();
   const { matchesShortcut } = useKeybindings();
   const {
     pending: dangerousQuery,
-    guardQuery: guardDangerousQuery,
+    guardQuery: guardQueryExecution,
     resolve: resolveDangerousQuery,
-  } = useDangerousQueryGuard(!hasProductionConnection);
-  const guardProductionWrite = useProductionGuard();
+  } = useQueryGuards(connectionId);
 
   // Local notebook state — loaded from store/disk, NOT from tab
   const [notebook, setNotebook] = useState<NotebookState | null>(() =>
@@ -380,10 +365,7 @@ export function NotebookView({
         return;
       }
 
-      const mayRun = await passQueryGuards({
-        guardProduction: () => guardProductionWrite(connectionId, resolvedSql),
-        guardDangerousQuery: () => guardDangerousQuery(resolvedSql),
-      });
+      const mayRun = await guardQueryExecution(resolvedSql);
       if (!mayRun) {
         updateCell(cellId, { isLoading: false });
         return;
@@ -443,8 +425,7 @@ export function NotebookView({
       updateCell,
       params,
       activeDriver,
-      guardDangerousQuery,
-      guardProductionWrite,
+      guardQueryExecution,
     ],
   );
 
