@@ -496,6 +496,8 @@
     "queryExecution": "Ejecución de consultas",
     "runStatementUnderCursor": "Ejecutar la instrucción bajo el cursor",
     "runStatementUnderCursorDesc": "Cuando un script tiene varias instrucciones, ejecuta la que está bajo el cursor en lugar de mostrar el selector de consultas. Selecciona texto para ejecutar un rango específico.",
+    "safetyConfirmationDelay": "Retrasar las confirmaciones de seguridad",
+    "safetyConfirmationDelayDesc": "Desactiva los botones de confirmación durante cinco segundos para consultas destructivas y escrituras en producción.",
     "formatter_title": "Formateador SQL",
     "formatter_keywordCase": "Mayúsculas en palabras clave",
     "formatter_keywordCaseDesc": "Cómo se capitalizan las palabras clave SQL (SELECT, FROM, WHERE) después del formateo.",
