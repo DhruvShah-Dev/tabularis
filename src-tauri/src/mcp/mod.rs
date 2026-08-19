@@ -321,6 +321,16 @@ async fn register_drivers_for_mcp() {
     let plugin_configs = app_config.plugins.unwrap_or_default();
     let enabled_ids = app_config.active_external_drivers;
     plugins::manager::load_plugins_with_configs(plugin_configs, enabled_ids.as_deref()).await;
+
+    // Must run after driver registration above — the migration resolves each
+    // connection's driver dialect via the same registry, so it needs plugin
+    // drivers already loaded. This is the standalone MCP process's own entry
+    // point for a migration that previously only ran from the GUI process's
+    // Tauri commands (issue #639) — never blocks server startup on failure.
+    let conn_path = paths::resolve_connections_path(&paths::get_app_config_dir());
+    crate::connection_migrations::migrate_postgres_ssl_mode_spelling_at_path(&conn_path)
+        .await
+        .ok();
 }
 
 /// Resolve the driver for an MCP-known connection. Returns the connection,

@@ -63,11 +63,8 @@ import { usesMultiDatabaseLayout } from "../../utils/database";
 import { useSettings } from "../../hooks/useSettings";
 import { useAlert } from "../../hooks/useAlert";
 import { useKeybindings } from "../../hooks/useKeybindings";
-import {
-  useDangerousQueryGuard,
-  DANGEROUS_QUERY_I18N,
-} from "../../hooks/useDangerousQueryGuard";
-import { useProductionGuard } from "../../hooks/useProductionGuard";
+import { DANGEROUS_QUERY_I18N } from "../../hooks/useDangerousQueryGuard";
+import { useQueryGuards } from "../../hooks/useQueryGuards";
 import { ConfirmModal } from "../modals/ConfirmModal";
 import { NotebookToolbar } from "./NotebookToolbar";
 import { NotebookHistoryPanel } from "./NotebookHistoryPanel";
@@ -106,10 +103,9 @@ export function NotebookView({
   const { matchesShortcut } = useKeybindings();
   const {
     pending: dangerousQuery,
-    guardQuery: guardDangerousQuery,
+    guardQuery: guardQueryExecution,
     resolve: resolveDangerousQuery,
-  } = useDangerousQueryGuard();
-  const guardProductionWrite = useProductionGuard();
+  } = useQueryGuards(connectionId);
 
   // Local notebook state — loaded from store/disk, NOT from tab
   const [notebook, setNotebook] = useState<NotebookState | null>(() =>
@@ -369,12 +365,8 @@ export function NotebookView({
         return;
       }
 
-      if (!(await guardDangerousQuery(resolvedSql))) {
-        updateCell(cellId, { isLoading: false });
-        return;
-      }
-
-      if (!(await guardProductionWrite(connectionId, resolvedSql))) {
+      const mayRun = await guardQueryExecution(resolvedSql);
+      if (!mayRun) {
         updateCell(cellId, { isLoading: false });
         return;
       }
@@ -433,8 +425,7 @@ export function NotebookView({
       updateCell,
       params,
       activeDriver,
-      guardDangerousQuery,
-      guardProductionWrite,
+      guardQueryExecution,
     ],
   );
 
@@ -863,7 +854,9 @@ export function NotebookView({
         sql={dangerousQuery?.sql}
         confirmLabel={t("editor.dangerousQueryConfirm")}
         variant="danger"
-        confirmDelaySeconds={5}
+        confirmDelaySeconds={
+          settings.safetyConfirmationDelayEnabled ? 5 : undefined
+        }
       />
       <NotebookToolbar {...toolbarProps} />
       {showHistory && (

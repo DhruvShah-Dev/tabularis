@@ -501,6 +501,8 @@
     "queryExecution": "Pagpapatakbo ng Query",
     "runStatementUnderCursor": "Patakbuhin ang statement sa ilalim ng cursor",
     "runStatementUnderCursorDesc": "Kapag maraming statement ang isang script, patakbuhin ang nasa ilalim ng cursor sa halip na ipakita ang query picker. Pumili ng teksto para patakbuhin ang isang partikular na saklaw.",
+    "safetyConfirmationDelay": "Iantala ang mga kumpirmasyon sa kaligtasan",
+    "safetyConfirmationDelayDesc": "I-disable ang mga confirmation button nang limang segundo para sa mapanirang query at production writes.",
     "formatter_title": "SQL Formatter",
     "formatter_keywordCase": "Case ng Keyword",
     "formatter_keywordCaseDesc": "Paano icapitalize ang SQL keywords (SELECT, FROM, WHERE) pagkatapos i-format.",

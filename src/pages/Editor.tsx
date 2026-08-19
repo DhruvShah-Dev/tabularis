@@ -16,11 +16,9 @@ import {
 } from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
 import { useClickOutside } from "../hooks/useClickOutside";
-import {
-  useDangerousQueryGuard,
-  DANGEROUS_QUERY_I18N,
-} from "../hooks/useDangerousQueryGuard";
+import { DANGEROUS_QUERY_I18N } from "../hooks/useDangerousQueryGuard";
 import { useProductionGuard } from "../hooks/useProductionGuard";
+import { useQueryGuards } from "../hooks/useQueryGuards";
 import {
   generateTempId,
   initializeNewRow,
@@ -411,9 +409,9 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     useState(false);
   const {
     pending: dangerousQuery,
-    guardQuery: guardDangerousQuery,
+    guardQuery: guardQueryExecution,
     resolve: resolveDangerousQuery,
-  } = useDangerousQueryGuard();
+  } = useQueryGuards(activeConnectionId);
   const guardProductionWrite = useProductionGuard();
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
@@ -929,8 +927,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
       if (!textToRun || !textToRun.trim()) return;
 
-      if (!(await guardDangerousQuery(textToRun))) return;
-      if (!(await guardProductionWrite(activeConnectionId, textToRun))) return;
+      const mayRun = await guardQueryExecution(textToRun);
+      if (!mayRun) return;
 
       // Check for parameters
       const params = extractQueryParams(textToRun, activeDialect);
@@ -1157,8 +1155,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       isMultiDb,
       activeDatabaseName,
       addHistoryEntry,
-      guardDangerousQuery,
-      guardProductionWrite,
+      guardQueryExecution,
       activeDialect,
     ],
   );
@@ -1171,10 +1168,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const targetTab = tabsRef.current.find((t) => t.id === targetTabId);
       if (!targetTab) return;
 
-      if (!(await guardDangerousQuery(queries))) return;
-      if (!(await guardProductionWrite(activeConnectionId, queries.join(";\n")))) {
-        return;
-      }
+      const mayRun = await guardQueryExecution(queries);
+      if (!mayRun) return;
 
       // Collect all unique parameters across all queries
       const allParams = [
@@ -1358,8 +1353,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       isMultiDb,
       activeDatabaseName,
       addHistoryEntry,
-      guardDangerousQuery,
-      guardProductionWrite,
+      guardQueryExecution,
       activeDialect,
     ],
   );
@@ -4687,7 +4681,9 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         sql={dangerousQuery?.sql}
         confirmLabel={t("editor.dangerousQueryConfirm")}
         variant="danger"
-        confirmDelaySeconds={5}
+        confirmDelaySeconds={
+          settings.safetyConfirmationDelayEnabled ? 5 : undefined
+        }
       />
       <TabSwitcherModal
         isOpen={isTabSwitcherOpen}
@@ -4720,7 +4716,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         schema={activeTab?.schema ?? activeSchema ?? undefined}
         onInsert={(q) => {
           updateActiveTab({ query: q });
-          runQuery(q, 1);
+          // AI-generated SQL uses the same production-first safety pipeline.
+          void runQuery(q, 1);
         }}
       />
       <AiExplainModal

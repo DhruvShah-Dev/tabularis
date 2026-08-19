@@ -1,8 +1,9 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { TriangleAlert, X } from "lucide-react";
 import { Modal } from "../components/ui/Modal";
 import { SqlPreview } from "../components/ui/SqlPreview";
+import { useSettings } from "../hooks/useSettings";
 import {
   ProductionGuardContext,
   snoozedConnectionIds,
@@ -23,18 +24,29 @@ interface PendingPrompt {
 
 export function ProductionGuardProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
+  const { settings } = useSettings();
   const [pending, setPending] = useState<PendingPrompt | null>(null);
   const [snooze, setSnooze] = useState(false);
+  const [remaining, setRemaining] = useState(0);
 
   const request = useCallback<GuardRequest>(
     (connectionId, connectionName, sql) => {
       return new Promise<boolean>((resolve) => {
         setSnooze(false);
+        setRemaining(settings.safetyConfirmationDelayEnabled ? 5 : 0);
         setPending({ connectionId, connectionName, sql, resolve });
       });
     },
-    [],
+    [settings.safetyConfirmationDelayEnabled],
   );
+
+  useEffect(() => {
+    if (!pending || remaining <= 0) return;
+    const timeout = setTimeout(() => {
+      setRemaining((previous) => Math.max(0, previous - 1));
+    }, 1000);
+    return () => clearTimeout(timeout);
+  }, [pending, remaining]);
 
   const finish = (ok: boolean) => {
     if (!pending) return;
@@ -42,6 +54,7 @@ export function ProductionGuardProvider({ children }: { children: ReactNode }) {
       snoozedConnectionIds.add(pending.connectionId);
     }
     pending.resolve(ok);
+    setRemaining(0);
     setPending(null);
   };
 
@@ -97,9 +110,12 @@ export function ProductionGuardProvider({ children }: { children: ReactNode }) {
             </button>
             <button
               onClick={() => finish(true)}
-              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-medium transition-colors"
+              disabled={remaining > 0}
+              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {t("environment.warnConfirm")}
+              {remaining > 0
+                ? `${t("environment.warnConfirm")} (${remaining})`
+                : t("environment.warnConfirm")}
             </button>
           </div>
         </div>
