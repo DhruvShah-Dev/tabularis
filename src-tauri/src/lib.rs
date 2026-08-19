@@ -27,6 +27,9 @@ pub mod config;
 pub mod connection_cache;
 #[cfg(test)]
 pub mod connection_cache_tests;
+pub mod connection_migrations;
+#[cfg(test)]
+pub mod connection_migrations_tests;
 pub mod connection_tags;
 pub mod connection_window;
 #[cfg(test)]
