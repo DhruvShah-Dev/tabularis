@@ -15,6 +15,18 @@ describe('useDangerousQueryGuard', () => {
     expect(result.current.isPending).toBe(false);
   });
 
+  it('skips confirmation when the guard is disabled', async () => {
+    const { result } = renderHook(() => useDangerousQueryGuard(false));
+
+    let resolved: boolean | undefined;
+    await act(async () => {
+      resolved = await result.current.guardQuery('DROP TABLE users');
+    });
+
+    expect(resolved).toBe(true);
+    expect(result.current.pending).toBeNull();
+  });
+
   it('opens a pending confirmation for a destructive query with no WHERE', async () => {
     const { result } = renderHook(() => useDangerousQueryGuard());
 

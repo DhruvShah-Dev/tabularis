@@ -15,6 +15,8 @@ import {
   usesMultiDatabaseLayout,
 } from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
+import { isProductionConnection } from "../utils/environment";
+import { passQueryGuards } from "../utils/queryGuard";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
   useDangerousQueryGuard,
@@ -236,6 +238,10 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
   const driverReadonly = isReadonly(activeCapabilities);
   const driverSupportsExplain = supportsExplain(activeCapabilities);
   const activeDialect = activeCapabilities?.sql_dialect;
+  const hasProductionConnection = isProductionConnection(
+    connections,
+    activeConnectionId,
+  );
 
   // Editor panes stay mounted (hidden with display:none) so Monaco never
   // remounts. Render them sorted by id, decoupled from the tab-strip order:
@@ -413,7 +419,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     pending: dangerousQuery,
     guardQuery: guardDangerousQuery,
     resolve: resolveDangerousQuery,
-  } = useDangerousQueryGuard();
+  } = useDangerousQueryGuard(!hasProductionConnection);
   const guardProductionWrite = useProductionGuard();
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
@@ -929,8 +935,12 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
       if (!textToRun || !textToRun.trim()) return;
 
-      if (!(await guardDangerousQuery(textToRun))) return;
-      if (!(await guardProductionWrite(activeConnectionId, textToRun))) return;
+      const mayRun = await passQueryGuards({
+        guardProduction: () =>
+          guardProductionWrite(activeConnectionId, textToRun),
+        guardDangerousQuery: () => guardDangerousQuery(textToRun),
+      });
+      if (!mayRun) return;
 
       // Check for parameters
       const params = extractQueryParams(textToRun, activeDialect);
@@ -1171,10 +1181,12 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const targetTab = tabsRef.current.find((t) => t.id === targetTabId);
       if (!targetTab) return;
 
-      if (!(await guardDangerousQuery(queries))) return;
-      if (!(await guardProductionWrite(activeConnectionId, queries.join(";\n")))) {
-        return;
-      }
+      const mayRun = await passQueryGuards({
+        guardProduction: () =>
+          guardProductionWrite(activeConnectionId, queries.join(";\n")),
+        guardDangerousQuery: () => guardDangerousQuery(queries),
+      });
+      if (!mayRun) return;
 
       // Collect all unique parameters across all queries
       const allParams = [
@@ -4687,7 +4699,9 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         sql={dangerousQuery?.sql}
         confirmLabel={t("editor.dangerousQueryConfirm")}
         variant="danger"
-        confirmDelaySeconds={5}
+        confirmDelaySeconds={
+          settings.safetyConfirmationDelayEnabled ? 5 : undefined
+        }
       />
       <TabSwitcherModal
         isOpen={isTabSwitcherOpen}
@@ -4720,7 +4734,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         schema={activeTab?.schema ?? activeSchema ?? undefined}
         onInsert={(q) => {
           updateActiveTab({ query: q });
-          runQuery(q, 1);
+          // AI-generated SQL uses the same production-first safety pipeline.
+          void runQuery(q, 1);
         }}
       />
       <AiExplainModal

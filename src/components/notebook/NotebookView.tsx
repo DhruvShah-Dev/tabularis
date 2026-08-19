@@ -60,6 +60,8 @@ import {
 import { useDatabase } from "../../hooks/useDatabase";
 import { useSqlAutocompleteRegistration } from "../../hooks/useSqlAutocompleteRegistration";
 import { usesMultiDatabaseLayout } from "../../utils/database";
+import { isProductionConnection } from "../../utils/environment";
+import { passQueryGuards } from "../../utils/queryGuard";
 import { useSettings } from "../../hooks/useSettings";
 import { useAlert } from "../../hooks/useAlert";
 import { useKeybindings } from "../../hooks/useKeybindings";
@@ -92,8 +94,13 @@ export function NotebookView({
   isActive,
 }: NotebookViewProps) {
   const { t } = useTranslation();
-  const { activeSchema, activeCapabilities, selectedDatabases, activeDriver } =
-    useDatabase();
+  const {
+    activeSchema,
+    activeCapabilities,
+    selectedDatabases,
+    activeDriver,
+    connections,
+  } = useDatabase();
   const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
   const effectiveSchema =
     tab.schema || activeSchema || (isMultiDb ? selectedDatabases[0] : null);
@@ -102,13 +109,17 @@ export function NotebookView({
     enabled: isActive,
   });
   const { settings } = useSettings();
+  const hasProductionConnection = isProductionConnection(
+    connections,
+    connectionId,
+  );
   const { showAlert } = useAlert();
   const { matchesShortcut } = useKeybindings();
   const {
     pending: dangerousQuery,
     guardQuery: guardDangerousQuery,
     resolve: resolveDangerousQuery,
-  } = useDangerousQueryGuard();
+  } = useDangerousQueryGuard(!hasProductionConnection);
   const guardProductionWrite = useProductionGuard();
 
   // Local notebook state — loaded from store/disk, NOT from tab
@@ -369,12 +380,11 @@ export function NotebookView({
         return;
       }
 
-      if (!(await guardDangerousQuery(resolvedSql))) {
-        updateCell(cellId, { isLoading: false });
-        return;
-      }
-
-      if (!(await guardProductionWrite(connectionId, resolvedSql))) {
+      const mayRun = await passQueryGuards({
+        guardProduction: () => guardProductionWrite(connectionId, resolvedSql),
+        guardDangerousQuery: () => guardDangerousQuery(resolvedSql),
+      });
+      if (!mayRun) {
         updateCell(cellId, { isLoading: false });
         return;
       }
@@ -863,7 +873,9 @@ export function NotebookView({
         sql={dangerousQuery?.sql}
         confirmLabel={t("editor.dangerousQueryConfirm")}
         variant="danger"
-        confirmDelaySeconds={5}
+        confirmDelaySeconds={
+          settings.safetyConfirmationDelayEnabled ? 5 : undefined
+        }
       />
       <NotebookToolbar {...toolbarProps} />
       {showHistory && (

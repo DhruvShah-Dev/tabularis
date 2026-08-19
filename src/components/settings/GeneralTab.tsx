@@ -146,6 +146,18 @@ export function GeneralTab() {
             onChange={(v) => updateSetting("runStatementUnderCursor", v)}
           />
         </SettingRow>
+
+        <SettingRow
+          label={t("settings.safetyConfirmationDelay")}
+          description={t("settings.safetyConfirmationDelayDesc")}
+        >
+          <SettingToggle
+            checked={settings.safetyConfirmationDelayEnabled === true}
+            onChange={(v) =>
+              updateSetting("safetyConfirmationDelayEnabled", v)
+            }
+          />
+        </SettingRow>
       </SettingSection>
 
       <SettingSection title={t("settings.connectionHealthCheck")}>
