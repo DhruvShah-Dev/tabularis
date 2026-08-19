@@ -3,6 +3,19 @@ import { rowsToMarkdown } from "./clipboard";
 
 export type ResultExportFormat = "csv" | "json" | "markdown";
 
+export function getLoadedRowsExportLimit(
+  result: QueryResult,
+): { loadedRows: number; totalRows: number } | null {
+  const totalRows = result.pagination?.total_rows;
+
+  if (typeof totalRows !== "number" || !Number.isFinite(totalRows)) {
+    return null;
+  }
+
+  const loadedRows = result.rows.length;
+  return loadedRows < totalRows ? { loadedRows, totalRows } : null;
+}
+
 function csvValue(value: unknown, delimiter: string): string {
   const text =
     value === null || value === undefined

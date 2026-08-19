@@ -4,7 +4,10 @@ import { useTranslation } from "react-i18next";
 import { reconstructTableQuery } from "../utils/editor";
 import { shouldShowStatementSuccess } from "../utils/resultPresentation";
 import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
-import { formatResultForExport } from "../utils/resultExport";
+import {
+  formatResultForExport,
+  getLoadedRowsExportLimit,
+} from "../utils/resultExport";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import {
   buildKeylessUpdatePlan,
@@ -267,6 +270,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     rowsProcessed: number;
     fileName: string;
     errorMessage?: string;
+    warningMessage?: string;
   }>({
     isOpen: false,
     status: "exporting",
@@ -3308,6 +3312,14 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     const multiResult = activeResultEntry?.result;
     if (multiResult?.rows.length) {
       try {
+        const loadedRowsLimit = getLoadedRowsExportLimit(multiResult);
+        const warningMessage = loadedRowsLimit
+          ? t("editor.exportLoadedRowsWarning", {
+              loaded: loadedRowsLimit.loadedRows.toLocaleString(),
+              total: loadedRowsLimit.totalRows.toLocaleString(),
+            })
+          : undefined;
+
         const filePath = await save({
           filters: [
             {
@@ -3325,6 +3337,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
           status: "exporting",
           rowsProcessed: multiResult.rows.length,
           fileName: filePath.split(/[/\\]/).pop() || filePath,
+          errorMessage: undefined,
+          warningMessage,
         });
         setExportMenuOpen(false);
 
@@ -3375,6 +3389,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         status: "exporting",
         rowsProcessed: 0,
         fileName: filePath.split(/[/\\]/).pop() || filePath, // Show only filename
+        errorMessage: undefined,
+        warningMessage: undefined,
       });
       setExportMenuOpen(false);
 
@@ -4877,6 +4893,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         rowsProcessed={exportState.rowsProcessed}
         fileName={exportState.fileName}
         errorMessage={exportState.errorMessage}
+        warningMessage={exportState.warningMessage}
         onCancel={cancelExport}
         onClose={closeExportModal}
       />
