@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { reconstructTableQuery } from "../utils/editor";
+import { reconstructTableQuery, resolveTabPageSize } from "../utils/editor";
 import { shouldShowStatementSuccess } from "../utils/resultPresentation";
 import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
@@ -72,6 +72,7 @@ import { TableToolbar } from "../components/ui/TableToolbar";
 import { DataGrid } from "../components/ui/DataGrid";
 import { MultiResultPanel } from "../components/ui/MultiResultPanel";
 import { ErrorDisplay } from "../components/ui/ErrorDisplay";
+import { PageSizeSelector } from "../components/ui/PageSizeSelector";
 import { NewRowModal } from "../components/modals/NewRowModal";
 import { QuerySelectionModal } from "../components/modals/QuerySelectionModal";
 import { ConfirmModal } from "../components/modals/ConfirmModal";
@@ -887,6 +888,9 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         pendingDeletions?: Record<string, unknown>;
         pendingInsertions?: Record<string, PendingInsertion>;
       },
+      // Skips tab state (which may not have re-rendered yet) when the page
+      // size is changed and re-run in the same handler; 0 = no pagination.
+      pageSizeOverride?: number,
     ) => {
       const targetTabId = tabId || activeTabIdRef.current;
       if (!activeConnectionId || !targetTabId) return;
@@ -1000,12 +1004,13 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
       try {
         const start = performance.now();
-        // Use settings.resultPageSize for Page Size (pagination), ignoring the "Total Limit" input which is handled in SQL
-        // Fallback to 100 if settings not loaded yet
-        const pageSize =
-          settings.resultPageSize && settings.resultPageSize > 0
-            ? settings.resultPageSize
-            : 100;
+        // Per-tab page size (falling back to the global Result Page Size)
+        // drives pagination; the "Total Limit" input is handled in the SQL.
+        // undefined disables pagination entirely (the user picked "All").
+        const pageSize = resolveTabPageSize(
+          pageSizeOverride ?? targetTab.pageSize,
+          settings.resultPageSize,
+        );
         const res = await invoke<QueryResult>("execute_query", {
           connectionId: activeConnectionId,
           query: textToRun,
@@ -1203,10 +1208,10 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         );
       }
 
-      const pageSize =
-        settings.resultPageSize && settings.resultPageSize > 0
-          ? settings.resultPageSize
-          : 100;
+      const pageSize = resolveTabPageSize(
+        targetTab.pageSize,
+        settings.resultPageSize,
+      );
       const schema = targetTab?.schema ?? activeSchema;
       const historyDb = schema
         || (isMultiDb ? activeDatabaseName : undefined)
@@ -1426,10 +1431,10 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const entry = currentTab?.results?.find((r) => r.id === entryId);
       if (!entry) return;
 
-      const pageSize =
-        settings.resultPageSize && settings.resultPageSize > 0
-          ? settings.resultPageSize
-          : 100;
+      const pageSize = resolveTabPageSize(
+        currentTab?.pageSize,
+        settings.resultPageSize,
+      );
       const schema = currentTab?.schema ?? activeSchema;
 
       // Mark this entry as loading
@@ -1492,6 +1497,37 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       }
     },
     [activeConnectionId, updateTab, settings.resultPageSize, activeSchema, t],
+  );
+
+  const handlePageSizeChange = useCallback(
+    (newSize: number) => {
+      const targetTabId = activeTabIdRef.current;
+      const tab = tabsRef.current.find((t) => t.id === targetTabId);
+      if (!targetTabId || !tab) return;
+      updateTab(targetTabId, { pageSize: newSize });
+      // Keep the first visible row in view when the page size changes
+      const pagination = tab.result?.pagination;
+      const newPage =
+        newSize > 0 && pagination
+          ? Math.floor(
+              ((pagination.page - 1) * pagination.page_size) / newSize,
+            ) + 1
+          : 1;
+      // The override carries the new size: tab state won't have re-rendered
+      // into tabsRef by the time runQuery reads it.
+      runQuery(
+        undefined,
+        newPage,
+        targetTabId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        newSize,
+      );
+    },
+    [runQuery, updateTab],
   );
 
   const loadCount = useCallback(
@@ -4262,15 +4298,29 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                     </div>
 
                     {/* Pagination Controls */}
-                    {activeTab.result.pagination && (
+                    {(activeTab.result.pagination ||
+                      activeTab.pageSize === 0) && (
                       <div className="flex items-center gap-1 bg-surface-secondary rounded border border-strong shrink-0">
+                        <PageSizeSelector
+                          value={activeTab.result.pagination?.page_size ?? 0}
+                          defaultSize={
+                            settings.resultPageSize &&
+                            settings.resultPageSize > 0
+                              ? settings.resultPageSize
+                              : 100
+                          }
+                          disabled={!!activeTab.isLoading}
+                          onChange={handlePageSizeChange}
+                        />
+                        {activeTab.result.pagination && (
+                          <>
                         <button
                           disabled={
                             activeTab.result.pagination.page === 1 ||
                             activeTab.isLoading
                           }
                           onClick={() => runQuery(undefined, 1)}
-                          className="hidden @[420px]:block p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="hidden @[420px]:block p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
                           title="First Page"
                         >
                           <ChevronsLeft size={14} />
@@ -4286,7 +4336,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                               activeTab.result!.pagination!.page - 1,
                             )
                           }
-                          className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed @[420px]:border-l border-strong"
+                          className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
                           title="Previous Page"
                         >
                           <ChevronLeft size={14} />
@@ -4410,6 +4460,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                         >
                           <ChevronsRight size={14} />
                         </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

@@ -2097,7 +2097,12 @@
     "firstPage": "Первая страница",
     "previousPage": "Предыдущая страница",
     "nextPage": "Следующая страница",
-    "lastPage": "Последняя страница"
+    "lastPage": "Последняя страница",
+    "pageSize": "Строк на странице",
+    "allRows": "Все",
+    "allRowsHint": "загружает все строки",
+    "customPageSize": "Свой размер…",
+    "defaultPageSize": "по умолчанию"
   },
   "miniGrid": {
     "runningQuery": "Выполнение запроса...",
