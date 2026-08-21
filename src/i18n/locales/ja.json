@@ -2044,7 +2044,12 @@
     "firstPage": "最初のページ",
     "previousPage": "前のページ",
     "nextPage": "次のページ",
-    "lastPage": "最後のページ"
+    "lastPage": "最後のページ",
+    "pageSize": "1ページあたりの行数",
+    "allRows": "すべて",
+    "allRowsHint": "すべての行を取得",
+    "customPageSize": "カスタム…",
+    "defaultPageSize": "デフォルト"
   },
   "miniGrid": {
     "runningQuery": "クエリを実行中...",

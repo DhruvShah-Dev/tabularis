@@ -2030,7 +2030,12 @@
     "firstPage": "첫 페이지",
     "previousPage": "이전 페이지",
     "nextPage": "다음 페이지",
-    "lastPage": "마지막 페이지"
+    "lastPage": "마지막 페이지",
+    "pageSize": "페이지당 행 수",
+    "allRows": "전체",
+    "allRowsHint": "모든 행을 가져옴",
+    "customPageSize": "사용자 지정…",
+    "defaultPageSize": "기본값"
   },
   "miniGrid": {
     "runningQuery": "쿼리를 실행하는 중...",

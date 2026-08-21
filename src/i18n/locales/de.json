@@ -2026,7 +2026,12 @@
     "firstPage": "Erste Seite",
     "previousPage": "Vorherige Seite",
     "nextPage": "Nächste Seite",
-    "lastPage": "Letzte Seite"
+    "lastPage": "Letzte Seite",
+    "pageSize": "Zeilen pro Seite",
+    "allRows": "Alle",
+    "allRowsHint": "ruft alle Zeilen ab",
+    "customPageSize": "Benutzerdefiniert…",
+    "defaultPageSize": "Standard"
   },
   "miniGrid": {
     "runningQuery": "Abfrage wird ausgeführt...",

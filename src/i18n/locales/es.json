@@ -1948,7 +1948,12 @@
     "firstPage": "Primera página",
     "previousPage": "Página anterior",
     "nextPage": "Página siguiente",
-    "lastPage": "Última página"
+    "lastPage": "Última página",
+    "pageSize": "Filas por página",
+    "allRows": "Todas",
+    "allRowsHint": "recupera todas las filas",
+    "customPageSize": "Personalizado…",
+    "defaultPageSize": "predeterminado"
   },
   "miniGrid": {
     "runningQuery": "Ejecutando consulta...",
