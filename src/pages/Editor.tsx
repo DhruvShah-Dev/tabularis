@@ -1061,7 +1061,10 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
           currentTab?.type === "table" ? currentTab.activeTable : undefined;
 
         if (!tableName && textToRun) {
-          const extracted = extractTableName(textToRun);
+          const extracted = extractTableName(
+            textToRun,
+            schema ?? activeDatabaseName,
+          );
           // Reject views and materialized views — they are not row-editable
           // (materialized views only accept REFRESH, not INSERT/UPDATE/DELETE).
           if (
@@ -1252,7 +1255,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
           return;
         }
         const res = item?.result ?? null;
-        const tableName = extractTableName(entry.query) ?? null;
+        const tableName =
+          extractTableName(entry.query, schema ?? activeDatabaseName) ?? null;
         if (shouldRecordHistory) {
           addHistoryEntry(
             entry.query,
