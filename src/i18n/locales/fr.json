@@ -2104,7 +2104,12 @@
     "firstPage": "Première page",
     "previousPage": "Page précédente",
     "nextPage": "Page suivante",
-    "lastPage": "Dernière page"
+    "lastPage": "Dernière page",
+    "pageSize": "Lignes par page",
+    "allRows": "Toutes",
+    "allRowsHint": "récupère toutes les lignes",
+    "customPageSize": "Personnalisé…",
+    "defaultPageSize": "par défaut"
   },
   "miniGrid": {
     "runningQuery": "Exécution de la requête...",

@@ -114,6 +114,7 @@ export interface Tab {
   filterClause?: string; // SQL WHERE clause (without "WHERE")
   sortClause?: string; // SQL ORDER BY clause (without "ORDER BY")
   limitClause?: number; // SQL LIMIT value
+  pageSize?: number; // Per-tab rows-per-page override; 0 = fetch all rows (no pagination); unset = follow the global setting
   queryParams?: Record<string, string>; // Saved values for query parameters
   schema?: string; // Schema name (PostgreSQL) for query reconstruction
   readOnly?: boolean; // Hides the Run button (e.g. for definition views)

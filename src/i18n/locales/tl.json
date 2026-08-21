@@ -2096,7 +2096,12 @@
     "firstPage": "Unang pahina",
     "previousPage": "Nakaraang pahina",
     "nextPage": "Susunod na pahina",
-    "lastPage": "Huling pahina"
+    "lastPage": "Huling pahina",
+    "pageSize": "Mga row bawat pahina",
+    "allRows": "Lahat",
+    "allRowsHint": "kinukuha ang lahat ng row",
+    "customPageSize": "Custom…",
+    "defaultPageSize": "default"
   },
   "miniGrid": {
     "runningQuery": "Tumatakbo ang query...",
