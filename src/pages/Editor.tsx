@@ -4016,6 +4016,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                 height="100%"
                 initialValue={tab.query}
                 dialect={activeDialect}
+                foldPreview
                 onChange={(val) => {
                   if (isActive) updateTab(tab.id, { query: val });
                 }}
