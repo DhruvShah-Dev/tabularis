@@ -32,7 +32,7 @@ const MainLayoutContent = () => {
       <CommandPaletteScopeBridge scopeId={ROOT_COMMAND_SCOPE_ID} />
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <ProductionBanner />
+        {location.pathname === "/editor" && <ProductionBanner />}
         {renderedSplit ? (
           <SplitPaneLayout {...renderedSplit} />
         ) : (

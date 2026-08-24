@@ -35,3 +35,8 @@ plugins/**/target
 .atl/
 .opencode/
 AGENTS.override.md
+
+# Claude: keep only reusable skills in version control
+.claude/*
+!.claude/skills/
+!.claude/skills/**

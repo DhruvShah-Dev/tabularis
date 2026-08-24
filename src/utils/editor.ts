@@ -419,3 +419,20 @@ export function calculateTotalPages(
   if (totalRows === null || totalRows === 0) return 1;
   return Math.ceil(totalRows / pageSize);
 }
+
+/**
+ * Resolve the page size to request from the backend for a tab.
+ * The per-tab override wins over the global setting; a value of 0 means
+ * "no pagination" and yields undefined so no limit is sent at all.
+ * @param tabPageSize - Per-tab override (Tab.pageSize), if any
+ * @param globalPageSize - The resultPageSize from the global settings
+ * @returns The page size to send, or undefined to disable pagination
+ */
+export function resolveTabPageSize(
+  tabPageSize: number | undefined,
+  globalPageSize: number | undefined,
+): number | undefined {
+  if (tabPageSize === 0) return undefined;
+  if (tabPageSize && tabPageSize > 0) return tabPageSize;
+  return globalPageSize && globalPageSize > 0 ? globalPageSize : 100;
+}

@@ -24,6 +24,7 @@ export function useSqlAutocompleteRegistration(
     tables,
     activeDriver,
     activeSchema,
+    activeDatabaseName,
     activeCapabilities,
     schemaDataMap,
     databaseDataMap,
@@ -31,6 +32,8 @@ export function useSqlAutocompleteRegistration(
   } = useDatabase();
 
   const schema = options?.schema ?? activeSchema;
+  const defaultNamespace =
+    schema ?? (activeCapabilities?.schemas === true ? null : activeDatabaseName);
   const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
 
   const enabled = options?.enabled ?? true;
@@ -43,12 +46,21 @@ export function useSqlAutocompleteRegistration(
     const register = (monaco: Monaco) => {
       if (cancelled) return;
 
-      let effectiveTables = tables;
+      let effectiveTables = tables.map((table) =>
+        defaultNamespace && !table.schema
+          ? { ...table, schema: defaultNamespace }
+          : table,
+      );
       if (activeCapabilities?.schemas && schema) {
-        effectiveTables = schemaDataMap[schema]?.tables ?? tables;
+        effectiveTables = (schemaDataMap[schema]?.tables ?? tables).map(
+          (table) => ({ ...table, schema: table.schema ?? schema }),
+        );
       } else if (isMultiDb) {
-        effectiveTables = selectedDatabases.flatMap(
-          (db) => databaseDataMap[db]?.tables ?? [],
+        effectiveTables = selectedDatabases.flatMap((db) =>
+          (databaseDataMap[db]?.tables ?? []).map((table) => ({
+            ...table,
+            schema: table.schema ?? db,
+          })),
         );
       }
 
@@ -56,7 +68,7 @@ export function useSqlAutocompleteRegistration(
         monaco,
         connectionId,
         effectiveTables,
-        schema,
+        defaultNamespace,
         activeCapabilities ?? activeDriver ?? null,
       );
     };
@@ -78,6 +90,7 @@ export function useSqlAutocompleteRegistration(
     enabled,
     options?.monaco,
     schema,
+    defaultNamespace,
     tables,
     activeDriver,
     activeCapabilities,

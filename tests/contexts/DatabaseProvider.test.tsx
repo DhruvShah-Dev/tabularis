@@ -46,6 +46,24 @@ const mockPostgresManifest = {
   },
 };
 
+const mockMysqlManifest = {
+  id: 'mysql',
+  name: 'MySQL',
+  version: '1.0.0',
+  description: '',
+  default_port: 3306,
+  capabilities: {
+    schemas: false,
+    single_database: false,
+    file_based: false,
+    folder_based: false,
+    no_connection_required: false,
+    views: true,
+    routines: true,
+    identifier_quote: '`',
+  },
+};
+
 describe('DatabaseProvider', () => {
   const mockConnections = [
     {
@@ -174,6 +192,90 @@ describe('DatabaseProvider', () => {
     expect(invoke).toHaveBeenCalledWith('get_connections');
     expect(invoke).toHaveBeenCalledWith('get_tables', { connectionId: 'conn-123' });
     expect(invoke).toHaveBeenCalledWith('get_views', { connectionId: 'conn-123' });
+  });
+
+  it('exposes a single saved database as a selection, not as a flat connection', async () => {
+    // A connection saved with one database is still a database *selection*:
+    // `usesMultiDatabaseLayout` accepts one, so `selectedDatabases` must be
+    // populated for it, otherwise the sidebar drops the manage/refresh controls
+    // and there is no way to pick another database without editing the
+    // connection.
+    const singleDbConnection = [
+      {
+        id: 'conn-single',
+        name: 'Single DB MySQL',
+        params: { driver: 'mysql', host: 'localhost', database: 'onlydb' },
+      },
+    ];
+
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === 'get_connections') return Promise.resolve(singleDbConnection);
+      if (cmd === 'get_driver_manifest') return Promise.resolve(mockMysqlManifest);
+      if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
+      if (cmd === 'register_active_connection') return Promise.resolve(undefined);
+      if (cmd === 'get_available_databases') return Promise.resolve(['onlydb', 'otherdb']);
+      if (cmd === 'get_tables') return Promise.resolve(mockTables);
+      if (cmd === 'get_views') return Promise.resolve(mockViews);
+      if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
+      if (cmd === 'get_triggers') return Promise.resolve([]);
+      if (cmd === 'set_window_title') return Promise.resolve(undefined);
+      return Promise.reject(new Error(`Unexpected command: ${cmd}`));
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(DatabaseProvider, null, children);
+
+    const { result } = renderHook(() => useDatabase(), { wrapper });
+
+    await act(async () => {
+      await result.current.connect('conn-single');
+    });
+
+    await waitFor(() => {
+      expect(result.current.selectedDatabases).toEqual(['onlydb']);
+      // Marked active so the tree expands it: a lone database should not sit
+      // collapsed behind an extra click.
+      expect(result.current.activeSchema).toBe('onlydb');
+    });
+  });
+
+  it('leaves no database active when several are selected', async () => {
+    // With a choice to make, none is picked for the user.
+    const twoDbConnection = [
+      {
+        id: 'conn-two',
+        name: 'Two DB MySQL',
+        params: { driver: 'mysql', host: 'localhost', database: ['firstdb', 'seconddb'] },
+      },
+    ];
+
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === 'get_connections') return Promise.resolve(twoDbConnection);
+      if (cmd === 'get_driver_manifest') return Promise.resolve(mockMysqlManifest);
+      if (cmd === 'test_connection') return Promise.resolve('Connection successful!');
+      if (cmd === 'register_active_connection') return Promise.resolve(undefined);
+      if (cmd === 'get_available_databases') return Promise.resolve(['firstdb', 'seconddb']);
+      if (cmd === 'get_tables') return Promise.resolve(mockTables);
+      if (cmd === 'get_views') return Promise.resolve(mockViews);
+      if (cmd === 'get_routines') return Promise.resolve(mockRoutines);
+      if (cmd === 'get_triggers') return Promise.resolve([]);
+      if (cmd === 'set_window_title') return Promise.resolve(undefined);
+      return Promise.reject(new Error(`Unexpected command: ${cmd}`));
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(DatabaseProvider, null, children);
+
+    const { result } = renderHook(() => useDatabase(), { wrapper });
+
+    await act(async () => {
+      await result.current.connect('conn-two');
+    });
+
+    await waitFor(() => {
+      expect(result.current.selectedDatabases).toEqual(['firstdb', 'seconddb']);
+      expect(result.current.activeSchema).toBeNull();
+    });
   });
 
   it('should keep object browsing available when routine metadata fails', async () => {

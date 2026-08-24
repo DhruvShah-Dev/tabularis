@@ -466,6 +466,8 @@
     "queryExecution": "Выполнение запросов",
     "runStatementUnderCursor": "Выполнять запрос под курсором",
     "runStatementUnderCursorDesc": "Если скрипт содержит несколько запросов, выполняется тот, что под курсором, вместо показа списка запросов. Выделите текст, чтобы выполнить определённый фрагмент.",
+    "safetyConfirmationDelay": "Задержка подтверждений безопасности",
+    "safetyConfirmationDelayDesc": "Отключает кнопки подтверждения на пять секунд для разрушительных запросов и записи в production.",
     "formatter_title": "Форматирование SQL",
     "formatter_keywordCase": "Регистр ключевых слов",
     "formatter_keywordCaseDesc": "Регистр ключевых слов SQL (SELECT, FROM, WHERE) после форматирования.",
@@ -2096,7 +2098,12 @@
     "firstPage": "Первая страница",
     "previousPage": "Предыдущая страница",
     "nextPage": "Следующая страница",
-    "lastPage": "Последняя страница"
+    "lastPage": "Последняя страница",
+    "pageSize": "Строк на странице",
+    "allRows": "Все",
+    "allRowsHint": "загружает все строки",
+    "customPageSize": "Свой размер…",
+    "defaultPageSize": "по умолчанию"
   },
   "miniGrid": {
     "runningQuery": "Выполнение запроса...",

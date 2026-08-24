@@ -471,6 +471,8 @@
     "queryExecution": "Abfrageausführung",
     "runStatementUnderCursor": "Anweisung unter dem Cursor ausführen",
     "runStatementUnderCursorDesc": "Wenn ein Skript mehrere Anweisungen enthält, wird die Anweisung unter dem Cursor ausgeführt, statt die Abfrageauswahl anzuzeigen. Markiere Text, um einen bestimmten Bereich auszuführen.",
+    "safetyConfirmationDelay": "Sicherheitsbestätigungen verzögern",
+    "safetyConfirmationDelayDesc": "Deaktiviert Bestätigungsschaltflächen für destruktive Abfragen und Produktionsschreibvorgänge fünf Sekunden lang.",
     "formatter_title": "SQL-Formatierung",
     "formatter_keywordCase": "Schlüsselwort-Schreibweise",
     "formatter_keywordCaseDesc": "Groß-/Kleinschreibung von SQL-Schlüsselwörtern (SELECT, FROM, WHERE) nach der Formatierung.",
@@ -2025,7 +2027,12 @@
     "firstPage": "Erste Seite",
     "previousPage": "Vorherige Seite",
     "nextPage": "Nächste Seite",
-    "lastPage": "Letzte Seite"
+    "lastPage": "Letzte Seite",
+    "pageSize": "Zeilen pro Seite",
+    "allRows": "Alle",
+    "allRowsHint": "ruft alle Zeilen ab",
+    "customPageSize": "Benutzerdefiniert…",
+    "defaultPageSize": "Standard"
   },
   "miniGrid": {
     "runningQuery": "Abfrage wird ausgeführt...",

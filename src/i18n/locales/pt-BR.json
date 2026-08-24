@@ -477,6 +477,8 @@
     "queryExecution": "Execução de Consultas",
     "runStatementUnderCursor": "Executar instrução sob o cursor",
     "runStatementUnderCursorDesc": "Quando um script tem várias instruções, executa a que está sob o cursor em vez de mostrar o seletor de consultas. Selecione um texto para executar um intervalo específico.",
+    "safetyConfirmationDelay": "Atrasar confirmações de segurança",
+    "safetyConfirmationDelayDesc": "Desativa os botões de confirmação por cinco segundos para consultas destrutivas e gravações em produção.",
     "formatter_title": "Formatador SQL",
     "formatter_keywordCase": "Caixa das Palavras-Chave",
     "formatter_keywordCaseDesc": "Como as palavras-chave SQL (SELECT, FROM, WHERE) são capitalizadas após a formatação.",
@@ -2076,7 +2078,12 @@
     "firstPage": "Primeira página",
     "previousPage": "Página anterior",
     "nextPage": "Próxima página",
-    "lastPage": "Última página"
+    "lastPage": "Última página",
+    "pageSize": "Linhas por página",
+    "allRows": "Todas",
+    "allRowsHint": "busca todas as linhas",
+    "customPageSize": "Personalizado…",
+    "defaultPageSize": "padrão"
   },
   "miniGrid": {
     "runningQuery": "Executando consulta...",

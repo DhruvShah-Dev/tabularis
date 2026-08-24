@@ -496,6 +496,8 @@
     "queryExecution": "Esecuzione query",
     "runStatementUnderCursor": "Esegui l'istruzione sotto il cursore",
     "runStatementUnderCursorDesc": "Quando uno script contiene più istruzioni, esegue quella sotto il cursore invece di mostrare il selettore di query. Seleziona il testo per eseguire un intervallo specifico.",
+    "safetyConfirmationDelay": "Ritarda le conferme di sicurezza",
+    "safetyConfirmationDelayDesc": "Disabilita i pulsanti di conferma per cinque secondi per le query distruttive e le scritture in produzione.",
     "formatter_title": "Formattatore SQL",
     "formatter_keywordCase": "Maiuscole parole chiave",
     "formatter_keywordCaseDesc": "Come vengono capitalizzate le parole chiave SQL (SELECT, FROM, WHERE) dopo la formattazione.",
@@ -2027,7 +2029,12 @@
     "firstPage": "Prima pagina",
     "previousPage": "Pagina precedente",
     "nextPage": "Pagina successiva",
-    "lastPage": "Ultima pagina"
+    "lastPage": "Ultima pagina",
+    "pageSize": "Righe per pagina",
+    "allRows": "Tutte",
+    "allRowsHint": "recupera tutte le righe",
+    "customPageSize": "Personalizzato…",
+    "defaultPageSize": "predefinito"
   },
   "miniGrid": {
     "runningQuery": "Esecuzione query...",

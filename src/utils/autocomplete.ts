@@ -229,6 +229,35 @@ export const registerSqlAutocomplete = (
       const simpleDotMatch = qualifiedDotMatch ? null : textUntilPosition.match(/(?:["'`])?([a-zA-Z0-9_]+)(?:["'`])?\.([a-zA-Z0-9_]*)$/);
 
       if (qualifiedDotMatch || simpleDotMatch) {
+        // In a table operand, `namespace.partial` refers to a table rather than
+        // a column. Resolve this before the regular table/alias dot path so
+        // `FROM Ops.Add` does not request columns for a table named `Ops`.
+        if (simpleDotMatch && suggestionKinds.tables) {
+          const namespace = simpleDotMatch[1].toLowerCase();
+          const partialTable = simpleDotMatch[2];
+          const namespaceTables = tables.filter(
+            (table) => table.schema?.toLowerCase() === namespace,
+          );
+
+          if (namespaceTables.length > 0) {
+            const tableRange = {
+              startLineNumber: position.lineNumber,
+              endLineNumber: position.lineNumber,
+              startColumn: position.column - partialTable.length,
+              endColumn: position.column,
+            };
+            return {
+              suggestions: namespaceTables.map((table) => ({
+                label: table.name,
+                kind: monaco.languages.CompletionItemKind.Class,
+                detail: `Table · ${table.schema}`,
+                ...buildIdentifierInsert(table.name, tableRange),
+                sortText: `1_${table.name}`,
+              })),
+            };
+          }
+        }
+
         let dotTables: TableInfo[] = [];
         let partialColumn: string;
 

@@ -64,6 +64,8 @@ export interface Settings {
   editorShowLineNumbers?: boolean;
   editorAcceptSuggestionOnEnter?: boolean;
   runStatementUnderCursor?: boolean;
+  /** Delay destructive-query and production-write confirmations for five seconds. Default: false. */
+  safetyConfirmationDelayEnabled?: boolean;
   // SQL Formatter
   formatterKeywordCase?: "upper" | "lower" | "preserve";
   formatterIndentStyle?: "standard" | "tabularLeft" | "tabularRight";
@@ -162,6 +164,7 @@ export const DEFAULT_SETTINGS: Settings = {
   editorShowLineNumbers: true,
   editorAcceptSuggestionOnEnter: true,
   runStatementUnderCursor: true,
+  safetyConfirmationDelayEnabled: false,
   formatterKeywordCase: "upper",
   formatterIndentStyle: "standard",
   formatterTabWidth: 2,
