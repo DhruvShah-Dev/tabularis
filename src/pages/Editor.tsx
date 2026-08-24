@@ -4,6 +4,10 @@ import { useTranslation } from "react-i18next";
 import { reconstructTableQuery, resolveTabPageSize } from "../utils/editor";
 import { shouldShowStatementSuccess } from "../utils/resultPresentation";
 import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
+import {
+  formatResultForExport,
+  getLoadedRowsExportLimit,
+} from "../utils/resultExport";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import {
   buildKeylessUpdatePlan,
@@ -68,6 +72,7 @@ import {
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { TableToolbar } from "../components/ui/TableToolbar";
 import { DataGrid } from "../components/ui/DataGrid";
 import { MultiResultPanel } from "../components/ui/MultiResultPanel";
@@ -97,6 +102,7 @@ import {
   removeOtherEntries,
   removeEntriesToRight,
   removeEntriesToLeft,
+  findActiveEntry,
 } from "../utils/multiResult";
 import {
   extractQueryParams,
@@ -263,6 +269,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     rowsProcessed: number;
     fileName: string;
     errorMessage?: string;
+    warningMessage?: string;
   }>({
     isOpen: false,
     status: "exporting",
@@ -467,6 +474,16 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
   const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
   const isEditorOpen =
     !isTableTab && (activeTab?.isEditorOpen ?? activeTab?.type !== "table");
+  const activeResultEntry = useMemo(
+    () =>
+      activeTab?.results
+        ? findActiveEntry(activeTab.results, activeTab.activeResultId)
+        : undefined,
+    [activeTab?.activeResultId, activeTab?.results],
+  );
+  const activeExportResult = activeResultEntry?.result ?? activeTab?.result;
+  const canExportActiveResult =
+    !!activeExportResult && activeExportResult.rows.length > 0;
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
@@ -1350,7 +1367,15 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         applied.add(idx);
         applyStatement(idx, item);
       });
-      updateTab(targetTabId, { isLoading: false });
+      const firstResultEntry = batchResults.findIndex(
+        (item) => (item.result?.rows.length ?? 0) > 0,
+      );
+      updateTab(targetTabId, {
+        isLoading: false,
+        ...(firstResultEntry >= 0
+          ? { activeResultId: entries[firstResultEntry].id }
+          : {}),
+      });
     },
     [
       activeConnectionId,
@@ -3317,6 +3342,59 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
   const handleExportCommon = async (format: "csv" | "json" | "markdown") => {
     if (!activeTab || !activeConnectionId) return;
 
+    const extension = format === "markdown" ? "md" : format;
+    const multiResult = activeResultEntry?.result;
+    if (multiResult?.rows.length) {
+      try {
+        const loadedRowsLimit = getLoadedRowsExportLimit(multiResult);
+        const warningMessage = loadedRowsLimit
+          ? t("editor.exportLoadedRowsWarning", {
+              loaded: loadedRowsLimit.loadedRows.toLocaleString(),
+              total: loadedRowsLimit.totalRows.toLocaleString(),
+            })
+          : undefined;
+
+        const filePath = await save({
+          filters: [
+            {
+              name: format === "markdown" ? "Markdown" : format.toUpperCase(),
+              extensions: [extension],
+            },
+          ],
+          defaultPath: `result_${Date.now()}.${extension}`,
+        });
+
+        if (!filePath) return;
+
+        setExportState({
+          isOpen: true,
+          status: "exporting",
+          rowsProcessed: multiResult.rows.length,
+          fileName: filePath.split(/[/\\]/).pop() || filePath,
+          errorMessage: undefined,
+          warningMessage,
+        });
+        setExportMenuOpen(false);
+
+        await writeTextFile(
+          filePath,
+          formatResultForExport(multiResult, format, csvDelimiter),
+        );
+
+        setExportState((prev) => ({
+          ...prev,
+          status: "completed",
+        }));
+      } catch (e) {
+        setExportState((prev) => ({
+          ...prev,
+          status: "error",
+          errorMessage: String(e),
+        }));
+      }
+      return;
+    }
+
     const effectiveSchema =
       activeCapabilities?.schemas === true ? activeTab.schema : undefined;
     const tabForQuery = { ...activeTab, schema: effectiveSchema };
@@ -3328,7 +3406,6 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     if (!query || !query.trim()) return;
 
     try {
-      const extension = format === "markdown" ? "md" : format;
       const filePath = await save({
         filters: [
           {
@@ -3346,6 +3423,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         status: "exporting",
         rowsProcessed: 0,
         fileName: filePath.split(/[/\\]/).pop() || filePath, // Show only filename
+        errorMessage: undefined,
+        warningMessage: undefined,
       });
       setExportMenuOpen(false);
 
@@ -3857,7 +3936,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         <div ref={exportMenuRef} className="relative ml-auto shrink-0">
           <button
             onClick={() => setExportMenuOpen(!exportMenuOpen)}
-            disabled={!activeTab.result || activeTab.result.rows.length === 0}
+            disabled={!canExportActiveResult}
             aria-haspopup="menu"
             aria-expanded={exportMenuOpen}
             title={t("editor.export")}
@@ -4868,6 +4947,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         rowsProcessed={exportState.rowsProcessed}
         fileName={exportState.fileName}
         errorMessage={exportState.errorMessage}
+        warningMessage={exportState.warningMessage}
         onCancel={cancelExport}
         onClose={closeExportModal}
       />
