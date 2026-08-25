@@ -1,3 +1,25 @@
+# [0.21.0](https://github.com/TabularisDB/tabularis/compare/v0.20.0...v0.21.0) (2026-08-25)
+
+
+### Bug Fixes
+
+* **editor:** complete database-qualified tables ([44b00f4](https://github.com/TabularisDB/tabularis/commit/44b00f4ee0026f5d49fbbbdcce1f63683bb2a039))
+* **editor:** handle qualified tables in grid editing ([e99be83](https://github.com/TabularisDB/tabularis/commit/e99be838dd66565df97b9b7426a59bcb91d55b0b))
+* guard the SSL-mode migration against a concurrent-write race ([44eeb5b](https://github.com/TabularisDB/tabularis/commit/44eeb5b756376179dd324ef83e5d97222c69bf1d))
+* **postgres:** add mTLS client certificate authentication support ([6bb4e9b](https://github.com/TabularisDB/tabularis/commit/6bb4e9b0b08c3e7c6525fad8bc20d47a4f5a52dd))
+* run the SSL-mode migration from the --mcp server process (closes [#639](https://github.com/TabularisDB/tabularis/issues/639)) ([c7058ae](https://github.com/TabularisDB/tabularis/commit/c7058ae87edeba01fbb39a2cd0e6afa6f60edbee))
+* show production banner only in editor ([8dbde6f](https://github.com/TabularisDB/tabularis/commit/8dbde6f302f068499f868bb188000138a16b6a8f))
+* skip postgres client auth when ssl_mode is disabled and use tempfile in tests ([07793f9](https://github.com/TabularisDB/tabularis/commit/07793f9bbfe57f53b1215fc128f712edb3a1f949))
+* **snap:** ship a desktop entry so the app appears in the launcher ([370f4d7](https://github.com/TabularisDB/tabularis/commit/370f4d7c85b606c0a200299a39ecce9097f77d3a)), closes [#669](https://github.com/TabularisDB/tabularis/issues/669)
+* unify safety confirmation guards ([42e9431](https://github.com/TabularisDB/tabularis/commit/42e9431949b742a62c287e8ef42a2a074eec3b69))
+
+
+### Features
+
+* **editor:** add SQL query folding previews ([a5545a9](https://github.com/TabularisDB/tabularis/commit/a5545a95cfc94fceb02e84ee90e1aab0ba5c3c08))
+* per-tab page size selector in the results pagination bar ([1c33a0e](https://github.com/TabularisDB/tabularis/commit/1c33a0ee61a7e495533cd122bfcc996d4362ddf8))
+* **plugins:** support cancelling installations ([2d5974f](https://github.com/TabularisDB/tabularis/commit/2d5974f3a80ffb6506ac70b6ace725f67d07b5b2))
+
 # [0.20.0](https://github.com/TabularisDB/tabularis/compare/v0.19.0...v0.20.0) (2026-08-18)
 
 
