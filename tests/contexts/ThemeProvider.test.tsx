@@ -8,6 +8,10 @@ import type { Theme } from "../../src/types/theme";
 
 vi.mock("@tauri-apps/api/core");
 
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ setTheme: vi.fn().mockResolvedValue(undefined) }),
+}));
+
 vi.mock("../../src/themes/themeUtils", () => ({
   applyThemeToCSS: vi.fn(),
 }));
@@ -107,14 +111,30 @@ const createMockTheme = (id: string, name: string): Theme => ({
 });
 
 const mockDarkTheme = createMockTheme("tabularis-dark", "Tabularis Dark");
-const mockLightTheme = createMockTheme("tabularis-light", "Tabularis Light");
+const mockLightTheme: Theme = {
+  ...createMockTheme("tabularis-light", "Tabularis Light"),
+  monacoTheme: { base: "vs", inherit: true },
+};
 
 vi.mock("../../src/themes/themeRegistry", () => ({
   themeRegistry: {
     getDefault: () => mockDarkTheme,
     getAllPresets: () => [mockDarkTheme, mockLightTheme],
+    getPreset: (id: string) =>
+      [mockDarkTheme, mockLightTheme].find((t) => t.id === id),
+    isDarkTheme: (t: Theme) =>
+      t.monacoTheme.base === "vs-dark" || t.monacoTheme.base === "hc-black",
+    isLightTheme: (t: Theme) => t.monacoTheme.base === "vs",
   },
 }));
+
+let systemIsDark = false;
+let mediaListeners: Array<(e: { matches: boolean }) => void> = [];
+
+const fireSystemThemeChange = (isDark: boolean) => {
+  systemIsDark = isDark;
+  mediaListeners.forEach((l) => l({ matches: isDark }));
+};
 
 describe("ThemeProvider", () => {
   const mockDefaultTheme = mockDarkTheme;
@@ -123,18 +143,27 @@ describe("ThemeProvider", () => {
     localStorage.clear();
 
     // Mock matchMedia globally
+    mediaListeners = [];
+    systemIsDark = false;
     Object.defineProperty(window, "matchMedia", {
       writable: true,
-      value: vi.fn().mockImplementation((query) => ({
-        matches: false,
+      value: (query: string) => ({
+        matches: query === "(prefers-color-scheme: dark)" ? systemIsDark : false,
         media: query,
         onchange: null,
         addListener: vi.fn(),
         removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
+        addEventListener: (_: string, cb: (e: { matches: boolean }) => void) => {
+          mediaListeners.push(cb);
+        },
+        removeEventListener: (
+          _: string,
+          cb: (e: { matches: boolean }) => void,
+        ) => {
+          mediaListeners = mediaListeners.filter((l) => l !== cb);
+        },
         dispatchEvent: vi.fn(),
-      })),
+      }),
     });
 
     // Default mock for invoke
@@ -646,6 +675,149 @@ describe("ThemeProvider", () => {
           config: { theme: "tabularis-dark" },
         }),
       );
+    });
+  });
+
+  describe("system theme sync", () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(ThemeProvider, null, children);
+
+    const stubConfig = (config: Record<string, unknown>) => {
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
+        if (cmd === "get_config") return Promise.resolve(config);
+        if (cmd === "save_config") return Promise.resolve(undefined);
+        if (cmd === "get_all_themes") return Promise.resolve([]);
+        return Promise.reject(new Error(`Unexpected command: ${cmd}`));
+      });
+    };
+
+    it("applies darkThemeId on load when following a dark system", async () => {
+      systemIsDark = true;
+      stubConfig({
+        theme: "tabularis-light",
+        followSystemTheme: true,
+        lightThemeId: "tabularis-light",
+        darkThemeId: "tabularis-dark",
+      });
+      const { result } = renderHook(() => useTheme(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.currentTheme.id).toBe("tabularis-dark");
+      expect(result.current.settings.followSystemTheme).toBe(true);
+      expect(result.current.settings.lightThemeId).toBe("tabularis-light");
+    });
+
+    it("persists settings when updateSettings is called", async () => {
+      stubConfig({ theme: "tabularis-dark" });
+      const { result } = renderHook(() => useTheme(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.updateSettings({
+          followSystemTheme: true,
+          lightThemeId: "tabularis-light",
+          darkThemeId: "tabularis-dark",
+        });
+      });
+
+      expect(invoke).toHaveBeenCalledWith("save_config", {
+        config: {
+          followSystemTheme: true,
+          lightThemeId: "tabularis-light",
+          darkThemeId: "tabularis-dark",
+        },
+      });
+    });
+
+    it("immediately applies the system-matching theme when follow-system is toggled on", async () => {
+      systemIsDark = false; // OS is light
+      stubConfig({ theme: "tabularis-dark" });
+      const { result } = renderHook(() => useTheme(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.currentTheme.id).toBe("tabularis-dark");
+
+      await act(async () => {
+        await result.current.updateSettings({ followSystemTheme: true });
+      });
+
+      expect(result.current.currentTheme.id).toBe("tabularis-light");
+    });
+
+    it("switches themes when the OS appearance changes", async () => {
+      systemIsDark = true;
+      stubConfig({
+        theme: "tabularis-dark",
+        followSystemTheme: true,
+        lightThemeId: "tabularis-light",
+        darkThemeId: "tabularis-dark",
+      });
+      const { result } = renderHook(() => useTheme(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.currentTheme.id).toBe("tabularis-dark");
+
+      act(() => fireSystemThemeChange(false));
+      expect(result.current.currentTheme.id).toBe("tabularis-light");
+
+      act(() => fireSystemThemeChange(true));
+      expect(result.current.currentTheme.id).toBe("tabularis-dark");
+    });
+
+    it("falls back to the light preset when a light-mode pick is unresolvable", async () => {
+      systemIsDark = false; // OS is light
+      stubConfig({
+        theme: "tabularis-dark",
+        followSystemTheme: true,
+        lightThemeId: "deleted-custom-theme",
+        darkThemeId: "tabularis-dark",
+      });
+      const { result } = renderHook(() => useTheme(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.currentTheme.id).toBe("tabularis-light");
+    });
+
+    it("ignores OS appearance changes in static mode", async () => {
+      systemIsDark = true;
+      stubConfig({ theme: "tabularis-dark" });
+      const { result } = renderHook(() => useTheme(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      act(() => fireSystemThemeChange(false));
+      expect(result.current.currentTheme.id).toBe("tabularis-dark");
+    });
+
+    it("replaces the active theme with the OS-mode preset when deleting an active per-mode pick in follow-system mode", async () => {
+      const customLightTheme: Theme = {
+        ...mockLightTheme,
+        id: "custom-light-1",
+        name: "Custom Light",
+        isPreset: false,
+        isReadOnly: false,
+      };
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
+        if (cmd === "get_config") {
+          return Promise.resolve({
+            theme: "custom-light-1",
+            followSystemTheme: true,
+            lightThemeId: "custom-light-1",
+            darkThemeId: "tabularis-dark",
+          });
+        }
+        if (cmd === "save_config") return Promise.resolve(undefined);
+        if (cmd === "get_all_themes") return Promise.resolve([customLightTheme]);
+        if (cmd === "delete_custom_theme") return Promise.resolve(undefined);
+        return Promise.reject(new Error(`Unexpected command: ${cmd}`));
+      });
+      const { result } = renderHook(() => useTheme(), { wrapper });
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      // OS is light; custom-light-1 resolves to active.
+      expect(result.current.currentTheme.id).toBe("custom-light-1");
+
+      await act(async () => {
+        await result.current.deleteCustomTheme("custom-light-1");
+      });
+
+      // Replacement must match the current OS mode (light), not getDefault().
+      expect(result.current.currentTheme.id).toBe("tabularis-light");
+      expect(result.current.settings.lightThemeId).toBe("tabularis-light");
     });
   });
 });
