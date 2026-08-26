@@ -190,3 +190,12 @@ export function getSystemThemeId(
 ): string {
   return isDark ? settings.darkThemeId : settings.lightThemeId;
 }
+
+export function resolveActiveThemeId(
+  settings: ThemeSettings,
+  systemIsDark: boolean
+): string {
+  return settings.followSystemTheme
+    ? getSystemThemeId(systemIsDark, settings)
+    : settings.activeThemeId;
+}
