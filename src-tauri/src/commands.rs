@@ -4541,6 +4541,7 @@ pub async fn open_er_diagram_window(
         .title(&title)
         .inner_size(1200.0, 800.0)
         .center()
+        .decorations(crate::window_decorations::native_decorations_enabled())
         .build()
         .map_err(|e| format!("Failed to create ER Diagram window: {}", e))?;
 
