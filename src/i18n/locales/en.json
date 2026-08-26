@@ -772,6 +772,12 @@
               "label": "Timezone",
               "description": "Session timezone sent to MySQL after connect."
             }
+          },
+          "postgres": {
+            "poolMaxSize": {
+              "label": "Pool Max Size",
+              "description": "Maximum number of PostgreSQL connections kept in the pool."
+            }
           }
         }
       },

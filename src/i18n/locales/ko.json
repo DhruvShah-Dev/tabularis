@@ -708,6 +708,12 @@
               "label": "시간대",
               "description": "연결 후 MySQL로 전송되는 세션 시간대입니다."
             }
+          },
+          "postgres": {
+            "poolMaxSize": {
+              "label": "풀 최대 크기",
+              "description": "풀에 유지할 PostgreSQL 연결의 최대 개수입니다."
+            }
           }
         }
       }

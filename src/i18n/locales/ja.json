@@ -744,6 +744,12 @@
               "label": "タイムゾーン",
               "description": "接続後に MySQL に送信するセッションタイムゾーンです。"
             }
+          },
+          "postgres": {
+            "poolMaxSize": {
+              "label": "プール最大サイズ",
+              "description": "プールに保持する PostgreSQL 接続の最大数です。"
+            }
           }
         }
       },

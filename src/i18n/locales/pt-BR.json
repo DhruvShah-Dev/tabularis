@@ -742,6 +742,12 @@
               "label": "Fuso Horário",
               "description": "Fuso horário de sessão enviado ao MySQL após a conexão."
             }
+          },
+          "postgres": {
+            "poolMaxSize": {
+              "label": "Tamanho Máximo do Pool",
+              "description": "Número máximo de conexões PostgreSQL mantidas no pool."
+            }
           }
         }
       },

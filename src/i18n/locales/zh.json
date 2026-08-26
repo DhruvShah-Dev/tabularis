@@ -694,6 +694,12 @@
               "label": "时区",
               "description": "连接建立后发送给 MySQL 的会话时区。"
             }
+          },
+          "postgres": {
+            "poolMaxSize": {
+              "label": "连接池最大大小",
+              "description": "连接池中保留的 PostgreSQL 连接最大数量。"
+            }
           }
         }
       },

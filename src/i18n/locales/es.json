@@ -755,6 +755,12 @@
               "label": "Zona Horaria",
               "description": "Zona horaria de sesión enviada a MySQL después de conectar."
             }
+          },
+          "postgres": {
+            "poolMaxSize": {
+              "label": "Tamaño Máximo del Pool",
+              "description": "Número máximo de conexiones PostgreSQL mantenidas en el pool."
+            }
           }
         }
       },

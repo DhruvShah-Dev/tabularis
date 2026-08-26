@@ -763,6 +763,12 @@
               "label": "Fuseau horaire",
               "description": "Fuseau horaire de session envoyé à MySQL après connexion."
             }
+          },
+          "postgres": {
+            "poolMaxSize": {
+              "label": "Taille maximale du pool",
+              "description": "Nombre maximal de connexions PostgreSQL conservées dans le pool."
+            }
           }
         }
       },

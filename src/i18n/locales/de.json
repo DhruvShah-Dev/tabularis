@@ -730,6 +730,12 @@
               "label": "Zeitzone",
               "description": "Sitzungszeitzone, die nach dem Verbindungsaufbau an MySQL gesendet wird."
             }
+          },
+          "postgres": {
+            "poolMaxSize": {
+              "label": "Maximale Pool-Größe",
+              "description": "Maximale Anzahl von PostgreSQL-Verbindungen, die im Pool gehalten werden."
+            }
           }
         }
       },
