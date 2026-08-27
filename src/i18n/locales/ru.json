@@ -436,6 +436,12 @@
     "appearance": "Внешний вид",
     "localization": "Локализация",
     "themeSelection": "Выбор темы",
+    "themeMode": "Режим темы",
+    "themeModeDesc": "Выберите фиксированную тему или следуйте светлому/тёмному оформлению системы.",
+    "themeModeStatic": "Статичная",
+    "themeModeSystem": "Как в системе",
+    "lightTheme": "Светлая тема",
+    "darkTheme": "Тёмная тема",
     "fontFamily": "Шрифт",
     "fonts": {
       "system": "Системный по умолчанию",

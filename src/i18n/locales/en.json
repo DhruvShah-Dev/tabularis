@@ -459,6 +459,12 @@
     "appearance": "Appearance",
     "localization": "Localization",
     "themeSelection": "Theme Selection",
+    "themeMode": "Theme Mode",
+    "themeModeDesc": "Choose a fixed theme, or follow your system's light/dark appearance.",
+    "themeModeStatic": "Static",
+    "themeModeSystem": "Follow System",
+    "lightTheme": "Light Theme",
+    "darkTheme": "Dark Theme",
     "fontFamily": "Font Family",
     "fonts": {
       "system": "System Default",
