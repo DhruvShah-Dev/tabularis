@@ -17,6 +17,15 @@ pub struct PluginConfig {
     pub settings: HashMap<String, serde_json::Value>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowDecorationsMode {
+    #[default]
+    Automatic,
+    AlwaysShow,
+    AlwaysHide,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
@@ -104,6 +113,9 @@ pub struct AppConfig {
     pub show_welcome: Option<bool>,
     /// Maximize the window on startup. Default: false.
     pub start_maximized: Option<bool>,
+    /// Controls native window decorations. Automatic hides them for recognized
+    /// tiling window managers and keeps them on other desktop environments.
+    pub window_decorations: Option<WindowDecorationsMode>,
     /// IANA timezone name (e.g. `Asia/Tokyo`) used to render timestamps in the
     /// UI and exports. `None` or `"auto"` follows the OS local timezone.
     pub display_timezone: Option<String>,
@@ -417,6 +429,11 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         if config.start_maximized.is_some() {
             existing_config.start_maximized = config.start_maximized;
         }
+        let window_decorations_changed = config.window_decorations.is_some()
+            && config.window_decorations != existing_config.window_decorations;
+        if config.window_decorations.is_some() {
+            existing_config.window_decorations = config.window_decorations;
+        }
         if config.display_timezone.is_some() {
             existing_config.display_timezone = config.display_timezone;
         }
@@ -484,6 +501,12 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;
         fs::write(config_path, content).map_err(|e| e.to_string())?;
         cache_config(&existing_config);
+        if window_decorations_changed {
+            crate::window_decorations::apply_to_all_windows(
+                &app,
+                existing_config.window_decorations.as_ref(),
+            );
+        }
         Ok(())
     } else {
         Err("Could not resolve config directory".to_string())

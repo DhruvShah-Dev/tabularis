@@ -12,6 +12,10 @@ export type AiProvider =
   | "custom-openai"
   | "minimax";
 export type ERDiagramLayout = "LR" | "TB";
+export type WindowDecorationsMode =
+  | "automatic"
+  | "alwaysShow"
+  | "alwaysHide";
 
 export interface PluginConfig {
   interpreter?: string;
@@ -81,6 +85,8 @@ export interface Settings {
   autoConnectLastConnection?: boolean;
   /** Maximize the window on startup. Default: false. */
   startMaximized?: boolean;
+  /** Controls whether Tauri uses native window decorations. */
+  windowDecorations?: WindowDecorationsMode;
   // AI / MCP safety
   aiAuditEnabled?: boolean;
   aiAuditMaxEntries?: number;
@@ -176,6 +182,7 @@ export const DEFAULT_SETTINGS: Settings = {
   queryHistoryMaxEntries: 500,
   autoConnectLastConnection: true,
   startMaximized: false,
+  windowDecorations: "automatic",
   aiAuditEnabled: true,
   aiAuditMaxEntries: 5000,
   aiSessionGapMinutes: 10,
