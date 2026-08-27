@@ -788,7 +788,12 @@
       "commandPaletteActions": "アクションを検索",
       "triggerSuggestions": "候補を表示",
       "formatSql": "SQLをフォーマット",
-      "refreshTable": "テーブルを更新"
+      "refreshTable": "テーブルを更新",
+      "extendCellRange": "セル範囲を拡張",
+      "jumpToEdge": "グリッドの端へ移動",
+      "extendCellRangeToEdge": "セル範囲を端まで拡張",
+      "selectRow": "行を選択",
+      "selectColumn": "列を選択"
     },
     "aiActivity": "AI アクティビティ",
     "backup": {

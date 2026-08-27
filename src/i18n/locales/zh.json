@@ -737,7 +737,12 @@
       "commandPaletteActions": "搜索操作",
       "triggerSuggestions": "触发建议",
       "formatSql": "格式化 SQL",
-      "refreshTable": "刷新表格"
+      "refreshTable": "刷新表格",
+      "extendCellRange": "扩展单元格范围",
+      "jumpToEdge": "跳转到网格边缘",
+      "extendCellRangeToEdge": "扩展单元格范围至边缘",
+      "selectRow": "选择行",
+      "selectColumn": "选择列"
     },
     "aiActivity": "AI 活动",
     "backup": {
