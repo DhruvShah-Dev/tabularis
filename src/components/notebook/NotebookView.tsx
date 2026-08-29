@@ -888,8 +888,16 @@ export function NotebookView({
         )}
 
         <AddCellButton
-          onAddSql={() => addCell("sql", -1)}
-          onAddMarkdown={() => addCell("markdown", -1)}
+          onAddSql={() => {
+            const id = addCell("sql", -1);
+            scrollToCell(id);
+            focusCell(id);
+          }}
+          onAddMarkdown={() => {
+            const id = addCell("markdown", -1);
+            scrollToCell(id);
+            focusCell(id);
+          }}
         />
         {cells.map((cell, index) => (
           <div
@@ -938,8 +946,16 @@ export function NotebookView({
               }}
             />
             <AddCellButton
-              onAddSql={() => addCell("sql", index)}
-              onAddMarkdown={() => addCell("markdown", index)}
+              onAddSql={() => {
+                const id = addCell("sql", index);
+                scrollToCell(id);
+                focusCell(id);
+              }}
+              onAddMarkdown={() => {
+                const id = addCell("markdown", index);
+                scrollToCell(id);
+                focusCell(id);
+              }}
             />
             {index === cells.length - 1 &&
               showLineAt(cells.length) &&
