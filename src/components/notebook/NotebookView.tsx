@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
@@ -272,15 +273,41 @@ export function NotebookView({
     [updateNotebook],
   );
 
+  const focusCell = useCallback((cellId: string) => {
+    const tryFocus = (attempts: number) => {
+      const el = cellRefsMap.current.get(cellId);
+      if (!el) {
+        if (attempts < 10) requestAnimationFrame(() => tryFocus(attempts + 1));
+        return;
+      }
+      const monacoTextarea = el.querySelector<HTMLTextAreaElement>(".monaco-editor textarea");
+      if (monacoTextarea) {
+        monacoTextarea.focus();
+        return;
+      }
+      const textarea = el.querySelector<HTMLTextAreaElement>("textarea");
+      if (textarea) {
+        textarea.focus();
+        return;
+      }
+      if (attempts < 10) requestAnimationFrame(() => tryFocus(attempts + 1));
+    };
+    requestAnimationFrame(() => tryFocus(0));
+  }, []);
+
   const addCell = useCallback(
     (type: NotebookCellType, afterIndex?: number): string => {
       const newCells = addCellToCells(cellsRef.current, type, afterIndex);
       const insertAt = afterIndex !== undefined ? afterIndex + 1 : newCells.length - 1;
       const newCellId = newCells[insertAt].id;
-      updateNotebook(newCells);
+      flushSync(() => updateNotebook(newCells));
+      cellRefsMap.current
+        .get(newCellId)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      focusCell(newCellId);
       return newCellId;
     },
-    [updateNotebook],
+    [updateNotebook, focusCell],
   );
 
   const deleteCell = useCallback(
@@ -678,37 +705,6 @@ export function NotebookView({
   // Cancel any in-flight auto-scroll frame if the view unmounts mid-drag.
   useEffect(() => stopAutoScroll, [stopAutoScroll]);
 
-  const scrollToBottom = useCallback(() => {
-    requestAnimationFrame(() => {
-      scrollContainerRef.current?.scrollTo({
-        top: scrollContainerRef.current.scrollHeight,
-        behavior: "smooth",
-      });
-    });
-  }, []);
-
-  const focusCell = useCallback((cellId: string) => {
-    const tryFocus = (attempts: number) => {
-      const el = cellRefsMap.current.get(cellId);
-      if (!el) {
-        if (attempts < 10) requestAnimationFrame(() => tryFocus(attempts + 1));
-        return;
-      }
-      const monacoTextarea = el.querySelector<HTMLTextAreaElement>(".monaco-editor textarea");
-      if (monacoTextarea) {
-        monacoTextarea.focus();
-        return;
-      }
-      const textarea = el.querySelector<HTMLTextAreaElement>("textarea");
-      if (textarea) {
-        textarea.focus();
-        return;
-      }
-      if (attempts < 10) requestAnimationFrame(() => tryFocus(attempts + 1));
-    };
-    requestAnimationFrame(() => tryFocus(0));
-  }, []);
-
   const scrollToCell = useCallback((cellId: string) => {
     const el = cellRefsMap.current.get(cellId);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -764,16 +760,8 @@ export function NotebookView({
   }, [updateNotebook]);
 
   const toolbarProps = {
-    onAddSqlCell: () => {
-      const id = addCell("sql");
-      scrollToBottom();
-      focusCell(id);
-    },
-    onAddMarkdownCell: () => {
-      const id = addCell("markdown");
-      scrollToBottom();
-      focusCell(id);
-    },
+    onAddSqlCell: () => addCell("sql"),
+    onAddMarkdownCell: () => addCell("markdown"),
     onRunAll: runAll,
     onExport: handleExport,
     onExportHtml: handleExportHtml,
@@ -888,16 +876,8 @@ export function NotebookView({
         )}
 
         <AddCellButton
-          onAddSql={() => {
-            const id = addCell("sql", -1);
-            scrollToCell(id);
-            focusCell(id);
-          }}
-          onAddMarkdown={() => {
-            const id = addCell("markdown", -1);
-            scrollToCell(id);
-            focusCell(id);
-          }}
+          onAddSql={() => addCell("sql", -1)}
+          onAddMarkdown={() => addCell("markdown", -1)}
         />
         {cells.map((cell, index) => (
           <div
@@ -946,16 +926,8 @@ export function NotebookView({
               }}
             />
             <AddCellButton
-              onAddSql={() => {
-                const id = addCell("sql", index);
-                scrollToCell(id);
-                focusCell(id);
-              }}
-              onAddMarkdown={() => {
-                const id = addCell("markdown", index);
-                scrollToCell(id);
-                focusCell(id);
-              }}
+              onAddSql={() => addCell("sql", index)}
+              onAddMarkdown={() => addCell("markdown", index)}
             />
             {index === cells.length - 1 &&
               showLineAt(cells.length) &&
