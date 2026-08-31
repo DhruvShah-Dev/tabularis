@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { reconstructTableQuery } from "../utils/editor";
+import { reconstructTableQuery, resolveTabPageSize } from "../utils/editor";
 import { shouldShowStatementSuccess } from "../utils/resultPresentation";
 import { formatRowsForCopy, copyTextToClipboard } from "../utils/clipboard";
+import {
+  formatResultForExport,
+  getLoadedRowsExportLimit,
+} from "../utils/resultExport";
 import { serializePkKey, buildPkMap } from "../utils/dataGrid";
 import {
   buildKeylessUpdatePlan,
@@ -16,11 +20,9 @@ import {
 } from "../utils/database";
 import { isReadonly, supportsExplain } from "../utils/driverCapabilities";
 import { useClickOutside } from "../hooks/useClickOutside";
-import {
-  useDangerousQueryGuard,
-  DANGEROUS_QUERY_I18N,
-} from "../hooks/useDangerousQueryGuard";
+import { DANGEROUS_QUERY_I18N } from "../hooks/useDangerousQueryGuard";
 import { useProductionGuard } from "../hooks/useProductionGuard";
+import { useQueryGuards } from "../hooks/useQueryGuards";
 import {
   generateTempId,
   initializeNewRow,
@@ -70,10 +72,12 @@ import {
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { TableToolbar } from "../components/ui/TableToolbar";
 import { DataGrid } from "../components/ui/DataGrid";
 import { MultiResultPanel } from "../components/ui/MultiResultPanel";
 import { ErrorDisplay } from "../components/ui/ErrorDisplay";
+import { PageSizeSelector } from "../components/ui/PageSizeSelector";
 import { NewRowModal } from "../components/modals/NewRowModal";
 import { QuerySelectionModal } from "../components/modals/QuerySelectionModal";
 import { ConfirmModal } from "../components/modals/ConfirmModal";
@@ -98,6 +102,7 @@ import {
   removeOtherEntries,
   removeEntriesToRight,
   removeEntriesToLeft,
+  findActiveEntry,
 } from "../utils/multiResult";
 import {
   extractQueryParams,
@@ -264,6 +269,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     rowsProcessed: number;
     fileName: string;
     errorMessage?: string;
+    warningMessage?: string;
   }>({
     isOpen: false,
     status: "exporting",
@@ -411,9 +417,9 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     useState(false);
   const {
     pending: dangerousQuery,
-    guardQuery: guardDangerousQuery,
+    guardQuery: guardQueryExecution,
     resolve: resolveDangerousQuery,
-  } = useDangerousQueryGuard();
+  } = useQueryGuards(activeConnectionId);
   const guardProductionWrite = useProductionGuard();
   const [isTabSwitcherOpen, setIsTabSwitcherOpen] = useState(false);
   const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
@@ -468,6 +474,16 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
   const isMultiDb = usesMultiDatabaseLayout(activeCapabilities, selectedDatabases);
   const isEditorOpen =
     !isTableTab && (activeTab?.isEditorOpen ?? activeTab?.type !== "table");
+  const activeResultEntry = useMemo(
+    () =>
+      activeTab?.results
+        ? findActiveEntry(activeTab.results, activeTab.activeResultId)
+        : undefined,
+    [activeTab?.activeResultId, activeTab?.results],
+  );
+  const activeExportResult = activeResultEntry?.result ?? activeTab?.result;
+  const canExportActiveResult =
+    !!activeExportResult && activeExportResult.rows.length > 0;
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
@@ -889,6 +905,9 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         pendingDeletions?: Record<string, unknown>;
         pendingInsertions?: Record<string, PendingInsertion>;
       },
+      // Skips tab state (which may not have re-rendered yet) when the page
+      // size is changed and re-run in the same handler; 0 = no pagination.
+      pageSizeOverride?: number,
     ) => {
       const targetTabId = tabId || activeTabIdRef.current;
       if (!activeConnectionId || !targetTabId) return;
@@ -929,8 +948,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
       if (!textToRun || !textToRun.trim()) return;
 
-      if (!(await guardDangerousQuery(textToRun))) return;
-      if (!(await guardProductionWrite(activeConnectionId, textToRun))) return;
+      const mayRun = await guardQueryExecution(textToRun);
+      if (!mayRun) return;
 
       // Check for parameters
       const params = extractQueryParams(textToRun, activeDialect);
@@ -1002,12 +1021,13 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
       try {
         const start = performance.now();
-        // Use settings.resultPageSize for Page Size (pagination), ignoring the "Total Limit" input which is handled in SQL
-        // Fallback to 100 if settings not loaded yet
-        const pageSize =
-          settings.resultPageSize && settings.resultPageSize > 0
-            ? settings.resultPageSize
-            : 100;
+        // Per-tab page size (falling back to the global Result Page Size)
+        // drives pagination; the "Total Limit" input is handled in the SQL.
+        // undefined disables pagination entirely (the user picked "All").
+        const pageSize = resolveTabPageSize(
+          pageSizeOverride ?? targetTab.pageSize,
+          settings.resultPageSize,
+        );
         const res = await invoke<QueryResult>("execute_query", {
           connectionId: activeConnectionId,
           query: textToRun,
@@ -1063,7 +1083,10 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
           currentTab?.type === "table" ? currentTab.activeTable : undefined;
 
         if (!tableName && textToRun) {
-          const extracted = extractTableName(textToRun);
+          const extracted = extractTableName(
+            textToRun,
+            schema ?? activeDatabaseName,
+          );
           // Reject views and materialized views — they are not row-editable
           // (materialized views only accept REFRESH, not INSERT/UPDATE/DELETE).
           if (
@@ -1157,8 +1180,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       isMultiDb,
       activeDatabaseName,
       addHistoryEntry,
-      guardDangerousQuery,
-      guardProductionWrite,
+      guardQueryExecution,
       activeDialect,
     ],
   );
@@ -1171,10 +1193,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const targetTab = tabsRef.current.find((t) => t.id === targetTabId);
       if (!targetTab) return;
 
-      if (!(await guardDangerousQuery(queries))) return;
-      if (!(await guardProductionWrite(activeConnectionId, queries.join(";\n")))) {
-        return;
-      }
+      const mayRun = await guardQueryExecution(queries);
+      if (!mayRun) return;
 
       // Collect all unique parameters across all queries
       const allParams = [
@@ -1205,10 +1225,10 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         );
       }
 
-      const pageSize =
-        settings.resultPageSize && settings.resultPageSize > 0
-          ? settings.resultPageSize
-          : 100;
+      const pageSize = resolveTabPageSize(
+        targetTab.pageSize,
+        settings.resultPageSize,
+      );
       const schema = targetTab?.schema ?? activeSchema;
       const historyDb = schema
         || (isMultiDb ? activeDatabaseName : undefined)
@@ -1257,7 +1277,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
           return;
         }
         const res = item?.result ?? null;
-        const tableName = extractTableName(entry.query) ?? null;
+        const tableName =
+          extractTableName(entry.query, schema ?? activeDatabaseName) ?? null;
         if (shouldRecordHistory) {
           addHistoryEntry(
             entry.query,
@@ -1346,7 +1367,15 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         applied.add(idx);
         applyStatement(idx, item);
       });
-      updateTab(targetTabId, { isLoading: false });
+      const firstResultEntry = batchResults.findIndex(
+        (item) => (item.result?.rows.length ?? 0) > 0,
+      );
+      updateTab(targetTabId, {
+        isLoading: false,
+        ...(firstResultEntry >= 0
+          ? { activeResultId: entries[firstResultEntry].id }
+          : {}),
+      });
     },
     [
       activeConnectionId,
@@ -1358,8 +1387,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       isMultiDb,
       activeDatabaseName,
       addHistoryEntry,
-      guardDangerousQuery,
-      guardProductionWrite,
+      guardQueryExecution,
       activeDialect,
     ],
   );
@@ -1428,10 +1456,10 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       const entry = currentTab?.results?.find((r) => r.id === entryId);
       if (!entry) return;
 
-      const pageSize =
-        settings.resultPageSize && settings.resultPageSize > 0
-          ? settings.resultPageSize
-          : 100;
+      const pageSize = resolveTabPageSize(
+        currentTab?.pageSize,
+        settings.resultPageSize,
+      );
       const schema = currentTab?.schema ?? activeSchema;
 
       // Mark this entry as loading
@@ -1494,6 +1522,37 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
       }
     },
     [activeConnectionId, updateTab, settings.resultPageSize, activeSchema, t],
+  );
+
+  const handlePageSizeChange = useCallback(
+    (newSize: number) => {
+      const targetTabId = activeTabIdRef.current;
+      const tab = tabsRef.current.find((t) => t.id === targetTabId);
+      if (!targetTabId || !tab) return;
+      updateTab(targetTabId, { pageSize: newSize });
+      // Keep the first visible row in view when the page size changes
+      const pagination = tab.result?.pagination;
+      const newPage =
+        newSize > 0 && pagination
+          ? Math.floor(
+              ((pagination.page - 1) * pagination.page_size) / newSize,
+            ) + 1
+          : 1;
+      // The override carries the new size: tab state won't have re-rendered
+      // into tabsRef by the time runQuery reads it.
+      runQuery(
+        undefined,
+        newPage,
+        targetTabId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        newSize,
+      );
+    },
+    [runQuery, updateTab],
   );
 
   const loadCount = useCallback(
@@ -1821,12 +1880,17 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
 
     // Monaco Editor: handle selection and multi-query
     if (!editorsRef.current[activeTab.id]) {
-      // Fallback: no cursor context available (editor ref not mounted, e.g.
-      // after tab restore) — run everything, same precedent as runAutoQuery.
+      // Fallback: no cursor context available (editor not mounted yet). Never
+      // fire a whole script the user didn't ask for — with more than one
+      // statement, ask which one to run.
       if (activeTab.query?.trim()) {
         const queries = splitQueries(activeTab.query, activeDialect);
-        if (queries.length <= 1) runQuery(queries[0] || activeTab.query, 1);
-        else runMultipleQueries(queries);
+        if (queries.length <= 1) {
+          runQuery(queries[0] || activeTab.query, 1);
+        } else {
+          setSelectableQueries(queries);
+          setIsQuerySelectionModalOpen(true);
+        }
       }
       return;
     }
@@ -3094,9 +3158,12 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
   ) => {
     editorsRef.current[tabId] = editor;
     setMonacoInstance(monaco);
-    // Focus the editor when a console tab is opened (Ctrl+T / new console)
+    // Focus the editor when a console tab is opened (Ctrl+T / new console).
+    // Background tabs mount too, and must not steal focus from the active one.
     const mountedTab = tabsRef.current.find((t) => t.id === tabId);
-    if (mountedTab?.type === "console") editor.focus();
+    if (mountedTab?.type === "console" && tabId === activeTabIdRef.current) {
+      editor.focus();
+    }
     editor.addAction({
       id: "run-selection",
       label: "Execute Selection",
@@ -3275,6 +3342,59 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
   const handleExportCommon = async (format: "csv" | "json" | "markdown") => {
     if (!activeTab || !activeConnectionId) return;
 
+    const extension = format === "markdown" ? "md" : format;
+    const multiResult = activeResultEntry?.result;
+    if (multiResult?.rows.length) {
+      try {
+        const loadedRowsLimit = getLoadedRowsExportLimit(multiResult);
+        const warningMessage = loadedRowsLimit
+          ? t("editor.exportLoadedRowsWarning", {
+              loaded: loadedRowsLimit.loadedRows.toLocaleString(),
+              total: loadedRowsLimit.totalRows.toLocaleString(),
+            })
+          : undefined;
+
+        const filePath = await save({
+          filters: [
+            {
+              name: format === "markdown" ? "Markdown" : format.toUpperCase(),
+              extensions: [extension],
+            },
+          ],
+          defaultPath: `result_${Date.now()}.${extension}`,
+        });
+
+        if (!filePath) return;
+
+        setExportState({
+          isOpen: true,
+          status: "exporting",
+          rowsProcessed: multiResult.rows.length,
+          fileName: filePath.split(/[/\\]/).pop() || filePath,
+          errorMessage: undefined,
+          warningMessage,
+        });
+        setExportMenuOpen(false);
+
+        await writeTextFile(
+          filePath,
+          formatResultForExport(multiResult, format, csvDelimiter),
+        );
+
+        setExportState((prev) => ({
+          ...prev,
+          status: "completed",
+        }));
+      } catch (e) {
+        setExportState((prev) => ({
+          ...prev,
+          status: "error",
+          errorMessage: String(e),
+        }));
+      }
+      return;
+    }
+
     const effectiveSchema =
       activeCapabilities?.schemas === true ? activeTab.schema : undefined;
     const tabForQuery = { ...activeTab, schema: effectiveSchema };
@@ -3286,7 +3406,6 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
     if (!query || !query.trim()) return;
 
     try {
-      const extension = format === "markdown" ? "md" : format;
       const filePath = await save({
         filters: [
           {
@@ -3304,6 +3423,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         status: "exporting",
         rowsProcessed: 0,
         fileName: filePath.split(/[/\\]/).pop() || filePath, // Show only filename
+        errorMessage: undefined,
+        warningMessage: undefined,
       });
       setExportMenuOpen(false);
 
@@ -3815,7 +3936,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         <div ref={exportMenuRef} className="relative ml-auto shrink-0">
           <button
             onClick={() => setExportMenuOpen(!exportMenuOpen)}
-            disabled={!activeTab.result || activeTab.result.rows.length === 0}
+            disabled={!canExportActiveResult}
             aria-haspopup="menu"
             aria-expanded={exportMenuOpen}
             title={t("editor.export")}
@@ -3974,17 +4095,15 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                 height="100%"
                 initialValue={tab.query}
                 dialect={activeDialect}
+                foldPreview
                 onChange={(val) => {
                   if (isActive) updateTab(tab.id, { query: val });
                 }}
                 onRun={handleRunButton}
                 onRunAll={handleRunAll}
                 onRunContextChange={isActive ? handleRunContextChange : undefined}
-                onMount={
-                  isActive
-                    ? (editor, monaco) =>
-                        handleEditorMount(editor, monaco, tab.id)
-                    : undefined
+                onMount={(editor, monaco) =>
+                  handleEditorMount(editor, monaco, tab.id)
                 }
                 editorKey={tab.id}
                 options={{
@@ -4259,15 +4378,29 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                     </div>
 
                     {/* Pagination Controls */}
-                    {activeTab.result.pagination && (
+                    {(activeTab.result.pagination ||
+                      activeTab.pageSize === 0) && (
                       <div className="flex items-center gap-1 bg-surface-secondary rounded border border-strong shrink-0">
+                        <PageSizeSelector
+                          value={activeTab.result.pagination?.page_size ?? 0}
+                          defaultSize={
+                            settings.resultPageSize &&
+                            settings.resultPageSize > 0
+                              ? settings.resultPageSize
+                              : 100
+                          }
+                          disabled={!!activeTab.isLoading}
+                          onChange={handlePageSizeChange}
+                        />
+                        {activeTab.result.pagination && (
+                          <>
                         <button
                           disabled={
                             activeTab.result.pagination.page === 1 ||
                             activeTab.isLoading
                           }
                           onClick={() => runQuery(undefined, 1)}
-                          className="hidden @[420px]:block p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="hidden @[420px]:block p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
                           title="First Page"
                         >
                           <ChevronsLeft size={14} />
@@ -4283,7 +4416,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                               activeTab.result!.pagination!.page - 1,
                             )
                           }
-                          className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed @[420px]:border-l border-strong"
+                          className="p-1 hover:bg-surface-tertiary text-secondary hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border-l border-strong"
                           title="Previous Page"
                         >
                           <ChevronLeft size={14} />
@@ -4407,6 +4540,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
                         >
                           <ChevronsRight size={14} />
                         </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -4682,7 +4817,9 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         sql={dangerousQuery?.sql}
         confirmLabel={t("editor.dangerousQueryConfirm")}
         variant="danger"
-        confirmDelaySeconds={5}
+        confirmDelaySeconds={
+          settings.safetyConfirmationDelayEnabled ? 5 : undefined
+        }
       />
       <TabSwitcherModal
         isOpen={isTabSwitcherOpen}
@@ -4715,7 +4852,8 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         schema={activeTab?.schema ?? activeSchema ?? undefined}
         onInsert={(q) => {
           updateActiveTab({ query: q });
-          runQuery(q, 1);
+          // AI-generated SQL uses the same production-first safety pipeline.
+          void runQuery(q, 1);
         }}
       />
       <AiExplainModal
@@ -4809,6 +4947,7 @@ export const Editor = ({ commandScopeId }: EditorProps) => {
         rowsProcessed={exportState.rowsProcessed}
         fileName={exportState.fileName}
         errorMessage={exportState.errorMessage}
+        warningMessage={exportState.warningMessage}
         onCancel={cancelExport}
         onClose={closeExportModal}
       />

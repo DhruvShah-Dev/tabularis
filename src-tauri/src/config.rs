@@ -3,9 +3,9 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::RwLock;
 use tauri::AppHandle;
 use tauri::Manager;
-use std::sync::RwLock;
 
 use std::collections::HashMap;
 
@@ -17,10 +17,26 @@ pub struct PluginConfig {
     pub settings: HashMap<String, serde_json::Value>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowDecorationsMode {
+    #[default]
+    Automatic,
+    AlwaysShow,
+    AlwaysHide,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
     pub theme: Option<String>,
+    /// When true, the app follows the OS light/dark appearance using
+    /// `light_theme_id` / `dark_theme_id`. None/false ⇒ static `theme`.
+    pub follow_system_theme: Option<bool>,
+    /// Theme applied while the OS is in light mode and follow-system is on.
+    pub light_theme_id: Option<String>,
+    /// Theme applied while the OS is in dark mode and follow-system is on.
+    pub dark_theme_id: Option<String>,
     pub language: Option<String>,
     pub result_page_size: Option<u32>,
     pub font_family: Option<String>,
@@ -79,6 +95,8 @@ pub struct AppConfig {
     /// Default: `true` — matches the behaviour users expect from most editors.
     pub editor_accept_suggestion_on_enter: Option<bool>,
     pub run_statement_under_cursor: Option<bool>,
+    /// Delay destructive-query and production-write confirmations for five seconds. Default: false.
+    pub safety_confirmation_delay_enabled: Option<bool>,
     // ----- SQL Formatter -----
     pub formatter_keyword_case: Option<String>,
     pub formatter_indent_style: Option<String>,
@@ -95,6 +113,9 @@ pub struct AppConfig {
     pub show_welcome: Option<bool>,
     /// Maximize the window on startup. Default: false.
     pub start_maximized: Option<bool>,
+    /// Controls native window decorations. Automatic hides them for recognized
+    /// tiling window managers and keeps them on other desktop environments.
+    pub window_decorations: Option<WindowDecorationsMode>,
     /// IANA timezone name (e.g. `Asia/Tokyo`) used to render timestamps in the
     /// UI and exports. `None` or `"auto"` follows the OS local timezone.
     pub display_timezone: Option<String>,
@@ -263,6 +284,15 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         if config.theme.is_some() {
             existing_config.theme = config.theme;
         }
+        if config.follow_system_theme.is_some() {
+            existing_config.follow_system_theme = config.follow_system_theme;
+        }
+        if config.light_theme_id.is_some() {
+            existing_config.light_theme_id = config.light_theme_id;
+        }
+        if config.dark_theme_id.is_some() {
+            existing_config.dark_theme_id = config.dark_theme_id;
+        }
         if config.language.is_some() {
             existing_config.language = config.language;
         }
@@ -372,6 +402,10 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         if config.run_statement_under_cursor.is_some() {
             existing_config.run_statement_under_cursor = config.run_statement_under_cursor;
         }
+        if config.safety_confirmation_delay_enabled.is_some() {
+            existing_config.safety_confirmation_delay_enabled =
+                config.safety_confirmation_delay_enabled;
+        }
         if config.ping_interval.is_some() {
             let old_interval = existing_config.ping_interval;
             existing_config.ping_interval = config.ping_interval;
@@ -394,6 +428,11 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         }
         if config.start_maximized.is_some() {
             existing_config.start_maximized = config.start_maximized;
+        }
+        let window_decorations_changed = config.window_decorations.is_some()
+            && config.window_decorations != existing_config.window_decorations;
+        if config.window_decorations.is_some() {
+            existing_config.window_decorations = config.window_decorations;
         }
         if config.display_timezone.is_some() {
             existing_config.display_timezone = config.display_timezone;
@@ -462,6 +501,12 @@ pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
         let content = serde_json::to_string_pretty(&existing_config).map_err(|e| e.to_string())?;
         fs::write(config_path, content).map_err(|e| e.to_string())?;
         cache_config(&existing_config);
+        if window_decorations_changed {
+            crate::window_decorations::apply_to_all_windows(
+                &app,
+                existing_config.window_decorations.as_ref(),
+            );
+        }
         Ok(())
     } else {
         Err("Could not resolve config directory".to_string())
@@ -854,6 +899,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn app_config_deserializes_system_theme_fields() {
+        let json = r#"{"theme":"tabularis-dark","followSystemTheme":true,"lightThemeId":"tabularis-light","darkThemeId":"dracula"}"#;
+        let config: AppConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.follow_system_theme, Some(true));
+        assert_eq!(config.light_theme_id.as_deref(), Some("tabularis-light"));
+        assert_eq!(config.dark_theme_id.as_deref(), Some("dracula"));
+    }
+
+    #[test]
+    fn app_config_defaults_system_theme_fields_to_none() {
+        let config: AppConfig = serde_json::from_str("{}").unwrap();
+        assert!(config.follow_system_theme.is_none());
+        assert!(config.light_theme_id.is_none());
+        assert!(config.dark_theme_id.is_none());
+    }
+
+    #[test]
     fn selected_schemas_default_is_none() {
         let config = AppConfig::default();
         assert!(config.selected_schemas.is_none());
@@ -923,6 +985,7 @@ mod tests {
     #[test]
     fn editor_fields_default_to_none() {
         let config = AppConfig::default();
+        assert!(config.safety_confirmation_delay_enabled.is_none());
         assert!(config.editor_theme.is_none());
         assert!(config.editor_font_family.is_none());
         assert!(config.editor_font_size.is_none());
@@ -944,6 +1007,7 @@ mod tests {
         config.editor_show_line_numbers = Some(true);
         config.editor_theme = Some("tabularis-light".to_string());
         config.editor_accept_suggestion_on_enter = Some(true);
+        config.safety_confirmation_delay_enabled = Some(true);
 
         let json = serde_json::to_string(&config).unwrap();
         assert!(json.contains("editorFontFamily"));
@@ -954,9 +1018,11 @@ mod tests {
         assert!(json.contains("editorShowLineNumbers"));
         assert!(json.contains("editorTheme"));
         assert!(json.contains("editorAcceptSuggestionOnEnter"));
+        assert!(json.contains("safetyConfirmationDelayEnabled"));
         // snake_case must not appear
         assert!(!json.contains("editor_font_family"));
         assert!(!json.contains("editor_accept_suggestion_on_enter"));
+        assert!(!json.contains("safety_confirmation_delay_enabled"));
     }
 
     #[test]
@@ -969,7 +1035,8 @@ mod tests {
             "editorWordWrap": true,
             "editorShowLineNumbers": true,
             "editorTheme": "tabularis-dark",
-            "editorAcceptSuggestionOnEnter": true
+            "editorAcceptSuggestionOnEnter": true,
+            "safetyConfirmationDelayEnabled": true
         }"#;
 
         let config: AppConfig = serde_json::from_str(json).unwrap();
@@ -980,6 +1047,7 @@ mod tests {
         assert_eq!(config.editor_show_line_numbers, Some(true));
         assert_eq!(config.editor_theme.as_deref(), Some("tabularis-dark"));
         assert_eq!(config.editor_accept_suggestion_on_enter, Some(true));
+        assert_eq!(config.safety_confirmation_delay_enabled, Some(true));
     }
 
     #[test]

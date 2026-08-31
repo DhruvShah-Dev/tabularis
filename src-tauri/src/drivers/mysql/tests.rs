@@ -1,5 +1,5 @@
 use super::build_mysql_pk_where;
-use super::{is_text_protocol_stmt, MysqlDriver};
+use super::{is_text_protocol_stmt, push_mysql_update_value, MysqlDriver, TextProto};
 use super::helpers::{inline_str_placeholders, mysql_bytes_literal, mysql_string_literal};
 use crate::drivers::driver_trait::DatabaseDriver;
 use crate::models::{ConnectionParams, DatabaseSelection};
@@ -70,6 +70,36 @@ fn mysql_bytes_literal_hex_encodes() {
     assert_eq!(mysql_bytes_literal(&[]), "x''");
     assert_eq!(mysql_bytes_literal(&[0x00, 0x0f, 0xff]), "x'000fff'");
     assert_eq!(mysql_bytes_literal(b"AB"), "x'4142'");
+}
+
+#[test]
+fn mysql_json_update_value_binds_without_json_cast() {
+    let mut qb = sqlx::QueryBuilder::<sqlx::MySql>::new("SET `payload` = ");
+
+    push_mysql_update_value(
+        &mut qb,
+        &serde_json::json!({ "ok": true }),
+        TextProto::PREPARED,
+        1024,
+    )
+    .unwrap();
+
+    assert_eq!(qb.sql(), "SET `payload` = ?");
+}
+
+#[test]
+fn mysql_json_update_value_inlines_without_json_cast_in_text_protocol() {
+    let mut qb = sqlx::QueryBuilder::<sqlx::MySql>::new("SET `payload` = ");
+
+    push_mysql_update_value(
+        &mut qb,
+        &serde_json::json!({ "ok": true }),
+        TextProto::protocol_only(true),
+        1024,
+    )
+    .unwrap();
+
+    assert_eq!(qb.sql(), "SET `payload` = '{\\\"ok\\\":true}'");
 }
 
 #[test]

@@ -18,6 +18,7 @@ describe('tabCleaner', () => {
         filterClause: 'age > 18',
         sortClause: 'name ASC',
         limitClause: 100,
+        pageSize: 51,
         queryParams: { param1: 'value1' },
         // Temporary fields that should be excluded
         result: { columns: ['id'], rows: [[1]], affected_rows: 0 },
@@ -44,6 +45,7 @@ describe('tabCleaner', () => {
       expect(cleaned.filterClause).toBe('age > 18');
       expect(cleaned.sortClause).toBe('name ASC');
       expect(cleaned.limitClause).toBe(100);
+      expect(cleaned.pageSize).toBe(51);
       expect(cleaned.queryParams).toEqual({ param1: 'value1' });
 
       // Should NOT include temporary fields

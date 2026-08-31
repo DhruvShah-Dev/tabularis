@@ -19,6 +19,7 @@ import {
   formatExportFileName,
   validatePageNumber,
   calculateTotalPages,
+  resolveTabPageSize,
 } from "../../src/utils/editor";
 
 describe("editor", () => {
@@ -975,6 +976,28 @@ describe("editor", () => {
     it("should handle small page sizes", () => {
       expect(calculateTotalPages(100, 1)).toBe(100);
       expect(calculateTotalPages(10, 3)).toBe(4);
+    });
+  });
+
+  describe("resolveTabPageSize", () => {
+    it("should prefer the per-tab override over the global setting", () => {
+      expect(resolveTabPageSize(51, 50)).toBe(51);
+      expect(resolveTabPageSize(25, 500)).toBe(25);
+    });
+
+    it("should fall back to the global setting when no override is set", () => {
+      expect(resolveTabPageSize(undefined, 500)).toBe(500);
+    });
+
+    it("should return undefined for 0 (pagination disabled)", () => {
+      expect(resolveTabPageSize(0, 500)).toBeUndefined();
+    });
+
+    it("should fall back to 100 when neither value is usable", () => {
+      expect(resolveTabPageSize(undefined, undefined)).toBe(100);
+      expect(resolveTabPageSize(undefined, 0)).toBe(100);
+      expect(resolveTabPageSize(undefined, -5)).toBe(100);
+      expect(resolveTabPageSize(-1, undefined)).toBe(100);
     });
   });
 });

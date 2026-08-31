@@ -12,6 +12,10 @@ export type AiProvider =
   | "custom-openai"
   | "minimax";
 export type ERDiagramLayout = "LR" | "TB";
+export type WindowDecorationsMode =
+  | "automatic"
+  | "alwaysShow"
+  | "alwaysHide";
 
 export interface PluginConfig {
   interpreter?: string;
@@ -64,6 +68,8 @@ export interface Settings {
   editorShowLineNumbers?: boolean;
   editorAcceptSuggestionOnEnter?: boolean;
   runStatementUnderCursor?: boolean;
+  /** Delay destructive-query and production-write confirmations for five seconds. Default: false. */
+  safetyConfirmationDelayEnabled?: boolean;
   // SQL Formatter
   formatterKeywordCase?: "upper" | "lower" | "preserve";
   formatterIndentStyle?: "standard" | "tabularLeft" | "tabularRight";
@@ -79,6 +85,8 @@ export interface Settings {
   autoConnectLastConnection?: boolean;
   /** Maximize the window on startup. Default: false. */
   startMaximized?: boolean;
+  /** Controls whether Tauri uses native window decorations. */
+  windowDecorations?: WindowDecorationsMode;
   // AI / MCP safety
   aiAuditEnabled?: boolean;
   aiAuditMaxEntries?: number;
@@ -162,6 +170,7 @@ export const DEFAULT_SETTINGS: Settings = {
   editorShowLineNumbers: true,
   editorAcceptSuggestionOnEnter: true,
   runStatementUnderCursor: true,
+  safetyConfirmationDelayEnabled: false,
   formatterKeywordCase: "upper",
   formatterIndentStyle: "standard",
   formatterTabWidth: 2,
@@ -173,6 +182,7 @@ export const DEFAULT_SETTINGS: Settings = {
   queryHistoryMaxEntries: 500,
   autoConnectLastConnection: true,
   startMaximized: false,
+  windowDecorations: "automatic",
   aiAuditEnabled: true,
   aiAuditMaxEntries: 5000,
   aiSessionGapMinutes: 10,

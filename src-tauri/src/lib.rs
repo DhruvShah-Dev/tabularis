@@ -27,6 +27,9 @@ pub mod config;
 pub mod connection_cache;
 #[cfg(test)]
 pub mod connection_cache_tests;
+pub mod connection_migrations;
+#[cfg(test)]
+pub mod connection_migrations_tests;
 pub mod connection_tags;
 pub mod connection_window;
 #[cfg(test)]
@@ -84,6 +87,7 @@ pub mod task_manager;
 pub mod theme_commands;
 pub mod theme_models;
 pub mod updater;
+pub mod window_decorations;
 pub mod drivers {
     pub mod common;
     pub mod driver_trait;
@@ -245,6 +249,14 @@ pub fn run() {
         .manage(results_window::ResultsWindowStore::default())
         .manage(query_history::QueryHistoryState::default())
         .setup(move |app| {
+            // Apply the persisted decoration policy as early as possible. The
+            // main window is created from tauri.conf.json before this hook.
+            let startup_config = crate::config::load_config_internal(&app.handle());
+            crate::window_decorations::apply_to_all_windows(
+                &app.handle(),
+                startup_config.window_decorations.as_ref(),
+            );
+
             // Allow the SSH tunnel code (which runs without a Tauri context)
             // to bridge askpass prompts to the frontend.
             askpass::set_app_handle(app.handle().clone());
@@ -614,6 +626,7 @@ pub fn run() {
             // Plugin Registry
             plugins::commands::fetch_plugin_registry,
             plugins::commands::install_plugin,
+            plugins::commands::cancel_plugin_install,
             plugins::commands::uninstall_plugin,
             plugins::commands::get_installed_plugins,
             plugins::commands::disable_plugin,

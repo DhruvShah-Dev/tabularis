@@ -17,6 +17,7 @@ export interface CleanedTab {
   filterClause?: string;
   sortClause?: string;
   limitClause?: number;
+  pageSize?: number;
   queryParams?: Record<string, string>;
   notebookId?: string;
   schema?: string;
@@ -46,6 +47,7 @@ export function cleanTabForStorage(tab: Tab): CleanedTab {
     filterClause: tab.filterClause,
     sortClause: tab.sortClause,
     limitClause: tab.limitClause,
+    pageSize: tab.pageSize,
     queryParams: tab.queryParams,
     notebookId: tab.notebookId,
     schema: tab.schema,

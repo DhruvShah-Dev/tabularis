@@ -338,6 +338,7 @@
       "previewSubtitle": "Review connections from {{source}}",
       "notInstalled": "Not installed",
       "chooseFile": "Choose an export file to import",
+      "chooseConfigPath": "Choose the app config folder to import",
       "connectionsFound_one": "1 connection found",
       "connectionsFound_other": "{{count}} connections found",
       "includePasswords": "Include passwords",
@@ -439,6 +440,12 @@
     "appearance": "外观",
     "localization": "本地化",
     "themeSelection": "主题选择",
+    "themeMode": "主题模式",
+    "themeModeDesc": "选择固定主题，或跟随系统的浅色/深色外观。",
+    "themeModeStatic": "固定",
+    "themeModeSystem": "跟随系统",
+    "lightTheme": "浅色主题",
+    "darkTheme": "深色主题",
     "fontFamily": "字体",
     "fonts": {
       "system": "系统默认",
@@ -599,6 +606,11 @@
     "autoConnectLastConnectionDesc": "重新连接到上次关闭应用时打开的连接。",
     "startMaximized": "最大化启动",
     "startMaximizedDesc": "启动时以最大化窗口填满屏幕。",
+    "windowDecorations": "窗口装饰",
+    "windowDecorationsDesc": "检测到平铺式窗口管理器时自动隐藏原生窗口装饰，或选择明确的显示方式。",
+    "windowDecorationsAutomatic": "自动",
+    "windowDecorationsAlwaysShow": "始终显示",
+    "windowDecorationsAlwaysHide": "始终隐藏",
     "erDiagram": "ER 图",
     "erDiagramDefaultLayout": "默认布局",
     "erDiagramDefaultLayoutDesc": "选择 ER 图的默认布局方向",
@@ -725,7 +737,12 @@
       "commandPaletteActions": "搜索操作",
       "triggerSuggestions": "触发建议",
       "formatSql": "格式化 SQL",
-      "refreshTable": "刷新表格"
+      "refreshTable": "刷新表格",
+      "extendCellRange": "扩展单元格范围",
+      "jumpToEdge": "跳转到网格边缘",
+      "extendCellRangeToEdge": "扩展单元格范围至边缘",
+      "selectRow": "选择行",
+      "selectColumn": "选择列"
     },
     "aiActivity": "AI 活动",
     "backup": {
@@ -778,7 +795,9 @@
     },
     "queryExecution": "查询执行",
     "runStatementUnderCursor": "执行光标所在的语句",
-    "runStatementUnderCursorDesc": "当脚本包含多条语句时，执行光标所在的语句，而不显示查询选择器。选中文本可执行指定范围。"
+    "runStatementUnderCursorDesc": "当脚本包含多条语句时，执行光标所在的语句，而不显示查询选择器。选中文本可执行指定范围。",
+    "safetyConfirmationDelay": "延迟安全确认",
+    "safetyConfirmationDelayDesc": "对于破坏性查询和生产环境写入，将确认按钮禁用五秒。"
   },
   "update": {
     "newVersionAvailable": "有新版本可用",
@@ -1148,6 +1167,7 @@
     "executingQuery": "执行查询中...",
     "exporting": "导出中...",
     "rowsProcessed": "已处理行数",
+    "exportLoadedRowsWarning": "仅导出了总计 {{total}} 行中的 {{loaded}} 行已加载数据。如果需要更多行，请先翻页加载结果或运行范围更窄的查询后再导出。",
     "queryParameters": "查询参数",
     "formatSql": "格式化 SQL",
     "convertToConsole": "转换为控制台",
@@ -1964,7 +1984,12 @@
     "firstPage": "第一页",
     "previousPage": "上一页",
     "nextPage": "下一页",
-    "lastPage": "最后一页"
+    "lastPage": "最后一页",
+    "pageSize": "每页行数",
+    "allRows": "全部",
+    "allRowsHint": "获取所有行",
+    "customPageSize": "自定义…",
+    "defaultPageSize": "默认"
   },
   "miniGrid": {
     "runningQuery": "正在执行查询...",
