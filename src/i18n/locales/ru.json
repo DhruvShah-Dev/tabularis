@@ -767,7 +767,12 @@
       "commandPaletteActions": "Поиск действий",
       "triggerSuggestions": "Показать подсказки",
       "formatSql": "Форматировать SQL",
-      "refreshTable": "Обновить таблицу"
+      "refreshTable": "Обновить таблицу",
+      "extendCellRange": "Расширить диапазон ячеек",
+      "jumpToEdge": "Перейти к краю таблицы",
+      "extendCellRangeToEdge": "Расширить диапазон до края",
+      "selectRow": "Выделить строку",
+      "selectColumn": "Выделить столбец"
     },
     "aiActivity": "Активность AI",
     "backup": {

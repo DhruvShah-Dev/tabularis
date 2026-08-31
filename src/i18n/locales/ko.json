@@ -749,6 +749,11 @@
       "pasteImportClipboard": "클립보드에서 가져오기",
       "quickNavigator": "빠른 탐색기",
       "formatSql": "SQL 포맷",
+      "extendCellRange": "셀 범위 확장",
+      "jumpToEdge": "그리드 가장자리로 이동",
+      "extendCellRangeToEdge": "셀 범위를 가장자리까지 확장",
+      "selectRow": "행 선택",
+      "selectColumn": "열 선택",
       "commandPaletteActions": "작업 검색"
     },
     "aiActivity": "AI 활동",

@@ -804,6 +804,11 @@
       "pasteImportClipboard": "I-import mula sa Clipboard",
       "quickNavigator": "Quick Navigator",
       "formatSql": "I-format ang SQL",
+      "extendCellRange": "Palawakin ang cell range",
+      "jumpToEdge": "Tumalon sa gilid ng grid",
+      "extendCellRangeToEdge": "Palawakin ang range hanggang sa gilid",
+      "selectRow": "Piliin ang row",
+      "selectColumn": "Piliin ang column",
       "commandPaletteActions": "Maghanap ng mga aksyon"
     },
     "aiActivity": "AI Activity",

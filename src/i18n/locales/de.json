@@ -774,7 +774,12 @@
       "commandPaletteActions": "Aktionen suchen",
       "triggerSuggestions": "Vorschläge anzeigen",
       "formatSql": "SQL formatieren",
-      "refreshTable": "Tabelle aktualisieren"
+      "refreshTable": "Tabelle aktualisieren",
+      "extendCellRange": "Zellbereich erweitern",
+      "jumpToEdge": "Zum Rand des Rasters springen",
+      "extendCellRangeToEdge": "Zellbereich bis zum Rand erweitern",
+      "selectRow": "Zeile auswählen",
+      "selectColumn": "Spalte auswählen"
     },
     "aiActivity": "KI-Aktivität",
     "backup": {

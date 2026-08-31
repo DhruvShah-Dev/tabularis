@@ -799,7 +799,12 @@
       "commandPaletteActions": "Cerca azioni",
       "triggerSuggestions": "Mostra suggerimenti",
       "formatSql": "Formatta SQL",
-      "refreshTable": "Aggiorna tabella"
+      "refreshTable": "Aggiorna tabella",
+      "extendCellRange": "Estendi intervallo di celle",
+      "jumpToEdge": "Salta al bordo della griglia",
+      "extendCellRangeToEdge": "Estendi intervallo fino al bordo",
+      "selectRow": "Seleziona riga",
+      "selectColumn": "Seleziona colonna"
     },
     "aiActivity": "Attività AI",
     "backup": {

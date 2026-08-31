@@ -817,7 +817,12 @@
       "commandPaletteActions": "Search actions",
       "triggerSuggestions": "Trigger suggestions",
       "formatSql": "Format SQL",
-      "refreshTable": "Refresh table"
+      "refreshTable": "Refresh table",
+      "extendCellRange": "Extend cell range",
+      "jumpToEdge": "Jump to grid edge",
+      "extendCellRangeToEdge": "Extend cell range to edge",
+      "selectRow": "Select row",
+      "selectColumn": "Select column"
     },
     "aiActivity": "AI Activity",
     "backup": {

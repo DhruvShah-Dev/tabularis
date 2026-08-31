@@ -808,7 +808,12 @@
       "commandPaletteActions": "Rechercher des actions",
       "triggerSuggestions": "Afficher les suggestions",
       "formatSql": "Formater SQL",
-      "refreshTable": "Actualiser la table"
+      "refreshTable": "Actualiser la table",
+      "extendCellRange": "Étendre la plage de cellules",
+      "jumpToEdge": "Aller au bord de la grille",
+      "extendCellRangeToEdge": "Étendre la plage jusqu'au bord",
+      "selectRow": "Sélectionner la ligne",
+      "selectColumn": "Sélectionner la colonne"
     },
     "aiActivity": "Activité IA",
     "backup": {
